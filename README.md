@@ -1,4 +1,4 @@
-# Postproc-Alibava 
+# Postproc-Alibava   [![Build Status](https://travis-ci.org/duartej/postproc-alibava.svg?branch=master)](https://travis-ci.org/duartej/postproc-alibava)
 Some utilities for the post-processing of data acquired with
 the alibava systems [alibava DAQ](https://www.alibavasystems.com)
 
@@ -6,7 +6,6 @@ the alibava systems [alibava DAQ](https://www.alibavasystems.com)
  format obtained from the Alibava DAQ into a ROOT trees
 
  author: Jordi Duarte-Campderros (June.2017)
-[![Build Status](https://travis-ci.org/duartej/postproc-alibava.svg?branch=master)](https://travis-ci.org/duartej/postproc-alibava)
 
 ### Compilation
 Create a *build* directory. Configure and compile the code using
