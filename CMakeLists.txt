@@ -1,7 +1,12 @@
 cmake_minimum_required(VERSION 2.8)
-project(postproc-alibava)
+
+# Allowing to introduce the variable as option 
+# reuquies to place it before project
 set(CMAKE_INSTALL_PREFIX $ENV{HOME}/.local)
 
+project(postproc-alibava)
+
+# Flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -ansi -pedantic -W -Wall -Wshadow -fPIC -ldl -std=c++11")
 
 add_executable(fortythieves src/fortythieves.cc)
