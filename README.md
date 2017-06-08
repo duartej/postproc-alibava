@@ -29,8 +29,8 @@ and then don't forget to export the ```PATH``` variable to include
 that folder.
 
 #### Dependencies
- * ROOT
- * CMAKE
+ * ROOT >= 6.0 (Note that some problems has been spotted when using 5.34)
+ * CMAKE >= 2.8
 
 ### Usage
 After succesful compilation and the exportation of the environment
