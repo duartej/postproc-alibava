@@ -1,0 +1,18 @@
+# Ubuntu 14.04, ROOT > 6.08
+sudo: false
+dist: trusty
+
+language: cpp
+
+# install ROOT (already contain cmake > 3.0)
+before_script:
+    - wget https://root.cern.ch/download/root_v6.08.06.Linux-ubuntu14-x86_64-gcc4.8.tar.gz -O /tmp/root.v6.08.06.tar.gz
+    - tar -xvf /tmp/root.v6.08.06
+    - export PATH=$PATH:$PWD/root/bin:$TRAVIS_BUILD_DIR
+
+# command to run tests
+script: 
+    - mkdir build && cd build && cmake --DCMAKE_INSTALL_PREFIX=$TRAVIS_BUILD_DIR .. && make install && cd ..
+    - fortythieves test/alibavadata.raw 
+
+    

@@ -5,6 +5,9 @@ the alibava systems [alibava DAQ](https://www.alibavasystems.com)
  * *fortythieves*: a utility to convert the raw binary data 
  format obtained from the Alibava DAQ into a ROOT trees
 
+ author: Jordi Duarte-Campderros (June.2017)
+[![Build Status](https://travis-ci.org/duartej/postproc-alibava.svg?branch=master)](https://travis-ci.org/duartej/postproc-alibava)
+
 ### Compilation
 Create a *build* directory. Configure and compile the code using
 cmake inside the build directory:
