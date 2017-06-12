@@ -9,15 +9,14 @@ project(postproc-alibava)
 # Flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -ansi -pedantic -W -Wall -Wshadow -fPIC -ldl -std=c++11")
 
-add_executable(fortythieves src/fortythieves.cc)
+# The include directory
+include_directories("${PROJECT_SOURCE_DIR}/include")
+# and the source dir to build some useful libraries
+add_subdirectory(src)
 
-# ROOT dependencies
-set(ROOTLIBSTOLINK Tree RIO)
-find_package(ROOT REQUIRED ${ROOTLIBSTOLINK})
-include_directories(${ROOT_INCLUDE_DIRS})
-set(LIBS ${LIBS} ${ROOT_LIBRARIES})
+add_executable(fortythieves bin/fortythieves.cc)
 
-target_link_libraries(fortythieves ${LIBS})
+target_link_libraries(fortythieves IOManager)
 
 install(TARGETS fortythieves
     RUNTIME DESTINATION bin)
