@@ -17,10 +17,10 @@ $ cmake ..
 $ make install
 ```
 Per default it will create the executable *fortythieves* in the
-```$HOME/.bin/``` directory, so you should have the environment
+```$HOME/.local/bin/``` directory, so you should have the environment
 variable ```PATH``` pointing to that folder:
 ```bash
-$ export PATH=$PATH:$HOME/.bin
+$ export PATH=$PATH:$HOME/.local/bin
 ```
 You can change the install directory by using the cmake variable
 ```CMAKE_INSTALL_PREFIX```
