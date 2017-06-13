@@ -17,7 +17,7 @@ add_subdirectory(src)
 
 add_executable(fortythieves bin/fortythieves.cc)
 
-target_link_libraries(fortythieves IOManager)
+target_link_libraries(fortythieves IOManagersAlibava)
 
 install(TARGETS fortythieves
     RUNTIME DESTINATION bin)

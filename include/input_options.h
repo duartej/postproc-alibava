@@ -20,6 +20,8 @@ struct input_options
     {
         // Defaults
         outputFilename = "fortythieves.root";
+        pedestal_file = "";
+        calibration_file = "";
         storeHeaderPedestalNoise = false;
         runNumber = -1;
         cmndfile  = "";
@@ -28,6 +30,8 @@ struct input_options
     }
     std::string cmndfile;
     std::string outputFilename;
+    std::string pedestal_file;
+    std::string calibration_file;
     int runNumber;
     int startEventNum;
     int stopEventNum;

@@ -34,6 +34,10 @@
 // although it can be think to use it later)
 #include "AuxiliaryStructures.h"
 
+// Alibava reader and post-processing
+#include "IOAlibavaReader.h"
+#include "AlibavaPostProcessor.h"
+
 // ROOT dedicated classes
 #include "IOManager.h"
 
@@ -63,7 +67,7 @@ void display_usage()
         << std::endl;
     std::cout << std::endl;
     std::cout << "[OPTIONS]\n -o name of the ROOT output file [fortythieves.root]\n"
-      << " -p flag to store pedestal and noise header [false]\n"
+      << " -p alibava raw-binary containing the pedestal runs\n"
       << " -r run number [-1]\n"
       /*<< " -m mis-identification probability, a value different from 0 will force '-t pions_kaons'"
       << " regardless of the user input [default: 0.0]\n"
@@ -100,7 +104,14 @@ int main(int argc, char* argv[])
         }
         else if( strcmp(argv[i],"-p") == 0 )
         {
+            opt.pedestal_file = argv[i+1];
             opt.storeHeaderPedestalNoise = true;
+            ++i;
+        }
+        else if( strcmp(argv[i],"-c") == 0 )
+        {
+            opt.calibration_file = argv[i+1];
+            ++i;
         }
         else if( strcmp(argv[i],"-r") == 0 )
         {
@@ -112,6 +123,10 @@ int main(int argc, char* argv[])
         {
             misid_ratio = std::stof(argv[i+1]);
             ++i;
+        }
+        else if( strcmp(argv[i],"-m") == 0 )
+        {
+            boolean_one = true;
         }
         */
         else
@@ -134,10 +149,41 @@ int main(int argc, char* argv[])
     iomanager.book_tree();
 
     // process the file
-    int status = iomanager.read_data(opt);
+    int status = IOAlibavaReader::read_data(opt,iomanager);
+    iomanager.close();
+
+    // process pedestal file (Calibration ??)
+    if(opt.storeHeaderPedestalNoise)
+    {
+        std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
+            << "Processing pedestal file" << std::endl;
+        // The name of the output ROOT file
+        const auto dotpos = opt.outputFilename.find(".root");
+        std::string pedfile(opt.outputFilename.replace(dotpos,5,"_ped.root"));
+        // Initialize and prepare the output
+        IOManager iomanager_ped(pedfile);
+        iomanager_ped.book_tree_header();
+        iomanager_ped.book_tree();
+        // process the pedestal file
+        // change the name of the input file
+        input_options opt_ped(opt);
+        opt_ped.cmndfile = opt.pedestal_file;
+        status += IOAlibavaReader::read_data(opt_ped,iomanager_ped);
+    
+        // calculate pedestals and common noise: { bettle: { channels ,,, } }
+        AlibavaPostProcessor postproc;
+        std::map<int,std::pair<std::vector<float>,std::vector<float>> > pedestals_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
+        //std::map<int,std::vector<float> > noise_cmmd = AlibavaPostProcessor::calculate_commonnoise();
+        //std::map<int,std::vector<float> > pedestals_cmmd = AlibavaPostProcessor::calculate_pedestals(pedestals_cmmdnot,noise_cmmd);
+        // and update the main beam file
+        //iomanager.update(pedestals_cmmd,noise_cmmd);
+        // close the pedestal noise file
+        iomanager_ped.close();
+    }
 
     // close output ROOT file
-    iomanager.close();
+    // iomanager.update();
+    //iomanager.close();
 
     return status;
 }

@@ -151,276 +151,42 @@ void IOManager::close()
     }
 }
 
-int IOManager::read_data(const input_options & opt) 
+// Getter
+TTree * IOManager::get_events_tree() const
 {
-    // this event counter is used to stop the processing when it is
-    // greater than numEvents.
-    int eventCounter = 0;
-    
-    // print out a debug message
-    std::cout << "IOManager.read_data: Reading " 
-        << opt.cmndfile << ", run number: " << opt.runNumber << std::endl;
-    
-    ////////////////
-    // Open File  //
-    ////////////////
-    std::ifstream infile;
-    infile.open(opt.cmndfile);
-    if(!infile.is_open()) 
-    {
-        std::cerr << "IOManager.read_data could not read the file "
-            <<opt.cmndfile<<" correctly. Please check the path and file names that" 
-            << " have been input" << std::endl;
-        return 3;
-    }
-    else
-    {
-        std::cout<<"Input file "<<opt.cmndfile<<" is now opened"<<std::endl;
-    }
-    /////////////////
-    // Read Header //
-    /////////////////
-    // --- Time of start of the run 
-    unsigned int date = 0;
-    infile.read(reinterpret_cast<char*>(&date), sizeof(unsigned int));
-    // --- Run type: 1:Calibration; 2:Laser Syn.; 3:Laser; 4: Rad. source; 5: Pedestal
-    int type = -1;
-    infile.read(reinterpret_cast<char*>(&type), sizeof(int));
-    // --- Header lenght
-    unsigned int lheader = 0; 
-    infile.read(reinterpret_cast<char*>(&lheader), sizeof(unsigned int));
-    // read the next field until reach the lenght of the header
-    std::string header("");
-    header.clear();
-    for(unsigned int ic=0; ic<lheader; ++ic)
-    {
-        char tmp_c;
-        infile.read(&tmp_c, sizeof(char));
-        header.append(1, tmp_c);
-    }
-    header = trim_str(header);
-    
-    // Firmware version
-    int version(-1);
-    if (header[0]!='V' && header[0]!='v')
-    {
-        version = 0;
-    }
-    else
-    {
-        version = int(header[1]-'0');
-        header = header.substr(5);
-    }
-    /// XXX: Different treatment when calibration run?
-    ////////////////////////////////////
-    // Read header pedestal and noise //
-    // /////////////////////////////////
-	
-    // Alibava stores a pedestal and noise set in the run header. 
-    // These values are not used in te rest of the analysis, so it is 
-    // optional to store it. By default it will not be stored, but it you
-    // want you can set _storeHeaderPedestalNoise variable to true.
-    float tmp_float=-11;
-    std::vector<float> headerPedestal;
-    // first pedestal
-    for(int ichan=0; ichan<ALIBAVA::NOOFCHIPS*ALIBAVA::NOOFCHANNELS; ++ichan) 
-    {
-        infile.read(reinterpret_cast<char*> (&tmp_float), sizeof(double));
-        headerPedestal.push_back(tmp_float);
-    }	
-    // now noise
-    std::vector<float> headerNoise;
-    for(int ichan=0; ichan<ALIBAVA::NOOFCHIPS*ALIBAVA::NOOFCHANNELS; ichan++) 
-    {
-        infile.read(reinterpret_cast<char*>(&tmp_float), sizeof(double));
-        headerNoise.push_back(tmp_float);
-    }
-    ////////////////////
-    // Process Header //
-    ////////////////////
-    AlibavaRunHeader * runHeader = new AlibavaRunHeader;
-    runHeader->header = header;
-    runHeader->version= version;
-    runHeader->data_type =type;
-    runHeader->date_time = std::string(ctime(reinterpret_cast<time_t*>(&date)));
-    if(opt.storeHeaderPedestalNoise) 
-    {
-        runHeader->header_pedestal = headerPedestal;
-        runHeader->header_noise = headerNoise;
-    }
-    runHeader->run_number = opt.runNumber;
-    
-    // Store the run header
-    this->fill_header(runHeader);
-    delete runHeader;
-    runHeader = nullptr;
+    return this->_tree_events;
+}
 
-    ////////////////
-    // Read Event //
-    ////////////////
-    // Expected different streams depending the firmware version
-    // used to store the data
-    if(version<2) 
+void IOManager::set_events_tree_access(const std::vector<std::string> & branch_list) const
+{
+    // XXX: No mechanism to check the validity of the branches (id they exist)
+    // Speed up access, just using the branches we want
+    this->_tree_events->SetBranchStatus("*",0);
+    for(const auto & branch: branch_list)
     {
-        // this code is not written for version<=1.
-        std::cerr <<" Not supported data version found (version="
-            <<version<<"<2). Data is not saved."<<std::endl;
-	return 4;
+        this->_tree_events->SetBranchStatus(branch.c_str(),1);
     }
-    
-    // Event loop
-    while( !(infile.bad() || infile.eof()) )
-    {
-        if( eventCounter % 1000 == 0 )
-        {
-            std::cout << "\r Processing  "<< eventCounter << " from run " 
-                << opt.runNumber << std::flush;
-        }
-	
-        unsigned int headerCode = 0;
-        unsigned int eventTypeCode=0;
-        do
-        {
-            infile.read(reinterpret_cast< char *> (&headerCode), sizeof(unsigned int));
-            if(infile.bad() || infile.eof())
-            {
-                std::cout << std::endl;
-                return 0;
-            }
-	    eventTypeCode = (headerCode>>16) & 0xFFFF;
-        } while( eventTypeCode != 0xCAFE );
-	
-        eventTypeCode = headerCode & 0x0FFF;
+}
 
-        unsigned int userEventTypeCode = headerCode & 0x1000;
-        if(userEventTypeCode)
-        {	
-            std::cout << std::endl;
-            std::cout<<"Unexpected data type (user type). Data is not saved"<<std::endl;
-            return 5;
-        }
-        unsigned int eventSize = 0;
-        infile.read(reinterpret_cast< char *> (&eventSize), sizeof(unsigned int));
-        
-        double value = -1;
-        infile.read(reinterpret_cast< char *> (&value), sizeof(double));
-		
-	//see AlibavaGUI.cc
-        double charge = int(value) & 0xFF;
-        double delay = int(value) >> 16;
-        charge = charge * 1024;
-	
-        // The timestamp
-        unsigned int clock = 0;
-        // Thomas 13.05.2015: Firmware 3 introduces the clock to the header!
-        // for now this is not stored...
-        if(version==3)
-        {
-            infile.read(reinterpret_cast< char *> (&clock), sizeof(unsigned int));
-        }
-        // Time digital converter 
-        unsigned int tdcTime = 0;
-        infile.read(reinterpret_cast< char *> (&tdcTime), sizeof(unsigned int));
-        // Temperature measured on daughter board
-	unsigned short temp = 0;      
-        infile.read(reinterpret_cast< char *> (&temp), sizeof(unsigned short));
-        
-        // vector for data
-        std::map<int,std::vector<float> > beetles_data; // = { {0,{}}, {1,{}} };
-        beetles_data[0].reserve(ALIBAVA::NOOFCHANNELS);
-        beetles_data[1].reserve(ALIBAVA::NOOFCHANNELS);
-        // vector for chip header
-        std::map<int,std::vector<float> > beetles_chipheaders; // = { {0.{}}, {1,{}} };
-        beetles_chipheaders[0].reserve(ALIBAVA::CHIPHEADERLENGTH);
-        beetles_chipheaders[1].reserve(ALIBAVA::CHIPHEADERLENGTH);
-        
-        // An auxiliary variable (contains the data before pushing in the 
-        // previous vector
-        short tmp_short;
-        // Chip header
-        unsigned short chipHeader[2][ALIBAVA::CHIPHEADERLENGTH];
-        // iterate over number of chips and store the chip headers 
-        // and data
-        for(int ichip=0; ichip < ALIBAVA::NOOFCHIPS; ++ichip)
-        {
-            infile.read(reinterpret_cast< char *>(chipHeader[ichip]), ALIBAVA::CHIPHEADERLENGTH*sizeof(unsigned short));
-            // store chip header in all_chipheaders vector
-            for(int j = 0; j < ALIBAVA::CHIPHEADERLENGTH; ++j)
-            {
-                beetles_chipheaders[ichip].push_back(float(chipHeader[ichip][j]));
-            }
-            // store data in all_data vector
-	    for(int ichan=0; ichan < ALIBAVA::NOOFCHANNELS; ichan++) 
-            {
-                infile.read(reinterpret_cast< char *> (&tmp_short), sizeof(unsigned short));
-                beetles_data[ichip].push_back(float(tmp_short));
-            }
-        }
-        // -- so far the event is read
-        ++eventCounter;
-        
-        // Now store it in the new format
-        //
-        // Skip event 
-        if(opt.startEventNum!=-1 && eventCounter == opt.startEventNum) 
-        {
-            std::cout << std::endl;
-        }
-        if(opt.startEventNum!=-1 && eventCounter < opt.startEventNum) 
-        {
-            std::cout << "\r Skipping event "<< eventCounter <<". StartEventNum is set to "
-                <<opt.startEventNum << std::flush;
-            if(eventCounter == opt.startEventNum)
-            {
-                std::cout << std::endl;
-            }
-            continue;
-        }
-        
-        if(opt.stopEventNum!=-1 && eventCounter >= opt.stopEventNum) 
-        {
-            std::cout << std::endl;
-            std::cout <<"fortythieves: Reached StopEventNum '"
-                << opt.stopEventNum <<"'. Last saved event number is "
-                << eventCounter-1 << std::endl;
-            break;
-        }
-        // Store it
-        AlibavaEvent* anEvent = new AlibavaEvent();
-        anEvent->runNumber = opt.runNumber;
-        anEvent->eventNumber = eventCounter;
-        anEvent->eventType   = eventTypeCode;
-        anEvent->eventSize   = eventSize;
-        if(version==3)
-        {
-            anEvent->eventClock = clock;
-        }
-        anEvent->eventTime = static_cast<float>(tdc_time(tdcTime));
-	anEvent->eventTemp = static_cast<float>(get_temperature(temp));
-	anEvent->calCharge = charge;
-	anEvent->calDelay  = delay;
-        
-        anEvent->beetle1_chipheader = beetles_chipheaders[0];
-        anEvent->beetle2_chipheader = beetles_chipheaders[1];
+void IOManager::reset_events_tree() const
+{
+    this->_tree_events->ResetBranchAddresses();
+    this->_tree_events->SetBranchStatus("*",1);
+}
 
-        anEvent->beetle1_data = beetles_data[0];
-        anEvent->beetle2_data = beetles_data[1];
-        
-        // and store it 
-        this->fill_event(anEvent);
+void IOManager::set_events_tree_branch_address(const std::string & branch_name, std::vector<float> ** v) const
+{
+    // XXX: No mechanism to check the validity of the branches (id they exist)
+    this->_tree_events->SetBranchAddress(branch_name.c_str(),v);
+}
 
-        // Free memory
-        delete anEvent;
-    }
-    std::cout << std::endl;
-    
-    infile.close();
-    if(opt.stopEventNum!=-1 && eventCounter<opt.stopEventNum)
-    {
-        std::cout <<"fortythieves WARNING: Stopped before reaching"
-            << " StopEventNum: " <<opt.stopEventNum<<". The file has "
-            << eventCounter << " events."<<std::endl;
-    }
-    return 0;
+int IOManager::get_events_number_entries() const
+{
+    return this->_tree_events->GetEntries();
+}
+
+void IOManager::get_events_entry(const int & i) const
+{
+    this->_tree_events->GetEntry(i);
 }
 
