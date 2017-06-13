@@ -16,6 +16,7 @@
 // ROOT 
 #include "TFile.h"
 #include "TTree.h"
+#include "TFriendElement.h"
 
 // System headers
 #include <fstream>
@@ -71,10 +72,15 @@ double get_temperature(unsigned short temp)
 
 // --
 IOManager::IOManager(const std::string & rootfilename): 
+    _rootfilename(rootfilename),
+    _file(nullptr),
+    _tree_header(nullptr),
+    _tree_events(nullptr),
+    _eventsProcessed(0),
     _runheader(nullptr), 
     _events(nullptr) 
 { 
-    _file = new TFile(rootfilename.c_str(),"RECREATE"); 
+    _file = new TFile(_rootfilename.c_str(),"RECREATE"); 
 }
 
 IOManager::~IOManager()
@@ -89,6 +95,53 @@ IOManager::~IOManager()
         delete _events;
         _events = nullptr;
     }
+}
+
+void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
+{
+    // Check the file is closed, otherwise don't do anything
+    if( _file != nullptr )
+    {
+        std::cerr << "[IOManager::update WARNING] Trying to update"
+            << " an still open file. Please close it first. " << std::endl;
+        return;
+    }
+    
+    _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+    // Create a new Tree header
+    TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
+    
+    std::map<int,std::vector<float>*> pedestal = { {0, nullptr}, { 1, nullptr} }; 
+    std::map<int,std::vector<float>*> noise = { {0,nullptr}, {1,nullptr} }; 
+    t->Branch("pedestal_cmmd_beetle1",&(pedestal[0]));
+    t->Branch("noise_cmmd_beetle1",&(noise[0]));
+    t->Branch("pedestal_cmmd_beetle2",&(pedestal[1]));
+    t->Branch("noise_cmmd_beetle2",&(noise[1]));
+
+    // The loop
+    for(const auto & chip_p: pednoise_m)
+    {
+        if(pedestal[chip_p.first] != nullptr)
+        {
+            pedestal[chip_p.first]->clear();
+        }
+        if(noise[chip_p.first] != nullptr)
+        {
+            noise[chip_p.first]->clear();
+        }
+        
+        for(int i = 0; i < static_cast<int>(chip_p.second.first.size()); ++i)
+        {
+            pedestal[chip_p.first]->push_back(chip_p.second.first[i]);
+            noise[chip_p.first]->push_back(chip_p.second.second[i]);
+        }
+    }
+    t->Fill();
+    // Write it
+    t->Write("", TTree::kOverwrite);    
+
+    // SAME FOR corrected signal: postproc_Events, data_corrected_beetle1
+    this->close();
 }
 
 void IOManager::book_tree_header()
@@ -139,15 +192,36 @@ void IOManager::fill_event(const AlibavaEvent * anEvent) const
     _tree_events->Fill();
 }
 
+void IOManager::aux_store_friends(TTree * tree)
+{
+    // store the friends trees as well
+    TIter next(tree->GetListOfFriends());
+    TFriendElement * obj= nullptr;
+    while((obj = dynamic_cast<TFriendElement*>(next())))
+    {
+        obj->GetTree()->Write("", TTree::kOverwrite);
+    }
+}
+
 void IOManager::close()
 {
-    _tree_header->Write("", TTree::kOverwrite);
-    _tree_events->Write("", TTree::kOverwrite);
+    if( _tree_header != nullptr )
+    {
+        _tree_header->Write("", TTree::kOverwrite);
+        this->aux_store_friends(_tree_header);
+    }
+    if( _tree_events != nullptr )
+    {
+        _tree_events->Write("", TTree::kOverwrite);
+        this->aux_store_friends(_tree_events);
+    }
     if(_file != nullptr)
     {
         _file->Close();
         delete _file;
         _file = nullptr;
+        _tree_header = nullptr;
+        _tree_events = nullptr;
     }
 }
 

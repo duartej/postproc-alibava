@@ -19,6 +19,7 @@
 class IOAlibavaReader
 {
     public:
+        // FIXME: Possibly delete
         IOAlibavaReader();
         
         // Read the file defined in the opt, and store it using the IOManager
@@ -27,11 +28,6 @@ class IOAlibavaReader
         // Get TDC time
         static double tdc_time(const unsigned int & tdcTime);
         static double get_temperature(const unsigned short & temp);
-    
-        // Auxiliary functions
-        static std::string trim_right(const std::string & s);
-        static std::string trim_left(const std::string & s);
-        static std::string trim_str(const std::string & s);
 };
 
 #endif

@@ -19,24 +19,33 @@
 #include <map>
 
 // Some auxiliary functions ----------------------------
-std::string IOAlibavaReader::trim_right(const std::string & s)
+namespace auxfunc
 {
-	const std::string b=" \t\n";
-	std::string str = s;
-	return str.erase(str.find_last_not_of(b) +1);
-}
-
-std::string IOAlibavaReader::trim_left(const std::string &s)
-{
-	std::string b=" \t\n";
-	std::string str = s;
-	return str.erase( 0, str.find_first_not_of(b) );
-}
-
-std::string IOAlibavaReader::trim_str(const std::string &s)
-{
-	std::string str = s;
-	return trim_left(trim_right(str) );
+    std::string path_filename(const std::string & fullpath)
+    {
+        size_t pos = fullpath.find_last_of("/\\");
+        return fullpath.substr(pos+1);
+    }
+    
+    std::string trim_right(const std::string & s)
+    {
+    	const std::string b=" \t\n";
+    	std::string str = s;
+    	return str.erase(str.find_last_not_of(b) +1);
+    }
+    
+    std::string trim_left(const std::string &s)
+    {
+    	std::string b=" \t\n";
+    	std::string str = s;
+    	return str.erase( 0, str.find_first_not_of(b) );
+    }
+    
+    std::string trim_str(const std::string &s)
+    {
+    	std::string str = s;
+    	return trim_left(trim_right(str) );
+    }
 }
 
 // See alibava user manual
@@ -75,7 +84,7 @@ int IOAlibavaReader::read_data(const input_options & opt,const IOManager & ioman
     
     // print out a debug message
     std::cout << "IOAlibavaReader.read_data: Reading '" 
-        << opt.cmndfile << "', run number: " << opt.runNumber << std::endl;
+        <<  auxfunc::path_filename(opt.cmndfile) << "', run number: " << opt.runNumber << std::endl;
     
     ////////////////
     // Open File  //
@@ -85,7 +94,7 @@ int IOAlibavaReader::read_data(const input_options & opt,const IOManager & ioman
     if(!infile.is_open()) 
     {
         std::cerr << "\033[1;31mIOAlibavaReader.read_data\033[1;m could not read the file "
-            <<opt.cmndfile<<" correctly. Please check the path and file names that" 
+            << auxfunc::path_filename(opt.cmndfile)<<" correctly. Please check the path and file names that" 
             << " have been input" << std::endl;
         return 3;
     }
@@ -110,7 +119,7 @@ int IOAlibavaReader::read_data(const input_options & opt,const IOManager & ioman
         infile.read(&tmp_c, sizeof(char));
         header.append(1, tmp_c);
     }
-    header = IOAlibavaReader::trim_str(header);
+    header = auxfunc::trim_str(header);
     
     // Firmware version
     int version(-1);

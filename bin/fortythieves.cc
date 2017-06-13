@@ -44,7 +44,6 @@
 // The input options
 #include "input_options.h"
 
-
 // Just summary of error codes
 void print_error_codes()
 {
@@ -156,7 +155,7 @@ int main(int argc, char* argv[])
     if(opt.storeHeaderPedestalNoise)
     {
         std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
-            << "Processing pedestal file" << std::endl;
+            << "Pedestal and noise calculations" << std::endl;
         // The name of the output ROOT file
         const auto dotpos = opt.outputFilename.find(".root");
         std::string pedfile(opt.outputFilename.replace(dotpos,5,"_ped.root"));
@@ -172,18 +171,35 @@ int main(int argc, char* argv[])
     
         // calculate pedestals and common noise: { bettle: { channels ,,, } }
         AlibavaPostProcessor postproc;
-        std::map<int,std::pair<std::vector<float>,std::vector<float>> > pedestals_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
-        //std::map<int,std::vector<float> > noise_cmmd = AlibavaPostProcessor::calculate_commonnoise();
-        //std::map<int,std::vector<float> > pedestals_cmmd = AlibavaPostProcessor::calculate_pedestals(pedestals_cmmdnot,noise_cmmd);
-        // and update the main beam file
-        //iomanager.update(pedestals_cmmd,noise_cmmd);
+        std::cout << " - Calculating <pedestals>" << std::endl;
+        PedestalNoiseBeetleMap pednoise_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
+        
+        std::cout << " - Extracting pedestals free of noise" << std::endl;
+        postproc.get_pedestal_noise_free(iomanager_ped,pednoise_cmmdnot);
+        
+        std::cout << " - Calculating pedestals and common noise" << std::endl;
+        PedestalNoiseBeetleMap pednoise_cmmd = postproc.calculate_pedestal_noise(iomanager_ped);
+        /*for(auto & chip_m: pednoise_cmmdnot)
+        {
+            std::cout << "CHIP: " << chip_m.first << std::endl;
+            std::string up;
+            std::string down;
+            for(unsigned int i=0; i < chip_m.second.first.size(); ++i)
+            {
+                up += std::to_string(chip_m.second.first[i])+" ("+
+                        std::to_string(pednoise_cmmd[chip_m.first].first[i])+") " ;
+                down += std::to_string(chip_m.second.second[i])+" ("+
+                        std::to_string(pednoise_cmmd[chip_m.first].second[i])+") ";
+            }
+            std::cout << up << std::endl;
+            std::cout << down << std::endl;
+        }*/
         // close the pedestal noise file
         iomanager_ped.close();
+        // And update the beam file with the pedestals and common noise values
+        // included in the runHeader postproc 
+        iomanager.update(pednoise_cmmd);
     }
-
-    // close output ROOT file
-    // iomanager.update();
-    //iomanager.close();
 
     return status;
 }

@@ -14,7 +14,7 @@
 
 #include <string>
 #include <vector>
-
+#include <map>
 
 // forward declarations
 class TFile;
@@ -23,10 +23,13 @@ class TTree;
 class AlibavaRunHeader;
 class AlibavaEvent;
 
+using PedestalNoiseBeetleMap = std::map<int,std::pair<std::vector<float>,std::vector<float>> >;
+
 class IOManager
 {
     private:
         // datamembers
+        std::string _rootfilename;
         TFile * _file;
         TTree * _tree_header;
         TTree * _tree_events;
@@ -35,10 +38,15 @@ class IOManager
         // The auxiliary functions
         AlibavaRunHeader * _runheader;
         AlibavaEvent * _events;
+        
+        // store the friends
+        void aux_store_friends(TTree * tree);
 
     public:
         IOManager(const std::string & rootfilename);
         ~IOManager();
+
+        void update(const PedestalNoiseBeetleMap & pednoise_m);
 
         void book_tree_header();
         void book_tree();
