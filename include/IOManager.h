@@ -10,7 +10,10 @@
 #ifndef IOMANAGER_H
 #define IOMANAGER_H
 
+#include "input_options.h"
+
 #include <string>
+
 
 // forward declarations
 class TFile;
@@ -41,6 +44,9 @@ class IOManager
         
         void fill_header(const AlibavaRunHeader * aheader) const;
         void fill_event(const AlibavaEvent * anAlibavaEvent) const;
+        
+        // 
+        int read_data(const input_options & opt);
         
         void close();
 };
