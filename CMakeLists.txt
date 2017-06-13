@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 2.8)
 
-# Allowing to introduce the variable as option 
-# reuquies to place it before project
-set(CMAKE_INSTALL_PREFIX $ENV{HOME}/.local)
-
 project(postproc-alibava)
+
+if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+    set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.local" CACHE PATH "default install path" FORCE )
+endif()
+MESSAGE(STATUS "Installation path at: ${CMAKE_INSTALL_PREFIX}")
 
 # Flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -ansi -pedantic -W -Wall -Wshadow -fPIC -ldl -std=c++11")
@@ -26,4 +27,3 @@ install(TARGETS fortythieves
 #install(PROGRAMS utils/hzplots.py 
 #    DESTINATION bin
 #    RENAME hzplots)
-
