@@ -108,7 +108,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     }
     
     _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
-    // Create a new Tree header
+    // Create a new Tree header and the Tree events
     TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
     
     std::map<int,std::vector<float>*> pedestal = { {0, nullptr}, { 1, nullptr} }; 
@@ -139,8 +139,99 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     t->Fill();
     // Write it
     t->Write("", TTree::kOverwrite);    
+    // Delete it? Use the close to write it, by using the AddFriend?
+    
+    // And the events tree: I need to ressurrect the Events tree
+    TTree * tevt = new TTree("postproc_Events","post-processed signals");
+    std::map<int,std::vector<float>* > data = { {0, new std::vector<float>}, { 1, new std::vector<float>} }; 
+    tevt->Branch("postproc_data_beetle1",&(data[0]));
+    tevt->Branch("postproc_data_beetle2",&(data[1]));
 
-    // SAME FOR corrected signal: postproc_Events, data_corrected_beetle1
+    // Resurrect the Events tree to extract the data signal, in order 
+    // to correct it
+    this->resurrect_events_tree();
+    // Activate the needed branches
+    std::map<int,std::vector<float>* > original_data = { {0, nullptr}, { 1, nullptr} };
+    std::map<int,std::string> chip_dataname_map = { {0,"data_beetle1"}, {1,"data_beetle2"} };
+    set_events_tree_access( {chip_dataname_map[0], chip_dataname_map[1]} );
+    // attach the vector to the branches 
+    for(auto & i_v: original_data)
+    {
+        set_events_tree_branch_address(chip_dataname_map[i_v.first],&i_v.second);
+    }
+    // the event loop
+    for(int k=0; k < this->get_events_number_entries(); ++k)
+    {
+        for(const auto & i_v: data)
+        {
+            if( i_v.second != nullptr )
+            {
+                i_v.second->clear();
+                i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
+                //i_v.second->resize(ALIBAVA::NOOFCHANNELS);
+            }
+        }
+        
+        this->get_events_entry(k);
+        // And update using the pedestal and noise corrections
+        for(const auto & chip_rawdata: original_data)
+        {
+            // --> Slightly slowest..
+            // Subtract noise and pedestals in a provisional vector
+            //std::vector<float> total_sub(chip_rawdata.second->size());
+            //std::transform(pedestal[chip_rawdata.first]->begin(),pedestal[chip_rawdata.first]->end(),
+            //        noise[chip_rawdata.first]->begin(), 
+            //        total_sub.begin(),
+            //        [] (const float & ped, const float & noi) { return ped-noi; });
+            //// And now perform the final subtraction
+            //std::transform(chip_rawdata.second->begin(),chip_rawdata.second->end(), total_sub.begin(),
+            //        data[chip_rawdata.first]->begin(),
+            //        [] (const float & rawdata, const float & allbutsignal) { return rawdata-allbutsignal; });
+            for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
+            {
+                data[chip_rawdata.first]->push_back( (*chip_rawdata.second)[ichan]-
+                        (*pedestal[chip_rawdata.first])[ichan]-(*noise[chip_rawdata.first])[ichan] );
+            }
+        }
+        tevt->Fill();
+    }
+    // Write it
+    tevt->Write("", TTree::kOverwrite);    
+    // Delete it? Use the close to write it, by using the AddFriend?
+    // Deallocate memory--> [XXX: Maybe a function]
+    for(auto & i_v: data)
+    {
+        if( i_v.second != nullptr )
+        {
+            delete i_v.second ;
+            i_v.second = nullptr;
+        }
+    }
+    // the pedestal and noise
+    for(auto & i_v: pedestal)
+    {
+        if(i_v.second != nullptr)
+        {
+            delete i_v.second;
+            i_v.second = nullptr;
+        }
+    }
+
+    for(auto & i_v: noise)
+    {
+        if(i_v.second != nullptr)
+        {
+            delete i_v.second;
+            i_v.second = nullptr;
+        }
+    }
+
+
+    // Everything back to the original state
+    this->reset_events_tree();
+
+    // Note that close will take care of closing the appropiate 
+    // trees (events, runHeader)
     this->close();
 }
 
@@ -229,6 +320,18 @@ void IOManager::close()
 TTree * IOManager::get_events_tree() const
 {
     return this->_tree_events;
+}
+
+// Re-open the event trees
+void IOManager::resurrect_events_tree()
+{
+    if( this->_tree_events != nullptr )
+    {
+        std::cerr << "[IOManager::resurrect_events_tree WARNING] Trying to"
+            << " resurrect an still live TTree. Ignoring the order." << std::endl;
+        return;
+    }
+    this->_tree_events = static_cast<TTree*>(this->_file->Get("Events"));
 }
 
 void IOManager::set_events_tree_access(const std::vector<std::string> & branch_list) const

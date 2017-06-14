@@ -194,7 +194,7 @@ int IOAlibavaReader::read_data(const input_options & opt,const IOManager & ioman
     {
         if( eventCounter % 1000 == 0 )
         {
-            std::cout << "\r Processing  "<< eventCounter << " from run " 
+            std::cout << "\rProcessing  "<< eventCounter << " from run " 
                 << opt.runNumber << std::flush;
         }
 	

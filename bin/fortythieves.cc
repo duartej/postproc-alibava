@@ -174,10 +174,10 @@ int main(int argc, char* argv[])
         std::cout << " - Calculating <pedestals>" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
         
-        std::cout << " - Extracting pedestals free of noise" << std::endl;
+        std::cout << " - Re-evaluating pedestals (noise extracted)" << std::endl;
         postproc.get_pedestal_noise_free(iomanager_ped,pednoise_cmmdnot);
         
-        std::cout << " - Calculating pedestals and common noise" << std::endl;
+        std::cout << " - Re-calculating pedestals and common noise" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmd = postproc.calculate_pedestal_noise(iomanager_ped);
         /*for(auto & chip_m: pednoise_cmmdnot)
         {

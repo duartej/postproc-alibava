@@ -41,6 +41,8 @@ class IOManager
         
         // store the friends
         void aux_store_friends(TTree * tree);
+        // Resurrecting the events tree
+        void resurrect_events_tree();
 
     public:
         IOManager(const std::string & rootfilename);
