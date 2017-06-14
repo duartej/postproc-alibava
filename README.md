@@ -22,13 +22,19 @@ variable ```PATH``` pointing to that folder:
 ```bash
 $ export PATH=$PATH:$HOME/.local/bin
 ```
+As well, it will create some shared libraries under the 
+```$HOME/.local/lib```, so you need to update also the environment
+variable ```LD_LIBRARY-PATH```:
+```bash
+$ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/lib
+```
 You can change the install directory by using the cmake variable
 ```CMAKE_INSTALL_PREFIX```
 ```bash
 $ cmake -DCMAKE_INSTALL_PREFIX=your_favorite_path ..
 ```
-and then don't forget to export the ```PATH``` variable to include
-that folder.
+and then don't forget to export the ```PATH``` and the ```LD_LIBRARY_PATH``` to
+include both folders.
 
 #### Dependencies
  * ROOT >= 6.0 (Note that some problems has been spotted when using 5.34)
