@@ -20,6 +20,7 @@
 
 // System headers
 #include <fstream>
+#include <iomanip>
 
 // Some auxiliary functions ----------------------------
 std::string trim_right(const std::string & s)
@@ -159,16 +160,23 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     {
         set_events_tree_branch_address(chip_dataname_map[i_v.first],&i_v.second);
     }
+    
+    // Go back to the previous position, move up 1 line, and set 
+    // the 80 column
+    std::cout << "\033[1A\033[45C[000%]" << std::flush;
+    const int nentries= this->get_events_number_entries();
+    float point = float(nentries)/100.0;
     // the event loop
     for(int k=0; k < this->get_events_number_entries(); ++k)
     {
+        std::cout << "\r\033[45C[" << std::setfill('0') << std::setw(3) 
+            << std::round(float(k)/point) << "%]" << std::flush;
         for(const auto & i_v: data)
         {
             if( i_v.second != nullptr )
             {
                 i_v.second->clear();
                 i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
-                //i_v.second->resize(ALIBAVA::NOOFCHANNELS);
             }
         }
         
@@ -176,17 +184,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
         // And update using the pedestal and noise corrections
         for(const auto & chip_rawdata: original_data)
         {
-            // --> Slightly slowest..
-            // Subtract noise and pedestals in a provisional vector
-            //std::vector<float> total_sub(chip_rawdata.second->size());
-            //std::transform(pedestal[chip_rawdata.first]->begin(),pedestal[chip_rawdata.first]->end(),
-            //        noise[chip_rawdata.first]->begin(), 
-            //        total_sub.begin(),
-            //        [] (const float & ped, const float & noi) { return ped-noi; });
-            //// And now perform the final subtraction
-            //std::transform(chip_rawdata.second->begin(),chip_rawdata.second->end(), total_sub.begin(),
-            //        data[chip_rawdata.first]->begin(),
-            //        [] (const float & rawdata, const float & allbutsignal) { return rawdata-allbutsignal; });
+            // Subtract noise and pedestals to the raw-data
             for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
             {
                 data[chip_rawdata.first]->push_back( (*chip_rawdata.second)[ichan]-
@@ -195,6 +193,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
         }
         tevt->Fill();
     }
+    std::cout << std::endl; 
     // Write it
     tevt->Write("", TTree::kOverwrite);    
     // Delete it? Use the close to write it, by using the AddFriend?
