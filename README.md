@@ -72,9 +72,11 @@ contains data which is constant along the whole run.
 * **postproc_Events**: this tree is only present whenever the ```-p``` option is active as well, and it stores the ADC counts per channel/event with the pedestals and noise subtracted 
    * ```postproc_data_beetle<chipnumber>```
    
-Use the ```AddFriend``` mechanism to related and plot between the ```postproc``` versions of the Trees:
+Use the ```AddFriend``` mechanism to relate and connect the original and the ```postproc``` versions of the Trees in order to share and use information between them.
 ```bash
+# Add the Events tree as friend to postproc_Events (you can do it as they have the same
+# number of events)
 postproc_Events->AddFriend("Events");
+# Now you can use the branches of Events (as eventTime) as if they belong to postproc_Events
 postproc_Events->Draw("postproc_data_beetle1[13]","eventTime < 30 && eventTime > 3");
 ```
-   
