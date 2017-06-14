@@ -56,4 +56,25 @@ Convert a raw binary data from the ALIBAVA DAQ into a ROOT file
  -r run number [-1]
  -h show this help
 ```   
-
+To obtain a root file with signal subtracted by pedestal and common noise, you need
+to provide the ```-p``` option with the pedestal file obtained using a pedestal run
+with the ALIBAVA-gui. 
+```bash
+$ fortythieves -r <runNumber> -p <raw_pedestal_file> -o outputfile.root <raw_beam_file> 
+```
+After the previous command is launched, the ```outputfile.root``` file will contain four TTrees:
+* **runHeader**: the run header branches related extracted from the <raw_beam_file>. Note that the run header usually
+contains data which is constant along the whole run.
+* **Events**: the Event related branches (raw ADC counts per beetle, time per event, temperature, etc..)
+* **postproc_runHeader**: this tree is only present whenever the ```-p``` option is active, and it stores the pedestals and noise per channel calculated per chip 
+   * ```pedestal_cmmd_beetle<chipnumber>```
+   * ```noise_cmmd_beetle<chipnumber>```
+* **postproc_Events**: this tree is only present whenever the ```-p``` option is active as well, and it stores the ADC counts per channel/event with the pedestals and noise subtracted 
+   * ```postproc_data_beetle<chipnumber>```
+   
+Use the ```AddFriend``` mechanism to related and plot between the ```postproc``` versions of the Trees:
+```bash
+postproc_Events->AddFriend("Events");
+postproc_Events->Draw("postproc_data_beetle1[13]","eventTime < 30 && eventTime > 3");
+```
+   
