@@ -73,4 +73,29 @@ struct AlibavaEvent
     std::vector<float> beetle2_data;
 };
 
+// Auxiliary structure with the needed parameters to calibrate
+struct CalibrationParameters
+{
+    CalibrationParameters()
+    {
+        nPulses = -1;
+        initialCharge = -99999;
+        finalCharge   = -99999;
+        deltaCharge   = -1;
+        nSamplesPerPulse = -1;
+    }
+
+    int get_injected_charge(const int & evtNumber)
+    {
+        // WARNING: XXX ---> maybe use std::modf function??
+        return initialCharge+deltaCharge*((evtNumber)/(nSamplesPerPulse));
+    }
+
+    int nPulses;
+    int initialCharge;
+    int finalCharge;
+    int deltaCharge;
+    int nSamplesPerPulse;
+};
+
 #endif

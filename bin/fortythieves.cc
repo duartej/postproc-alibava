@@ -54,6 +54,7 @@ void print_error_codes()
     std::cout << "3: Invalid raw input binary file" << std::endl;
     std::cout << "4: Invalid firmware version from raw data" << std::endl;
     std::cout << "5: Invalid data type (user)" << std::endl;
+    std::cout << "6: Inconsistent Run Header in calibration file" << std::endl;
 }
 
 // Input parser functions
@@ -66,7 +67,8 @@ void display_usage()
         << std::endl;
     std::cout << std::endl;
     std::cout << "[OPTIONS]\n -o name of the ROOT output file [fortythieves.root]\n"
-      << " -p alibava raw-binary containing the pedestal runs\n"
+      << " -p alibava raw-binary containing the pedestal run\n"
+      << " -c alibava raw-binary containing the calibration run\n"
       << " -r run number [-1]\n"
       /*<< " -m mis-identification probability, a value different from 0 will force '-t pions_kaons'"
       << " regardless of the user input [default: 0.0]\n"
@@ -150,12 +152,42 @@ int main(int argc, char* argv[])
     // process the file
     int status = IOAlibavaReader::read_data(opt,iomanager);
     iomanager.close();
+    
+    // process calibration file
+    if(opt.calibration_file != "")
+    {
+        std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
+            << "Calibration actived" << std::endl;
+        // The name of the output ROOT file
+        const auto dotpos = opt.outputFilename.find(".root");
+        std::string calfile(opt.outputFilename.replace(dotpos,5,"_cal.root"));
+        
+        // Initialize and prepare the output
+        IOManager iomanager_cal(calfile);
+        iomanager_cal.book_tree_header();
+        iomanager_cal.book_tree();
+        // process the pedestal file
+        // change the name of the input file
+        input_options opt_cal(opt);
+        opt_cal.cmndfile = opt.calibration_file;
+        status += IOAlibavaReader::read_data(opt_cal,iomanager_cal);
+        
+        // calibrating
+        AlibavaPostProcessor postproc;
+        std::cout << " - Calibrating" << std::endl;
+        CalibrateBeetleMap cal_map = postproc.calibrate(iomanager_cal);
+        // close the calibration file
+        iomanager_cal.close();
+        // And update the beam file with the calibration vector
+        // included in the runHeader postproc 
+        iomanager.update(cal_map);
+    }
 
-    // process pedestal file (Calibration ??)
+    // process pedestal file
     if(opt.storeHeaderPedestalNoise)
     {
         std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
-            << "Pedestal and noise calculations" << std::endl;
+            << "Pedestal and noise calculations actived" << std::endl;
         // The name of the output ROOT file
         const auto dotpos = opt.outputFilename.find(".root");
         std::string pedfile(opt.outputFilename.replace(dotpos,5,"_ped.root"));

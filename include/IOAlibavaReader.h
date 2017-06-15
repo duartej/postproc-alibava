@@ -23,7 +23,7 @@ class IOAlibavaReader
         IOAlibavaReader();
         
         // Read the file defined in the opt, and store it using the IOManager
-        static int read_data(const input_options & opt,const IOManager & );
+        static int read_data(const input_options & opt, IOManager & man);
 
         // Get TDC time
         static double tdc_time(const unsigned int & tdcTime);

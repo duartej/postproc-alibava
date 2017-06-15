@@ -17,6 +17,7 @@
 // System headers
 #include <fstream>
 #include <map>
+#include <cmath>
 
 // Some auxiliary functions ----------------------------
 namespace auxfunc
@@ -76,7 +77,7 @@ double IOAlibavaReader::get_temperature(const unsigned short & temp)
 }
 
 
-int IOAlibavaReader::read_data(const input_options & opt,const IOManager & iomanager) 
+int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager) 
 {
     // this event counter is used to stop the processing when it is
     // greater than numEvents.
@@ -132,7 +133,45 @@ int IOAlibavaReader::read_data(const input_options & opt,const IOManager & ioman
         version = int(header[1]-'0');
         header = header.substr(5);
     }
-    /// XXX: Different treatment when calibration run?
+    /// Different treatment when calibration run
+    if(type == 1)
+    {
+        // Obtain the calibration run information: 
+        //    Step; InitialCharge; FinalCharge; StepSize
+        // Add an extra ; to the end, to help to the next algorithm
+        std::string the_header(header+";");
+        const std::string token(";");
+        std::string::size_type n = 0;
+        std::string::size_type i = 0;
+        std::vector<int> elements;
+        while(i != the_header.size())
+        {
+            n = the_header.find(token,i);
+            elements.push_back( std::stof(the_header.substr(i,n)) );
+            i = n+1;
+        }
+        // Very precise notation, otherwise some format problem is 
+        // present
+        if(elements.size() != 4)
+        {
+            std::cerr << "Inconsistency in the Run Header of the input file."
+                << "The HEADER STRING does not have the expected format: "
+                << "'Npulses'; 'InitialCharge'; 'FinalCharge'; 'StepSize'"<< std::endl;
+            return 6;
+        }
+        // The delta charge to be used in each step should be
+        if(std::fabs(float(elements[3])-(elements[2]-elements[1])/float(elements[0])) > 1e-9)
+        {
+            std::cout << "Inconsistency in the Run Header of the calibration"
+                << " input file. The HEADER STRING provides a deltaCharge"
+                << " which does not fulfill "
+                << "deltaCharge=(finalCharge-initialCharge)/numberPulses" << std::endl;
+            return 6;
+        }
+        // Update the manager with this info
+        iomanager.set_calibration_parameters(elements);
+    }
+
     ////////////////////////////////////
     // Read header pedestal and noise //
     // /////////////////////////////////

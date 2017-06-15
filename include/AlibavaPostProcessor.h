@@ -18,14 +18,14 @@
 #include <vector>
 
 
-// improving readability
-using PedestalNoiseBeetleMap = std::map<int,std::pair<std::vector<float>,std::vector<float> > >;
-
 class AlibavaPostProcessor
 {
     public:
         AlibavaPostProcessor();
         ~AlibavaPostProcessor() { ; }
+
+        // Obtain the equivalent electrons per ADC counts
+        CalibrateBeetleMap calibrate(const IOManager & gauge);
 
         // Fit a gaussian per channel, the mean is the <pedestal> and the 
         // sigma the <noise> (note that to evaluate the common noise you 

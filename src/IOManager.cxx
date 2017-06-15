@@ -78,6 +78,7 @@ IOManager::IOManager(const std::string & rootfilename):
     _tree_header(nullptr),
     _tree_events(nullptr),
     _eventsProcessed(0),
+    _cal_parameters(nullptr),
     _runheader(nullptr), 
     _events(nullptr) 
 { 
@@ -86,6 +87,15 @@ IOManager::IOManager(const std::string & rootfilename):
 
 IOManager::~IOManager()
 {
+    // In principle it should be closed, but
+    // just in case (if it was closed, nothing will do inside)
+    this->close();
+
+    if(_cal_parameters != nullptr)
+    {
+        delete _cal_parameters;
+        _cal_parameters = nullptr;
+    }
     if(_runheader != nullptr)
     {
         delete _runheader;
@@ -97,6 +107,214 @@ IOManager::~IOManager()
         _events = nullptr;
     }
 }
+
+void IOManager::set_calibration_parameters(const std::vector<int> & calparam_v)
+{
+    _cal_parameters = new CalibrationParameters;
+    _cal_parameters->nPulses        = calparam_v[0];
+    _cal_parameters->initialCharge  = calparam_v[1];
+    _cal_parameters->finalCharge    = calparam_v[2];
+    _cal_parameters->deltaCharge    = calparam_v[3];
+    // Note that the missing nSamplesPerPulse should be
+    // updated once all events have been read
+}
+
+
+void IOManager::book_tree_header()
+{
+    _tree_header = new TTree("runHeader","run header");
+
+    _runheader   = new AlibavaRunHeader;
+    _tree_header->Branch("version",&(_runheader->version));
+    _tree_header->Branch("data_type",&(_runheader->data_type));
+    _tree_header->Branch("run_number",&(_runheader->run_number));
+    //_tree_header->Branch("header",&(_runheader.header),"I");
+    //_tree_header->Branch("date_time",&(_runheader.header),"I");
+    _tree_header->Branch("chipSelection",&(_runheader->chipSelection));
+    _tree_header->Branch("header_pedestal",&(_runheader->header_pedestal));
+    _tree_header->Branch("header_noise",&(_runheader->header_noise));
+}
+
+void IOManager::book_tree()
+{
+    _tree_events = new TTree("Events","Alibava events");
+
+    _events   = new AlibavaEvent;
+    _tree_events->Branch("type",&(_events->eventType));
+    _tree_events->Branch("size",&(_events->eventSize));
+    _tree_events->Branch("clock",&(_events->eventClock));
+    _tree_events->Branch("runNumber",&(_events->runNumber));
+    _tree_events->Branch("eventNumber",&(_events->eventNumber));
+    _tree_events->Branch("eventTime",&(_events->eventTime));
+    _tree_events->Branch("temperature",&(_events->eventTemp));
+    _tree_events->Branch("calibration_charge",&(_events->calCharge));
+    _tree_events->Branch("calibration_delay",&(_events->calDelay));
+    _tree_events->Branch("chipheader_beetle1",&(_events->beetle1_chipheader));
+    _tree_events->Branch("chipheader_beetle2",&(_events->beetle2_chipheader));
+    _tree_events->Branch("data_beetle1",&(_events->beetle1_data));
+    _tree_events->Branch("data_beetle2",&(_events->beetle2_data));
+}
+
+
+void IOManager::fill_header(const AlibavaRunHeader * aheader) const
+{
+    *_runheader = *aheader;
+    _tree_header->Fill();
+}
+
+void IOManager::fill_event(const AlibavaEvent * anEvent) 
+{
+    *_events = *anEvent;
+    _tree_events->Fill();
+    ++_eventsProcessed;
+}
+
+void IOManager::aux_store_friends(TTree * tree)
+{
+    // store the friends trees as well
+    TIter next(tree->GetListOfFriends());
+    TFriendElement * obj= nullptr;
+    while((obj = dynamic_cast<TFriendElement*>(next())))
+    {
+        obj->GetTree()->Write("", TTree::kOverwrite);
+    }
+}
+
+void IOManager::close()
+{
+    if( _tree_header != nullptr )
+    {
+        _tree_header->Write("", TTree::kOverwrite);
+        this->aux_store_friends(_tree_header);
+    }
+    if( _tree_events != nullptr )
+    {
+        _tree_events->Write("", TTree::kOverwrite);
+        this->aux_store_friends(_tree_events);
+    }
+    if(_file != nullptr)
+    {
+        _file->Close();
+        delete _file;
+        _file = nullptr;
+        _tree_header = nullptr;
+        _tree_events = nullptr;
+    }
+}
+
+// Getter
+TTree * IOManager::get_events_tree() const
+{
+    return this->_tree_events;
+}
+
+// Re-open the event trees
+void IOManager::resurrect_events_tree()
+{
+    if( this->_tree_events != nullptr )
+    {
+        std::cerr << "[IOManager::resurrect_events_tree WARNING] Trying to"
+            << " resurrect an still live TTree. Ignoring the order." << std::endl;
+        return;
+    }
+    this->_tree_events = static_cast<TTree*>(this->_file->Get("Events"));
+}
+
+void IOManager::set_events_tree_access(const std::vector<std::string> & branch_list) const
+{
+    // XXX: No mechanism to check the validity of the branches (id they exist)
+    // Speed up access, just using the branches we want
+    this->_tree_events->SetBranchStatus("*",0);
+    for(const auto & branch: branch_list)
+    {
+        this->_tree_events->SetBranchStatus(branch.c_str(),1);
+    }
+}
+
+void IOManager::reset_events_tree() const
+{
+    this->_tree_events->ResetBranchAddresses();
+    this->_tree_events->SetBranchStatus("*",1);
+}
+
+void IOManager::set_events_tree_branch_address(const std::string & branch_name, std::vector<float> ** v) const
+{
+    // XXX: No mechanism to check the validity of the branches (id they exist)
+    this->_tree_events->SetBranchAddress(branch_name.c_str(),v);
+}
+
+int IOManager::get_events_number_entries() const
+{
+    return this->_tree_events->GetEntries();
+}
+
+void IOManager::get_events_entry(const int & i) const
+{
+    this->_tree_events->GetEntry(i);
+}
+
+void IOManager::update(const CalibrateBeetleMap & cal_m)
+{
+    // Check the file is closed, otherwise don't do anything
+    if( _file != nullptr )
+    {
+        std::cerr << "[IOManager::update WARNING] Trying to update"
+            << " an still open file. Please close it first. " << std::endl;
+        return;
+    }
+
+    if( _cal_parameters != nullptr )
+    {
+        std::cerr << "[IOManager::update WARNING] Calibration run"
+            << " not processed! IOManager::set_calibration_parameters " 
+            << "must be called first." << std::endl;
+        return;
+    }
+    // First calculate the nSamplesPerPulse (note should be a integer the result,
+    // otherwise, some inconsistency is spotted)
+    _cal_parameters->nSamplesPerPulse = _eventsProcessed/_cal_parameters->nPulses;
+    
+    _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+    // Create a new Tree header 
+    TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
+    
+    std::map<int,std::vector<int>*> elec_adc = { {0, nullptr}, { 1, nullptr} }; 
+    t->Branch("electronADC_beetle1",&(elec_adc[0]));
+    t->Branch("electronADC_beetle1",&(elec_adc[0]));
+
+    // The loop
+    for(const auto & chip_p: cal_m)
+    {
+        if(elec_adc[chip_p.first] != nullptr)
+        {
+            elec_adc[chip_p.first]->clear();
+        }
+        
+        for(int i = 0; i < static_cast<int>(chip_p.second.size()); ++i)
+        {
+            elec_adc[chip_p.first]->push_back(chip_p.second[i]);
+        }
+    }
+    t->Fill();
+    // Write it
+    t->Write("", TTree::kOverwrite);    
+    // Delete it? Use the close to write it, by using the AddFriend?
+    
+    // Deallocate memory--> [XXX: Maybe a function]
+    for(auto & i_v: elec_adc)
+    {
+        if(i_v.second != nullptr)
+        {
+            delete i_v.second;
+            i_v.second = nullptr;
+        }
+    }
+
+    // Note that close will take care of closing the appropiate 
+    // trees (events, runHeader)
+    this->close();
+}
+
 
 void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
 {
@@ -234,135 +452,4 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     this->close();
 }
 
-void IOManager::book_tree_header()
-{
-    _tree_header = new TTree("runHeader","run header");
-
-    _runheader   = new AlibavaRunHeader;
-    _tree_header->Branch("version",&(_runheader->version));
-    _tree_header->Branch("data_type",&(_runheader->data_type));
-    _tree_header->Branch("run_number",&(_runheader->run_number));
-    //_tree_header->Branch("header",&(_runheader.header),"I");
-    //_tree_header->Branch("date_time",&(_runheader.header),"I");
-    _tree_header->Branch("chipSelection",&(_runheader->chipSelection));
-    _tree_header->Branch("header_pedestal",&(_runheader->header_pedestal));
-    _tree_header->Branch("header_noise",&(_runheader->header_noise));
-}
-
-void IOManager::book_tree()
-{
-    _tree_events = new TTree("Events","Alibava events");
-
-    _events   = new AlibavaEvent;
-    _tree_events->Branch("type",&(_events->eventType));
-    _tree_events->Branch("size",&(_events->eventSize));
-    _tree_events->Branch("clock",&(_events->eventClock));
-    _tree_events->Branch("runNumber",&(_events->runNumber));
-    _tree_events->Branch("eventNumber",&(_events->eventNumber));
-    _tree_events->Branch("eventTime",&(_events->eventTime));
-    _tree_events->Branch("temperature",&(_events->eventTemp));
-    _tree_events->Branch("calibration_charge",&(_events->calCharge));
-    _tree_events->Branch("calibration_delay",&(_events->calDelay));
-    _tree_events->Branch("chipheader_beetle1",&(_events->beetle1_chipheader));
-    _tree_events->Branch("chipheader_beetle2",&(_events->beetle2_chipheader));
-    _tree_events->Branch("data_beetle1",&(_events->beetle1_data));
-    _tree_events->Branch("data_beetle2",&(_events->beetle2_data));
-}
-
-
-void IOManager::fill_header(const AlibavaRunHeader * aheader) const
-{
-    *_runheader = *aheader;
-    _tree_header->Fill();
-}
-
-void IOManager::fill_event(const AlibavaEvent * anEvent) const
-{
-    *_events = *anEvent;
-    _tree_events->Fill();
-}
-
-void IOManager::aux_store_friends(TTree * tree)
-{
-    // store the friends trees as well
-    TIter next(tree->GetListOfFriends());
-    TFriendElement * obj= nullptr;
-    while((obj = dynamic_cast<TFriendElement*>(next())))
-    {
-        obj->GetTree()->Write("", TTree::kOverwrite);
-    }
-}
-
-void IOManager::close()
-{
-    if( _tree_header != nullptr )
-    {
-        _tree_header->Write("", TTree::kOverwrite);
-        this->aux_store_friends(_tree_header);
-    }
-    if( _tree_events != nullptr )
-    {
-        _tree_events->Write("", TTree::kOverwrite);
-        this->aux_store_friends(_tree_events);
-    }
-    if(_file != nullptr)
-    {
-        _file->Close();
-        delete _file;
-        _file = nullptr;
-        _tree_header = nullptr;
-        _tree_events = nullptr;
-    }
-}
-
-// Getter
-TTree * IOManager::get_events_tree() const
-{
-    return this->_tree_events;
-}
-
-// Re-open the event trees
-void IOManager::resurrect_events_tree()
-{
-    if( this->_tree_events != nullptr )
-    {
-        std::cerr << "[IOManager::resurrect_events_tree WARNING] Trying to"
-            << " resurrect an still live TTree. Ignoring the order." << std::endl;
-        return;
-    }
-    this->_tree_events = static_cast<TTree*>(this->_file->Get("Events"));
-}
-
-void IOManager::set_events_tree_access(const std::vector<std::string> & branch_list) const
-{
-    // XXX: No mechanism to check the validity of the branches (id they exist)
-    // Speed up access, just using the branches we want
-    this->_tree_events->SetBranchStatus("*",0);
-    for(const auto & branch: branch_list)
-    {
-        this->_tree_events->SetBranchStatus(branch.c_str(),1);
-    }
-}
-
-void IOManager::reset_events_tree() const
-{
-    this->_tree_events->ResetBranchAddresses();
-    this->_tree_events->SetBranchStatus("*",1);
-}
-
-void IOManager::set_events_tree_branch_address(const std::string & branch_name, std::vector<float> ** v) const
-{
-    // XXX: No mechanism to check the validity of the branches (id they exist)
-    this->_tree_events->SetBranchAddress(branch_name.c_str(),v);
-}
-
-int IOManager::get_events_number_entries() const
-{
-    return this->_tree_events->GetEntries();
-}
-
-void IOManager::get_events_entry(const int & i) const
-{
-    this->_tree_events->GetEntry(i);
-}
 
