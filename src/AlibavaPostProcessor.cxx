@@ -17,6 +17,7 @@
 #include "TTree.h"
 #include "TH1F.h"
 #include "TH2F.h"
+#include "TProfile.h"
 #include "TF1.h"
 #include "TCanvas.h"
 
@@ -28,13 +29,191 @@
 #include <stdexcept>
 #include <utility>
 
+namespace auxmem
+{
+    // deallocating  helper
+    void deallocate(std::map<int,std::vector<float>*> & m)
+    {
+        for(auto & i_v: m)
+        {
+            if(i_v.second != nullptr)
+            {
+                delete i_v.second;
+                i_v.second = nullptr;
+            }
+        }
+    }
+    template <class T>
+        void deallocate(const std::map<int,std::map<int,T*> > & histos)
+        {
+            for(auto & i_m2: histos)
+            {
+                for(auto & i_mI: i_m2.second)
+                {
+                    if(i_mI.second != nullptr)
+                    {
+                        delete i_mI.second;
+                        i_mI.second = nullptr;
+                    }
+                }
+            }
+        }
+    // concrete
+    /*void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);
+    void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);
+    void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);*/
+}
+
 AlibavaPostProcessor::AlibavaPostProcessor():
     _pedestal_subtracted(false),
     _postproc_treename("postproc_Events")
 {
 }
 
+
+// Alternative algorithm using the calibration_charge from the Events tree
 CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
+{
+    std::string data_b1_brname("data_beetle1");
+    std::string data_b2_brname("data_beetle2");
+    
+    std::string charge_brname("calibration_charge");
+    
+    // Speed up access, just using the branches we want:
+    const std::vector<std::string> data_names = { data_b1_brname, data_b2_brname, charge_brname };
+    gauge.set_events_tree_access(data_names);
+    
+    // for the charge
+    float thecharge = -99999.9;
+    gauge.set_events_tree_branch_address(charge_brname,&thecharge);
+    // Helper map 
+    std::map<int,std::vector<float>*> thedata = { {0,nullptr}, {1,nullptr} };
+    gauge.set_events_tree_branch_address(data_b1_brname,&(thedata[0]));
+    gauge.set_events_tree_branch_address(data_b2_brname,&(thedata[1]));
+    // The histograms (XXX: Hardcoded bins and ranges)
+    std::map<int,std::map<int,TProfile*> > histos;
+    std::map<int,std::map<int,TF1*> >  cal_curve;
+    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        std::map<int,TProfile*> hchip;
+        std::map<int,TF1*> fchip;
+        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS ; ++ichan)
+        {
+            hchip[ichan] = new TProfile(std::string("calibration"+std::to_string(ichan)).c_str(),"",
+                    2*gauge.get_calibration_parameters()->nPulses+1,
+                   (-1)*gauge.get_calibration_parameters()->initialCharge,
+                   (-1)*gauge.get_calibration_parameters()->finalCharge,
+                   -1000.0,1000.0);
+            hchip[ichan]->SetDirectory(0);
+            fchip[ichan] = new TF1(std::string("calibration_curve"+std::to_string(ichan)).c_str(),"pol1");
+        }
+        histos[chip] = hchip;
+        cal_curve[chip] = fchip;
+    }
+    // loop over the tree to fill the histograms
+    // filling the histograms injected charge vs. ADC count 
+    // per events 
+    // NOTE the charge injection pattern follows:
+    //
+    //     EVENT   |   STRIP    | CHARGE SIGN
+    // ------------+------------+-------------
+    //  evt%2 == 0 |  i%2 == 0  |  NEGATIVE
+    //  evt%2 == 0 |  i%2 == 1  |  POSITIVE
+    //  ======================================
+    //  evt%2 == 1 |  i%2 == 0  |  POSITIVE
+    //  evt%2 == 1 |  i%2 == 1  |  NEGATIVE
+    //  
+    //  That conditions can be summarize with
+    //  (-1)**[ (EVENT%2) + ((STRIP+1)%2) ]
+    const int nentries = gauge.get_events_number_entries();
+    for(int k = 0; k < nentries; ++k)
+    {
+        thecharge = -99999.9;
+        gauge.get_events_entry(k);
+        for(int beetle = 0; beetle < ALIBAVA::NOOFCHIPS; ++beetle)
+        {
+            // The injected charge is the same for all the strips, 
+            // just taking the first one
+            const int injected_pulse = static_cast<int>( thecharge );
+
+            for(int istrip = 0; istrip < ALIBAVA::NOOFCHANNELS; ++istrip)
+            {
+                // Note that the injected charge will depend on event parity
+                // and channel parity
+                //const int sign = std::pow(-1,((k+1)%2))*std::pow(-1,(istrip%2));
+                const int sign = std::pow(-1,((k%2)+(istrip+1)%2));
+                histos[beetle][istrip]->Fill(sign*injected_pulse, (*(thedata[beetle]))[istrip] );
+            }
+        }
+    }
+    // The return data
+    CalibrateBeetleMap output;
+    output[0].reserve(ALIBAVA::NOOFCHANNELS);
+    output[1].reserve(ALIBAVA::NOOFCHANNELS);
+    // The fit: a canvas for the fits
+    // Loop over the channels to fit the calibration curve (stright line):
+    //   - the slope of the line: [ADC counts/#electrons], therefore
+    //   the number of electrons corresponding to a given ADC counts: 1/slope
+    TCanvas * cc = new TCanvas("def");
+    // An auxiliary map to check that the fit worked well
+    std::map<int,std::vector<int>> fitstatus_m = { {0,{0}},{0,{0}} };
+    for(auto & v: fitstatus_m)
+    {
+        v.second.reserve(ALIBAVA::NOOFCHANNELS);
+    }
+    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
+        {
+            // the fit
+            const int fit_status = histos[chip][ichan]->Fit(cal_curve[chip][ichan],"Q");
+            fitstatus_m[chip].push_back(fit_status);
+            // Slope: [ADC counts/number of electrons*1e-3] --> 1.0/slope
+            //const int elec_per_adc = std::round(1.0/(tempfit->GetParameter(1))); 
+            // const float err = tempfit->GetParError(1)*elec_per_adc; 
+            output[chip].push_back( static_cast<int>(std::round(1.0/(cal_curve[chip][ichan])->GetParameter(1))) );
+        }
+    }
+    // Check if anything went wrong, 
+    for(const auto & chip_v: fitstatus_m)
+    {
+        for(int ichan = 0; ichan < static_cast<int>(chip_v.second.size()); ++ichan)
+        {
+            if(chip_v.second[ichan] != 0)
+            {
+                std::cout << "\033[1;33mWARNING\033[1;m Problems with the "
+                    << "line fit @ CHIP: " << chip_v.first 
+                    << " , STRIP: " << ichan << " (Fit status:" 
+                    << chip_v.second[ichan] << ")" << std::endl;
+            }
+        }
+    }
+    // Deallocating memory
+    delete cc;
+    cc = nullptr;
+    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
+        {
+            if( histos[chip][ichan] != nullptr )
+            {
+                delete histos[chip][ichan];
+                histos[chip][ichan] = nullptr;
+            }
+            if( cal_curve[chip][ichan] != nullptr )
+            {
+                delete cal_curve[chip][ichan];
+                cal_curve[chip][ichan] = nullptr;
+            }
+        }
+    }
+    // RE-activate all branches (and reset their object addresses)
+    gauge.reset_events_tree();
+
+    return output;
+}
+
+/*CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
 {
     std::string data_b1_brname("data_beetle1");
     std::string data_b2_brname("data_beetle2");
@@ -98,7 +277,7 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
     //   the number of electrons corresponding to a given ADC counts: 1/slope
     TCanvas * cc = new TCanvas("def");
     // An auxiliary map to check that the fit worked well
-    std::map<int,std::vector<int>> fitstatus_m = { {0,{}},{0,{0}} };
+    std::map<int,std::vector<int>> fitstatus_m = { {0,{0}},{0,{0}} };
     for(auto & v: fitstatus_m)
     {
         v.second.reserve(ALIBAVA::NOOFCHANNELS);
@@ -153,7 +332,7 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
     gauge.reset_events_tree();
 
     return output;
-}
+}*/
 
 PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOManager & pedestal)
 {

@@ -171,7 +171,7 @@ int main(int argc, char* argv[])
         input_options opt_cal(opt);
         opt_cal.cmndfile = opt.calibration_file;
         status += IOAlibavaReader::read_data(opt_cal,iomanager_cal);
-        
+        std::cout <<    iomanager_cal.get_calibration_parameters    () <<std::endl;
         // calibrating
         AlibavaPostProcessor postproc;
         std::cout << " - Calibrating" << std::endl;

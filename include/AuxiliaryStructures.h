@@ -74,6 +74,7 @@ struct AlibavaEvent
 };
 
 // Auxiliary structure with the needed parameters to calibrate
+// TO OBE DEPRECATED
 struct CalibrationParameters
 {
     CalibrationParameters()

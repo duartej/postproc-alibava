@@ -63,6 +63,7 @@ class IOManager
         void reset_events_tree() const;
         // Probably a template, but just vector of floats so far
         void set_events_tree_branch_address(const std::string & branch, std::vector<float> ** v) const;
+        void set_events_tree_branch_address(const std::string & branch, float * v ) const;
         // Number of entries and Get the entry
         int get_events_number_entries() const;
         void get_events_entry(const int & i) const;

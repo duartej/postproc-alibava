@@ -16,11 +16,13 @@
 // ROOT 
 #include "TFile.h"
 #include "TTree.h"
+#include "TBranch.h"
 #include "TFriendElement.h"
 
 // System headers
 #include <fstream>
 #include <iomanip>
+#include <functional>
 
 // Some auxiliary functions ----------------------------
 std::string trim_right(const std::string & s)
@@ -237,6 +239,12 @@ void IOManager::reset_events_tree() const
     this->_tree_events->SetBranchStatus("*",1);
 }
 
+void IOManager::set_events_tree_branch_address(const std::string & branch_name, float * v) const
+{
+    // XXX: No mechanism to check the validity of the branches (id they exist)
+    this->_tree_events->SetBranchAddress(branch_name.c_str(),v);
+}
+
 void IOManager::set_events_tree_branch_address(const std::string & branch_name, std::vector<float> ** v) const
 {
     // XXX: No mechanism to check the validity of the branches (id they exist)
@@ -263,7 +271,7 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
         return;
     }
 
-    if( _cal_parameters != nullptr )
+    /*if( _cal_parameters == nullptr )
     {
         std::cerr << "[IOManager::update WARNING] Calibration run"
             << " not processed! IOManager::set_calibration_parameters " 
@@ -272,16 +280,15 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
     }
     // First calculate the nSamplesPerPulse (note should be a integer the result,
     // otherwise, some inconsistency is spotted)
-    _cal_parameters->nSamplesPerPulse = _eventsProcessed/_cal_parameters->nPulses;
-    
+    _cal_parameters->nSamplesPerPulse = _eventsProcessed/_cal_parameters->nPulses;*/
+
     _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
     // Create a new Tree header 
     TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
     
-    std::map<int,std::vector<int>*> elec_adc = { {0, nullptr}, { 1, nullptr} }; 
+    std::map<int,std::vector<int>*> elec_adc = { {0, new std::vector<int>}, { 1, new std::vector<int>} }; 
     t->Branch("electronADC_beetle1",&(elec_adc[0]));
-    t->Branch("electronADC_beetle1",&(elec_adc[0]));
-
+    t->Branch("electronADC_beetle2",&(elec_adc[1]));
     // The loop
     for(const auto & chip_p: cal_m)
     {
@@ -327,15 +334,28 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     }
     
     _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
-    // Create a new Tree header and the Tree events
-    TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
+    // Check if the tree already exist
+    // in that case an extra branches will be place also in the Events
+    bool is_calibrated = true;
+    TTree *t = dynamic_cast<TTree*>(_file->Get("postproc_runHeader"));
+    if( t == nullptr )
+    {
+        // Create a new Tree header and the Tree events
+        t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
+        is_calibrated=false;
+    }
     
     std::map<int,std::vector<float>*> pedestal = { {0, nullptr}, { 1, nullptr} }; 
     std::map<int,std::vector<float>*> noise = { {0,nullptr}, {1,nullptr} }; 
-    t->Branch("pedestal_cmmd_beetle1",&(pedestal[0]));
-    t->Branch("noise_cmmd_beetle1",&(noise[0]));
-    t->Branch("pedestal_cmmd_beetle2",&(pedestal[1]));
-    t->Branch("noise_cmmd_beetle2",&(noise[1]));
+    // Filling it as branches: 
+    // XXX: BE CAREFUL though. If storage problems show up maybe change the approach to
+    // create a new tree
+    // See. https://root.cern.ch/doc/master/classTTree.html (Adding a Branch to a Existing Tree)
+    std::vector<TBranch*> newbranches;
+    newbranches.push_back(t->Branch("pedestal_cmmd_beetle1",&(pedestal[0])));
+    newbranches.push_back(t->Branch("noise_cmmd_beetle1",&(noise[0])));
+    newbranches.push_back(t->Branch("pedestal_cmmd_beetle2",&(pedestal[1])));
+    newbranches.push_back(t->Branch("noise_cmmd_beetle2",&(noise[1])));
 
     // The loop
     for(const auto & chip_p: pednoise_m)
@@ -355,9 +375,23 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
             noise[chip_p.first]->push_back(chip_p.second.second[i]);
         }
     }
-    t->Fill();
+    // fill all branches
+    std::for_each(newbranches.begin(),newbranches.end(), [] (TBranch* br) { br->Fill(); });
     // Write it
-    t->Write("", TTree::kOverwrite);    
+    t->Write("", TTree::kOverwrite);
+    // obtain the calibrated vector if exist
+    std::map<int,std::vector<float>*> * elec_per_adc = nullptr;
+    if(is_calibrated)
+    {
+        std::map<int,std::vector<float>*> cal_m;
+        t->SetBranchAddress("electronADC_beetle1",&(cal_m[0]));
+        t->SetBranchAddress("electronADC_beetle2",&(cal_m[1]));
+        t->GetEntry(0);
+        // and copy 
+        elec_per_adc= new std::map<int,std::vector<float>*>;
+        (*elec_per_adc)[0] = cal_m[0];
+        (*elec_per_adc)[1] = cal_m[1];
+    }
     // Delete it? Use the close to write it, by using the AddFriend?
     
     // And the events tree: I need to ressurrect the Events tree
@@ -365,6 +399,17 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     std::map<int,std::vector<float>* > data = { {0, new std::vector<float>}, { 1, new std::vector<float>} }; 
     tevt->Branch("postproc_data_beetle1",&(data[0]));
     tevt->Branch("postproc_data_beetle2",&(data[1]));
+    // The calibrated if needed
+    std::map<int,std::vector<float>* > out_cal = { {0,new std::vector<float>}, {1,new std::vector<float>} };
+    // And define the setter to that collection (a dummy functoin if no cal)
+    std::function<void(const int &, const int &)> fill_calibrated_branches = [&] (const int & /*chip*/, const int & /*istrip*/) { return; };
+    if(is_calibrated)
+    {
+        tevt->Branch("postproc_cal_data_beetle1",&(out_cal[0]));
+        tevt->Branch("postproc_cal_data_beetle2",&(out_cal[1]));
+        fill_calibrated_branches = [&] (const int & chip, const int & istrip) 
+                { out_cal[chip]->push_back( (*(*elec_per_adc)[chip])[istrip] * (*data[chip])[istrip] ) ; };
+    }
 
     // Resurrect the Events tree to extract the data signal, in order 
     // to correct it
@@ -398,6 +443,15 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
             }
         }
         
+        for(const auto & i_v: out_cal)
+        {
+            if( i_v.second != nullptr )
+            {
+                i_v.second->clear();
+                i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
+            }
+        }
+        
         this->get_events_entry(k);
         // And update using the pedestal and noise corrections
         for(const auto & chip_rawdata: original_data)
@@ -407,6 +461,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
             {
                 data[chip_rawdata.first]->push_back( (*chip_rawdata.second)[ichan]-
                         (*pedestal[chip_rawdata.first])[ichan]-(*noise[chip_rawdata.first])[ichan] );
+                fill_calibrated_branches(chip_rawdata.first,ichan);
             }
         }
         tevt->Fill();
@@ -417,6 +472,14 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     // Delete it? Use the close to write it, by using the AddFriend?
     // Deallocate memory--> [XXX: Maybe a function]
     for(auto & i_v: data)
+    {
+        if( i_v.second != nullptr )
+        {
+            delete i_v.second ;
+            i_v.second = nullptr;
+        }
+    }
+    for(auto & i_v: out_cal)
     {
         if( i_v.second != nullptr )
         {
