@@ -98,7 +98,7 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
             hchip[ichan] = new TProfile(std::string("calibration"+std::to_string(ichan)).c_str(),"",
                     2*gauge.get_calibration_parameters()->nPulses+1,
                    (-1)*gauge.get_calibration_parameters()->finalCharge,
-                   (-1)*gauge.get_calibration_parameters()->finalCharge,
+                   gauge.get_calibration_parameters()->finalCharge,
                    -1000.0,1000.0);
             hchip[ichan]->SetDirectory(0);
             fchip[ichan] = new TF1(std::string("calibration_curve"+std::to_string(ichan)).c_str(),"pol1");
