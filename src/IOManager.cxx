@@ -137,6 +137,7 @@ IOManager::~IOManager()
 
 void IOManager::set_calibration_parameters(const std::vector<int> & calparam_v)
 {
+    // DEPRECATED... NOT NEEDED ANYMORE
     _cal_parameters = new CalibrationParameters;
     _cal_parameters->nPulses        = calparam_v[0];
     _cal_parameters->initialCharge  = calparam_v[1];
@@ -316,7 +317,9 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
     t->Fill();
     // Write it
     t->Write("", TTree::kOverwrite);    
-    // Delete it? Use the close to write it, by using the AddFriend?
+    // Deallocate ttree (is already in the file)
+    delete t;
+    t = nullptr;
     
     // Deallocate memory
     deallocate_memory<int>(elec_adc);
@@ -376,6 +379,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     std::for_each(newbranches.begin(),newbranches.end(), [] (TBranch* br) { br->Fill(); });
     // Write it
     t->Write("", TTree::kOverwrite);
+    
     // obtain the calibrated vector if exist
     std::map<int,std::vector<float>*> * elec_per_adc = nullptr;
     if(is_calibrated)
@@ -389,7 +393,10 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
         (*elec_per_adc)[0] = cal_m[0];
         (*elec_per_adc)[1] = cal_m[1];
     }
-    // Delete it? Use the close to write it, by using the AddFriend?
+    // Tree not needed anymore, 
+    delete t;
+    t = nullptr;
+
     
     // And the events tree: I need to ressurrect the Events tree
     TTree * tevt = new TTree("postproc_Events","post-processed signals");
@@ -451,7 +458,10 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     std::cout << std::endl; 
     // Write it
     tevt->Write("", TTree::kOverwrite);    
-    // Delete it? Use the close to write it, by using the AddFriend?
+    // Deallocate
+    delete tevt;
+    tevt = nullptr;
+
     // Deallocate memory
     deallocate_memory<float>(data);
     deallocate_memory<float>(out_cal);
