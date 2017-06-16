@@ -72,6 +72,31 @@ double get_temperature(unsigned short temp)
     }
 }
 
+// deallocate memory
+template <class T> void deallocate_memory(std::map<int,std::vector<T>*> v)
+{
+    for(auto & i_v: v)
+    {
+        if(i_v.second != nullptr)
+        {
+            delete i_v.second;
+            i_v.second = nullptr;
+        }
+    }
+}
+
+// clear and reserve memory before filling
+template <class T> void clear_and_reserve_channels(std::map<int,std::vector<T>*> v)
+{
+    for(auto & i_v: v)
+    {
+        if( i_v.second != nullptr )
+        {
+            i_v.second->clear();
+            i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
+        }
+    }
+}
 
 // --
 IOManager::IOManager(const std::string & rootfilename): 
@@ -271,17 +296,6 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
         return;
     }
 
-    /*if( _cal_parameters == nullptr )
-    {
-        std::cerr << "[IOManager::update WARNING] Calibration run"
-            << " not processed! IOManager::set_calibration_parameters " 
-            << "must be called first." << std::endl;
-        return;
-    }
-    // First calculate the nSamplesPerPulse (note should be a integer the result,
-    // otherwise, some inconsistency is spotted)
-    _cal_parameters->nSamplesPerPulse = _eventsProcessed/_cal_parameters->nPulses;*/
-
     _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
     // Create a new Tree header 
     TTree * t = new TTree("postproc_runHeader","post-processed pedestals and common noise");
@@ -289,14 +303,11 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
     std::map<int,std::vector<int>*> elec_adc = { {0, new std::vector<int>}, { 1, new std::vector<int>} }; 
     t->Branch("electronADC_beetle1",&(elec_adc[0]));
     t->Branch("electronADC_beetle2",&(elec_adc[1]));
-    // The loop
+    // The loop (first clean and reserve memory to fill the chip
+    // vectors)
+    clear_and_reserve_channels<int>(elec_adc);
     for(const auto & chip_p: cal_m)
     {
-        if(elec_adc[chip_p.first] != nullptr)
-        {
-            elec_adc[chip_p.first]->clear();
-        }
-        
         for(int i = 0; i < static_cast<int>(chip_p.second.size()); ++i)
         {
             elec_adc[chip_p.first]->push_back(chip_p.second[i]);
@@ -307,15 +318,8 @@ void IOManager::update(const CalibrateBeetleMap & cal_m)
     t->Write("", TTree::kOverwrite);    
     // Delete it? Use the close to write it, by using the AddFriend?
     
-    // Deallocate memory--> [XXX: Maybe a function]
-    for(auto & i_v: elec_adc)
-    {
-        if(i_v.second != nullptr)
-        {
-            delete i_v.second;
-            i_v.second = nullptr;
-        }
-    }
+    // Deallocate memory
+    deallocate_memory<int>(elec_adc);
 
     // Note that close will take care of closing the appropiate 
     // trees (events, runHeader)
@@ -357,18 +361,11 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     newbranches.push_back(t->Branch("pedestal_cmmd_beetle2",&(pedestal[1])));
     newbranches.push_back(t->Branch("noise_cmmd_beetle2",&(noise[1])));
 
-    // The loop
+    // The loop (clear the vectors, and reserve memory)
+    clear_and_reserve_channels(pedestal);
+    clear_and_reserve_channels(noise);
     for(const auto & chip_p: pednoise_m)
     {
-        if(pedestal[chip_p.first] != nullptr)
-        {
-            pedestal[chip_p.first]->clear();
-        }
-        if(noise[chip_p.first] != nullptr)
-        {
-            noise[chip_p.first]->clear();
-        }
-        
         for(int i = 0; i < static_cast<int>(chip_p.second.first.size()); ++i)
         {
             pedestal[chip_p.first]->push_back(chip_p.second.first[i]);
@@ -434,23 +431,8 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     {
         std::cout << "\r\033[45C[" << std::setfill('0') << std::setw(3) 
             << std::round(float(k)/point) << "%]" << std::flush;
-        for(const auto & i_v: data)
-        {
-            if( i_v.second != nullptr )
-            {
-                i_v.second->clear();
-                i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
-            }
-        }
-        
-        for(const auto & i_v: out_cal)
-        {
-            if( i_v.second != nullptr )
-            {
-                i_v.second->clear();
-                i_v.second->reserve(ALIBAVA::NOOFCHANNELS);
-            }
-        }
+        clear_and_reserve_channels(data);
+        clear_and_reserve_channels(out_cal);
         
         this->get_events_entry(k);
         // And update using the pedestal and noise corrections
@@ -470,42 +452,12 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     // Write it
     tevt->Write("", TTree::kOverwrite);    
     // Delete it? Use the close to write it, by using the AddFriend?
-    // Deallocate memory--> [XXX: Maybe a function]
-    for(auto & i_v: data)
-    {
-        if( i_v.second != nullptr )
-        {
-            delete i_v.second ;
-            i_v.second = nullptr;
-        }
-    }
-    for(auto & i_v: out_cal)
-    {
-        if( i_v.second != nullptr )
-        {
-            delete i_v.second ;
-            i_v.second = nullptr;
-        }
-    }
+    // Deallocate memory
+    deallocate_memory<float>(data);
+    deallocate_memory<float>(out_cal);
     // the pedestal and noise
-    for(auto & i_v: pedestal)
-    {
-        if(i_v.second != nullptr)
-        {
-            delete i_v.second;
-            i_v.second = nullptr;
-        }
-    }
-
-    for(auto & i_v: noise)
-    {
-        if(i_v.second != nullptr)
-        {
-            delete i_v.second;
-            i_v.second = nullptr;
-        }
-    }
-
+    deallocate_memory<float>(pedestal);
+    deallocate_memory<float>(noise);
 
     // Everything back to the original state
     this->reset_events_tree();
