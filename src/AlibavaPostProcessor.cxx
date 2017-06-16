@@ -32,7 +32,7 @@
 namespace auxmem
 {
     // deallocating  helper
-    void deallocate(std::map<int,std::vector<float>*> & m)
+    void deallocate_memory(std::map<int,std::vector<float>*> & m)
     {
         for(auto & i_v: m)
         {
@@ -44,7 +44,7 @@ namespace auxmem
         }
     }
     template <class T>
-        void deallocate(const std::map<int,std::map<int,T*> > & histos)
+        void deallocate_memory(std::map<int,std::map<int,T*> > & histos)
         {
             for(auto & i_m2: histos)
             {
@@ -58,10 +58,6 @@ namespace auxmem
                 }
             }
         }
-    // concrete
-    /*void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);
-    void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);
-    void deallocate<TProfile>(const std::map<int,std::map<int,TProfile*> > & histos);*/
 }
 
 AlibavaPostProcessor::AlibavaPostProcessor():
@@ -170,7 +166,7 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
             fitstatus_m[chip].push_back(fit_status);
             // Slope: [ADC counts/number of electrons*1e-3] --> 1.0/slope
             //const int elec_per_adc = std::round(1.0/(tempfit->GetParameter(1))); 
-            // const float err = tempfit->GetParError(1)*elec_per_adc; 
+            //const float err = tempfit->GetParError(1)*elec_per_adc; 
             output[chip].push_back( static_cast<int>(std::round(1.0/(cal_curve[chip][ichan])->GetParameter(1))) );
         }
     }
@@ -191,148 +187,16 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
     // Deallocating memory
     delete cc;
     cc = nullptr;
-    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
-        {
-            if( histos[chip][ichan] != nullptr )
-            {
-                delete histos[chip][ichan];
-                histos[chip][ichan] = nullptr;
-            }
-            if( cal_curve[chip][ichan] != nullptr )
-            {
-                delete cal_curve[chip][ichan];
-                cal_curve[chip][ichan] = nullptr;
-            }
-        }
-    }
+    // ROOT stuff
+    auxmem::deallocate_memory<TProfile>(histos);
+    auxmem::deallocate_memory<TF1>(cal_curve);
+    // vector and maps
+    auxmem::deallocate_memory(thedata);
     // RE-activate all branches (and reset their object addresses)
     gauge.reset_events_tree();
 
     return output;
 }
-
-/*CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
-{
-    std::string data_b1_brname("data_beetle1");
-    std::string data_b2_brname("data_beetle2");
-    
-    // Speed up access, just using the branches we want:
-    const std::vector<std::string> data_names = { data_b1_brname, data_b2_brname};
-    gauge.set_events_tree_access(data_names);
-    
-    // Helper map 
-    std::map<int,std::vector<float>*> thedata = { {0,nullptr}, {1,nullptr} };
-    gauge.set_events_tree_branch_address(data_b1_brname,&(thedata[0]));
-    gauge.set_events_tree_branch_address(data_b2_brname,&(thedata[1]));
-    // The histograms (XXX: Hardcoded bins and ranges)
-    std::map<int,std::map<int,TH2F*> > histos;
-    std::map<int,std::map<int,TF1*> >  cal_curve;
-    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        std::map<int,TH2F*> hchip;
-        std::map<int,TF1*> fchip;
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS ; ++ichan)
-        {
-            hchip[ichan] = new TH2F(std::string("calibration"+std::to_string(ichan)).c_str(),"",
-                    2*gauge.get_calibration_parameters()->nPulses+1,
-                   (-1)*gauge.get_calibration_parameters()->initialCharge,
-                   (-1)*gauge.get_calibration_parameters()->finalCharge,
-                   2001,-1000.0,1000.0);
-            hchip[ichan]->SetDirectory(0);
-            fchip[ichan] = new TF1(std::string("calibration_curve"+std::to_string(ichan)).c_str(),"pol1");
-        }
-        histos[chip] = hchip;
-        cal_curve[chip] = fchip;
-    }
-    // loop over the tree to fill the histograms
-    // filling the histograms injected charge vs. ADC count 
-    // per events 
-    const int nentries = gauge.get_events_number_entries();
-    for(int k = 0; k < nentries; ++k)
-    {
-        gauge.get_events_entry(k);
-        for(int beetle = 0; beetle < ALIBAVA::NOOFCHIPS; ++beetle)
-        {
-            const int injected_pulse = gauge.get_calibration_parameters()->get_injected_charge(k);
-
-            for(int istrip = 0; istrip < ALIBAVA::NOOFCHANNELS; ++istrip)
-            {
-                // Note that the injected charge will depend on event parity
-                // and channel parity
-                const int sign = std::pow(-1,((k+1)%2))*std::pow(-1,(istrip%2));
-                histos[beetle][istrip]->Fill(sign*injected_pulse*1e-3, (*(thedata[beetle]))[istrip] );
-            }
-        }
-    }
-    // The return data
-    CalibrateBeetleMap output;
-    output[0].reserve(ALIBAVA::NOOFCHANNELS);
-    output[1].reserve(ALIBAVA::NOOFCHANNELS);
-
-    // The fit: a canvas for the fits
-    // Loop over the channels to fit the calibration curve (stright line):
-    //   - the slope of the line: [ADC counts/#electrons], therefore
-    //   the number of electrons corresponding to a given ADC counts: 1/slope
-    TCanvas * cc = new TCanvas("def");
-    // An auxiliary map to check that the fit worked well
-    std::map<int,std::vector<int>> fitstatus_m = { {0,{0}},{0,{0}} };
-    for(auto & v: fitstatus_m)
-    {
-        v.second.reserve(ALIBAVA::NOOFCHANNELS);
-    }
-    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
-        {
-            // the fit
-            const int fit_status = histos[chip][ichan]->Fit(cal_curve[chip][ichan],"Q");
-            fitstatus_m[chip].push_back(fit_status);
-            // Slope: [ADC counts/number of electrons*1e-3] --> 1.0/slope
-            //const int elec_per_adc = std::round(1.0/(tempfit->GetParameter(1))); 
-            // const float err = tempfit->GetParError(1)*elec_per_adc; 
-            output[chip].push_back( static_cast<int>(std::round(1.0/(cal_curve[chip][ichan])->GetParameter(1))) );
-        }
-    }
-    // Check if anything went wrong, 
-    for(const auto & chip_v: fitstatus_m)
-    {
-        for(int ichan = 0; ichan < static_cast<int>(chip_v.second.size()); ++ichan)
-        {
-            if(chip_v.second[ichan] != 0)
-            {
-                std::cout << "\033[1;33mWARNING\033[1;m Problems with the "
-                    << "line fit @ CHIP: " << chip_v.first 
-                    << " , STRIP: " << ichan << " (Fit status:" 
-                    << chip_v.second[ichan] << ")" << std::endl;
-            }
-        }
-    }
-    // Deallocating memory
-    delete cc;
-    cc = nullptr;
-    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
-        {
-            if( histos[chip][ichan] != nullptr )
-            {
-                delete histos[chip][ichan];
-                histos[chip][ichan] = nullptr;
-            }
-            if( cal_curve[chip][ichan] != nullptr )
-            {
-                delete cal_curve[chip][ichan];
-                cal_curve[chip][ichan] = nullptr;
-            }
-        }
-    }
-    // RE-activate all branches (and reset their object addresses)
-    gauge.reset_events_tree();
-
-    return output;
-}*/
 
 PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOManager & pedestal)
 {
@@ -430,22 +294,12 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
     // Deallocating memory
     delete cc;
     cc = nullptr;
-    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
-        {
-            if( histos[chip][ichan] != nullptr )
-            {
-                delete histos[chip][ichan];
-                histos[chip][ichan] = nullptr;
-            }
-            if( gausfunc[chip][ichan] != nullptr )
-            {
-                delete gausfunc[chip][ichan];
-                gausfunc[chip][ichan] = nullptr;
-            }
-        }
-    }
+    // ROOT stuff
+    auxmem::deallocate_memory<TH1F>(histos);
+    auxmem::deallocate_memory<TF1>(gausfunc);
+    // vector and maps
+    auxmem::deallocate_memory(thedata);
+    
     // RE-activate all branches (and reset their object addresses)
     pedestal.reset_events_tree();
 
@@ -510,7 +364,8 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
         }
         t->Fill();
     }
-    // To store it with it
+    // To store it with it (don't deallocate it yet, it will be done
+    // afterwards)
     pedestal.get_events_tree()->AddFriend(this->_postproc_treename.c_str());
     
     // RE-activate all branches (and reset their object addresses)
@@ -519,6 +374,10 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
     // Let the instance know the pedestal was subtracted, therefore
     // the postprocEvents tree exits
     this->_pedestal_subtracted = true;
+
+    // deallocate memory
+    auxmem::deallocate_memory(thedata);
+    auxmem::deallocate_memory(postproc_thedata);
 }
 
 std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::vector<float> & nullsignal)
