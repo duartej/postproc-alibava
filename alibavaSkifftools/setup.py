@@ -11,5 +11,5 @@ setup(name='alibavaSkifftools',
         # for changes in the package distribution
         package_dir={'alibavaSkifftools':'python'},
         packages = ['alibavaSkifftools'],
-        scripts=['bin/'],
+        scripts=['bin/open_sesame'],
         )

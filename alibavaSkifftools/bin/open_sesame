@@ -13,18 +13,52 @@ __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
 def main(parent_folder):
+    """XXX: MISSING DOC
     """
-    """
-    import alibavaSkifftools.SPS2017TB_metadata import *
+    import alibavaSkifftools.SPS2017TB_metadata as tb2017
+    import glob
+    import os
+
+    # -- Check the sensors paths are there
+    sensor_paths = [ os.path.join(parent_folder,s) for s in tb2017.sensor_names ]
+    if False in filter(lambda abspath: os.path.isdir(abspath), sensor_paths):
+        raise OSError("Invalid parent folder structure at '{0:s}', "\
+            "missing sensors direcotories ".format(parent_folder))
+    # -- Descend over each directory and fill a dictionary with 
+    #    filename_parser instances
+    sensor_files = {}
+    for sensor in tb2017.sensor_names:
+        sensor_files[sensor] = []
+        beam_files =[]
+        ped_cal = []
+        for fname in glob.glob(os.path.join(os.path.join(parent_folder,sensor),"*.dat")):
+            try:
+                _prv = tb2017.filename_parser(fname)
+            except RuntimeError:
+                print "Just ignoring '{0}'".format(fname) 
+                continue
+            if _prv.is_beam:
+                beam_files.append(_prv)
+            else:
+                ped_cal.append(_prv)
+        # After split between beam and auxiliary runs, associate them
+        for _fb in beam_files:
+            sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
+            ped_cal.remove(sensor_files[sensor][-1].pedestal_instance)
+            ped_cal.remove(sensor_files[sensor][-1].calibration_instance)
+    for i,j in sensor_files.iteritems():
+        print i,j
+
+    
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
     from alibavaSkifftools.SPS2017TB_metadata import eospath
 
-    usage  = "Extract the list of alibava raw data files from a parent folder"
+    usage  = "Extract the list of alibava raw data files from a parent folder. "
     usage += "The folder should contain subdirectories with the name of the"
-    usage += " involved sensors; and the file names follow a pre-defined naming"
-    usage += "convention"
+    usage += " involved sensors; and the file names follow a pre-defined naming "
+    usage += "convention."
 
     parser = ArgumentParser(prog='open_sesame',description=usage)
 
@@ -32,4 +66,6 @@ if __name__ == '__main__':
             " to search down [Default: see SPS2017TB_metadata.eospath]")
     parser.set_defaults(parent_folder=eospath)
 
-    main(parser.parent_folder)
+    args = parser.parse_args()
+
+    main(args.parent_folder)
