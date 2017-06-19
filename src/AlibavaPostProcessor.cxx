@@ -137,6 +137,8 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
                 // Note that the injected charge will depend on event parity
                 // and channel parity
                 //const int sign = std::pow(-1,((k+1)%2))*std::pow(-1,(istrip%2));
+                // or static_cast<bool>(k%2) XOR static_cast<bool>(i%2) 
+                // i.e. a XNOR gate 
                 const int sign = std::pow(-1,((k%2)+(istrip+1)%2));
                 histos[beetle][istrip]->Fill(sign*injected_pulse, (*(thedata[beetle]))[istrip] );
             }
