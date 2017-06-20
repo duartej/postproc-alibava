@@ -12,7 +12,7 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
-def main(parent_folder):
+def main(parent_folder,verbose):
     """XXX: MISSING DOC
     """
     import alibavaSkifftools.SPS2017TB_metadata as tb2017
@@ -22,11 +22,15 @@ def main(parent_folder):
     # -- Check the sensors paths are there
     sensor_paths = [ os.path.join(parent_folder,s) for s in tb2017.sensor_names ]
     if False in filter(lambda abspath: os.path.isdir(abspath), sensor_paths):
-        raise OSError("Invalid parent folder structure at '{0:s}', "\
+        raise IOError("Invalid parent folder structure at '{0:s}', "\
             "missing sensors direcotories ".format(parent_folder))
+    # -- 
+    ###if sensor not in tb2017.sensor_names:
+    ###    raise RuntimeError("Not a valid sensor name '{0}'".format(sensor))
     # -- Descend over each directory and fill a dictionary with 
     #    filename_parser instances
     sensor_files = {}
+    failed = []
     for sensor in tb2017.sensor_names:
         sensor_files[sensor] = []
         beam_files =[]
@@ -35,7 +39,9 @@ def main(parent_folder):
             try:
                 _prv = tb2017.filename_parser(fname)
             except RuntimeError:
-                print "Just ignoring '{0}'".format(fname) 
+                # The file-name format is not understood
+                if fname.find("RunN") == -1:
+                    print "Just ignoring '{0}'".format(fname) 
                 continue
             if _prv.is_beam:
                 beam_files.append(_prv)
@@ -43,17 +49,55 @@ def main(parent_folder):
                 ped_cal.append(_prv)
         # After split between beam and auxiliary runs, associate them
         for _fb in beam_files:
-            sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
+            try:
+                sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
+            except IOError:
+                # No pedestals nor calibration, skip this file
+                continue
+            except RuntimeError:
+                # Store if verbose
+                if verbose:
+                    failed.append( (_fb,ped_cal) )
+                continue
             ped_cal.remove(sensor_files[sensor][-1].pedestal_instance)
             ped_cal.remove(sensor_files[sensor][-1].calibration_instance)
-    for i,j in sensor_files.iteritems():
-        print i,j
+    for sname,flist in sensor_files.iteritems():
+        print "\033[1;34mSENSOR:\033[1;m \033[1;20m{0}\033[1;m".format(sname)
+        for af in flist:
+            print af
+    if verbose:
+        print "\033[1;33mVERBOSE: Sensors and runs with incomplete/inconsistent files\033[1;m"
+        for (finst,pedcallist) in failed:
+            pedflen=len(filter(lambda x: x.is_pedestal,pedcallist))
+            calflen=len(filter(lambda x: x.is_calibration,pedcallist))
+            print "{0}, run: {1}, [# ped. files:{2}, "\
+                    "# cal. files:{3}]".format(
+                            finst.sensor_name,finst.run_number,
+                            pedflen,calflen)
 
-    
 
 if __name__ == '__main__':
-    from argparse import ArgumentParser
-    from alibavaSkifftools.SPS2017TB_metadata import eospath
+    from argparse import ArgumentParser,Action
+    from alibavaSkifftools.SPS2017TB_metadata import eospath,sensor_names
+
+    # Helper class to allow list sensor names (without introducing
+    # the positional arguments
+    class SensorNamesAction(Action):
+        def __init__(self,option_strings,dest,default=False,required=False,help=None):
+            super(SensorNamesAction, self).__init__(
+                    option_strings=option_strings,
+                    dest=dest,
+                    nargs=0,
+                    const=True,
+                    default=default,
+                    required=required,
+                    help=help)
+
+        def __call__(self, parser, namespace, values, option_string=None):
+            print "\033[1;34mAvailable sensor names:\033[1;m"
+            for sensor in sensor_names:
+                print " - {0}".format(sensor)
+            parser.exit()
 
     usage  = "Extract the list of alibava raw data files from a parent folder. "
     usage += "The folder should contain subdirectories with the name of the"
@@ -64,8 +108,13 @@ if __name__ == '__main__':
 
     parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
-    parser.set_defaults(parent_folder=eospath)
+    parser.add_argument('--print-available-sensors',dest="available_sensors",\
+            action=SensorNamesAction,help='Just print the available'\
+            ' sensor names')
+    parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
+            " because of any problem")
+    parser.set_defaults(parent_folder=eospath,ignore_runs=[])
 
     args = parser.parse_args()
 
-    main(args.parent_folder)
+    main(args.parent_folder,args.verbose)
