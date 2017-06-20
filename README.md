@@ -52,7 +52,8 @@ Convert a raw binary data from the ALIBAVA DAQ into a ROOT file
 
 [OPTIONS]
  -o name of the ROOT output file [fortythieves.root]
- -p flag to store pedestal and noise header [false]
+ -p alibava raw-binary containing the pedestal run
+ -c alibava raw-binary containing the calibration run
  -r run number [-1]
  -h show this help
 ```   
@@ -66,11 +67,13 @@ After the previous command is launched, the ```outputfile.root``` file will cont
 * **runHeader**: the run header branches related extracted from the <raw_beam_file>. Note that the run header usually
 contains data which is constant along the whole run.
 * **Events**: the Event related branches (raw ADC counts per beetle, time per event, temperature, etc..)
-* **postproc_runHeader**: this tree is only present whenever the ```-p``` option is active, and it stores the pedestals and noise per channel calculated per chip 
+* **postproc_runHeader**: this tree is only present whenever the ```-p``` or ```-c``` option is active, and it stores the pedestals and noise per channel calculated per chip, and the number of electrons per ADC count
    * ```pedestal_cmmd_beetle<chipnumber>```
    * ```noise_cmmd_beetle<chipnumber>```
-* **postproc_Events**: this tree is only present whenever the ```-p``` option is active as well, and it stores the ADC counts per channel/event with the pedestals and noise subtracted 
+   * ```electronADC_beetle<chipnumber>```
+* **postproc_Events**: this tree is only present whenever the ```-p``` or ```-c``` option is active as well, and it stores the ADC counts per channel/event with the pedestals and noise subtracted, and the number of electrons per channel/event with the pedestals and noise subtracted (if ```-p``` option also)
    * ```postproc_data_beetle<chipnumber>```
+   * ```postproc_cal_data_bettle<chipnumber>```
    
 Use the ```AddFriend``` mechanism to relate and connect the original and the ```postproc``` versions of the Trees in order to share and use information between them.
 ```bash
