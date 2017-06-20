@@ -12,7 +12,7 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
-def main(parent_folder,verbose):
+def list_raw_files(parent_folder,verbose):
     """XXX: MISSING DOC
     """
     import alibavaSkifftools.SPS2017TB_metadata as tb2017
@@ -98,23 +98,32 @@ if __name__ == '__main__':
             for sensor in sensor_names:
                 print " - {0}".format(sensor)
             parser.exit()
+    
 
-    usage  = "Extract the list of alibava raw data files from a parent folder. "
-    usage += "The folder should contain subdirectories with the name of the"
-    usage += " involved sensors; and the file names follow a pre-defined naming "
-    usage += "convention."
+    parser = ArgumentParser(prog='open_sesame')
+    
+    # Sub-command parsers
+    subparsers = parser.add_subparsers(title='subcommands',
+            description='valid subcommands', 
+            help='additional help')
 
-    parser = ArgumentParser(prog='open_sesame',description=usage)
-
-    parser.add_argument('parent_folder',help="The parent folder to start"\
+    usage_ld  = "Extract the list of alibava raw data files from a parent folder. "
+    usage_ld += "The folder should contain subdirectories with the name of the"
+    usage_ld += " involved sensors; and the file names follow a pre-defined naming "
+    usage_ld += "convention."
+    
+    ld_parser = subparsers.add_parser("list_files",help=usage_ld)
+    ld_parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
-    parser.add_argument('--print-available-sensors',dest="available_sensors",\
+    ld_parser.add_argument('--print-available-sensors',dest="available_sensors",\
             action=SensorNamesAction,help='Just print the available'\
             ' sensor names')
-    parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
+    ld_parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
             " because of any problem")
-    parser.set_defaults(parent_folder=eospath,ignore_runs=[])
+    ld_parser.set_defaults(which='list_files',parent_folder=eospath,ignore_runs=[])
 
     args = parser.parse_args()
+    
+    if args.which == 'list_files':
+        list_raw_files(args.parent_folder,args.verbose)
 
-    main(args.parent_folder,args.verbose)
