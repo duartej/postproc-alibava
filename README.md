@@ -59,9 +59,11 @@ Convert a raw binary data from the ALIBAVA DAQ into a ROOT file
 ```   
 To obtain a root file with signal subtracted by pedestal and common noise, you need
 to provide the ```-p``` option with the pedestal file obtained using a pedestal run
-with the ALIBAVA-gui. 
+with the ALIBAVA-gui. You can provide a raw file obtained using a calibration run with 
+the ```-c``` option as well. In that case, a new branch will contain the signal in 
+number of electrons (pedestal and noise subtracted).
 ```bash
-$ fortythieves -r <runNumber> -p <raw_pedestal_file> -o outputfile.root <raw_beam_file> 
+$ fortythieves -r <runNumber> -p <raw_pedestal_file> -c <calibration_file> -o outputfile.root <raw_beam_file> 
 ```
 After the previous command is launched, the ```outputfile.root``` file will contain four TTrees:
 * **runHeader**: the run header branches related extracted from the <raw_beam_file>. Note that the run header usually
@@ -74,6 +76,9 @@ contains data which is constant along the whole run.
 * **postproc_Events**: this tree is only present whenever the ```-p``` or ```-c``` option is active as well, and it stores the ADC counts per channel/event with the pedestals and noise subtracted, and the number of electrons per channel/event with the pedestals and noise subtracted (if ```-p``` option also)
    * ```postproc_data_beetle<chipnumber>```
    * ```postproc_cal_data_bettle<chipnumber>```
+
+Note that in cases of ```-p``` and/or ```-c``` option present, an extra root file will be created 
+with the result of the ROOT conversion performed at the pedestal and/or calibration raw files.
    
 Use the ```AddFriend``` mechanism to relate and connect the original and the ```postproc``` versions of the Trees in order to share and use information between them.
 ```bash
