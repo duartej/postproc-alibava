@@ -12,6 +12,13 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
+__all__ = [
+        "sensor_names",
+        "filename_parser",
+        "associated_filenames",
+        "active_sensors"
+        ]
+
 # the EOS path where to find the alibava data
 eospath="/eos/user/d/duarte/alibava_data"
 
@@ -19,7 +26,7 @@ eospath="/eos/user/d/duarte/alibava_data"
 sensor_names = [ 'LGAD7859W1H6_0_b1', 'iLGAD8533W1K05T_0_b2', 'REF_0_b1', 'M1-5_0_b2', 
         'M1-8_7e15_b2', 'M2-3_1e16_b2', 'N1-3_0_b1', 'N1-7_7e15_b2', 'N1-8_1e16_b1' ]
 
-# A simple parser class for the filenams
+# A simple parser class for the filenames
 class filename_parser(object):
     """A simple parser for the file names. 
     Check the list of fields at the __init__ func
@@ -33,14 +40,19 @@ class filename_parser(object):
         self.is_beam = False
         self.is_calibration = False
         self.is_pedestal = False
-        try:
+
+        naming_len=len(os.path.basename(filename).split("_"))
+        if naming_len == 10:
             self.date,self.hour,self.pcname,self.motherboard,self.sensor_name,\
                 self.voltage_bias,self.current_leak,self.temperature,self.latency,\
                 self.run_type = os.path.basename(filename).split("_")
-        except ValueError:
+        elif naming_len == 11:
             self.run_number,self.date,self.hour,self.pcname,self.motherboard,self.sensor_name,\
                 self.voltage_bias,self.current_leak,self.temperature,self.latency,\
                 self.run_type = os.path.basename(filename).split("_")
+        else:
+            raise NameError("Invalid naming convection for the file:"\
+                    "'{0}'".format(os.path.basename(filename)))
 
     def __str__(self):
         if self.is_beam:
@@ -53,13 +65,21 @@ class filename_parser(object):
             "leak current:{3:0.1f} uA".format(runnumber_str,\
             self.sensor_name,self.voltage_bias,self.current_leak)
         return message
+    
+    @property
+    def hour(self):
+        return self._hour
+    @hour.setter
+    def hour(self,hour):
+        # Convert into seconds (from 00:00)
+        h,m=hour.split("-")
+        self._hour = (float(h)*3600.+float(m)*60.)
 
     @property
     def run_number(self):
         return self._run_number
     @run_number.setter
     def run_number(self,run_number):
-        print run_number
         if "-" in run_number or 'RunN' in run_number:
             raise RuntimeError("Invalid format for the run number. This"\
                 " file should be masked")
@@ -78,7 +98,7 @@ class filename_parser(object):
         elif self.run_type == "ped":
             self.is_pedestal = True
         else:
-            raise ValueError("Not a valid run mode: {0}".format(run_type))
+            raise RuntimeError("Not a valid run mode: {0}".format(run_type))
     
     @property
     def voltage_bias(self):
@@ -98,7 +118,7 @@ class filename_parser(object):
         try:
             self._current_leak = float(current)
         except ValueError:
-            self._current_leak = float(current.upper().replace("d",".").replace("UA",""))
+            self._current_leak = float(current.upper().replace("D",".").replace("UA",""))
         
     @property
     def temperature(self):
@@ -126,16 +146,19 @@ class filename_parser(object):
         if self.sensor_name != other.sensor_name or \
                 self.motherboard != other.motherboard:
             return False
+        # And also not so far in time (5 hours)
+        if abs(self.hour-other.hour) > 5.0*3600.0:
+            return False
         # The propose float equalizers :
-        equalizers = [ ('voltage_bias',1e-19), ('current_leak',1e-1), 
+        equalizers = [ ('voltage_bias',1e-19), ('current_leak',10.0), 
                 ('temperature',1e-19) ]
         for (equalizer,max_diff) in equalizers:
-            if getattr(self,equalizer) > max_diff:
+            if abs(getattr(other,equalizer)-getattr(self,equalizer)) > max_diff:
                 return False
-        # we are here, then everythin is equal
+        # we are here, then everything is equal
         return True
 
-
+# A class to associate a beam file with the pedestal and calibration
 class associated_filenames(object):
     """Create a 3-tuple of filename_parsers instances which links each
     beam run with its corresponding pedestal and calibration run
@@ -144,42 +167,57 @@ class associated_filenames(object):
         """XXX: DOC. MISSING
         """
         # Matching the beam file with the pedestal and calibrate
-        associated_files = filter(lambda _fcp: _fcp == fn_instance and \
-                (_fcp.is_calibrated or _fcp.is_pedestal), list_available_pedcal)
+        pre_associated_files = filter(lambda _fcp: _fcp == fn_instance and \
+                (_fcp.is_calibration or _fcp.is_pedestal), list_available_pedcal)
+        # Just cleaning a bit if there is too close 
+        if len(pre_associated_files) > 2:
+            pedfile = sorted(filter(lambda x: x.is_pedestal,pre_associated_files),key=lambda x: x.hour)[0]
+            calfile = sorted(filter(lambda x: x.is_calibration,pre_associated_files),key=lambda x: x.hour)[0]
+            associated_files = [pedfile,calfile]
+        else:
+            associated_files = pre_associated_files
+
         if len(associated_files) == 0:
-            raise RuntimeError("No pedestal nor calibration runs found for the "\
-                    " current 'filename_parser' instance: {0}".format(fn_instance))
+            raise IOError("No pedestal nor calibration runs found for the "\
+                    " current 'filename_parser' instance:\n {0}".format(fn_instance))
         elif len(associated_files) < 2:
             # WARNING maybe?
-            raise RuntimeError("Just found '{0}' runs for the"\
-                    " current 'filename_parser' instance: {1}".format(run_type,fn_instance))
+            raise RuntimeError("Just found 1 non-beam run type for the"\
+                    " current 'filename_parser' instance:\n{0}\n{1}".format(fn_instance,associated_files[0]))
         elif len(associated_files) > 2:
             message = ""
             for af in associated_files:
-                af += " - "+af.filename+"\n"
-            raise RuntimeError("Oversize number of run types: '{0}'."\
-                " Current 'filename_parser' instance: \n{1}".format(run_type,fn_instance))
+                message += " - "+af.filename+"\n"
+            raise RuntimeError("Oversize number of ped/cal files."\
+                " Current 'filename_parser' instance: \n{0}\n"\
+                "List of cal/ped files:\n{1}".format(fn_instance,message))
 
         self.beam_instance        = fn_instance
         self.pedestal_instance    = filter(lambda x: x.is_pedestal,associated_files)[0]
         self.calibration_instance = filter(lambda x: x.is_calibration,associated_files)[0]
 
+    def __str__(self):
+        message = "Beam instance: {0}\n".format(self.beam_instance)
+        message += "  - Beam file: {0}\n".format(self.beam_instance.filename)
+        message += "  - Pedestal file:{0}\n".format(self.pedestal_instance.filename)
+        message += "  - Calibration file:{0}".format(self.calibration_instance.filename)
+        return message
+# -----------------------------------------------------------------------------
 
-
-# list of active sensors per run number,
-# they are ordered with the beam hitting in 
-# increasing z-plane (Motherboard). The first
-# element of the 2-tuple is the name of the sensor
-# while the second is the beetle number (0,1) 
+# list of active sensors per run number, # they are ordered with the
+# beam hitting in increasing z-plane (Motherboard). The first 
+# element of the 2-tuple is the name of the sensor while the second 
+# is the beetle number (0,1). Note that the name of the sensor contains
+# the beetle number b1-b2
 active_sensors = {
-    274: [ ('LGAD7859W1H6_0_b1',0), ('REF_0_b1',0), ('M2-3_1e16_b2',0), ('N1-7_7e15_b2',0) ],
-    345: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('N1-8_1e16_b1',0),('N1-7_7e15_b2',0) ],
-    362: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('M2-3_1e16_b2',0),('N1-7_7e15_b2',0) ],
-    378: [ ('REF_0_b1',0),('M2-3_1e16_b2',0), ('M1-5_0_b2',0), ('M1-8_7e15_b2',0) ],
-    391: [ ('REF_0_b1',0),('N1-8_1e16_b1',0), ('N1-3_0_b1',0), ('N1-7_7e15_b2',0) ], 
+    274: [ ('LGAD7859W1H6_0_b1',0), ('REF_0_b1',0), ('M2-3_1e16_b2',1), ('N1-7_7e15_b2',1) ],
+    345: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('N1-8_1e16_b1',0),('N1-7_7e15_b2',1) ],
+    362: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('M2-3_1e16_b2',1),('N1-7_7e15_b2',1) ],
+    378: [ ('REF_0_b1',0),('M2-3_1e16_b2',1), ('M1-5_0_b2',1), ('M1-8_7e15_b2',1) ],
+    391: [ ('REF_0_b1',0),('N1-8_1e16_b1',0), ('N1-3_0_b1',0), ('N1-7_7e15_b2',1) ], 
     }
 # append those with the same configuration
-samecfg = { 
+_samecfg = { 
     274: range(275,285)+[286]+range(299,303)+range(304,311)+range(313,316),
     345: range(346,353),
     362: range(363,373),
@@ -187,23 +225,8 @@ samecfg = {
     391: range(392,296)+range(399,410) 
     }
 # Build the final map
-for k,runlist in samecfg.iteritems():
+for k,runlist in _samecfg.iteritems():
     for irun in runlist:
         active_sensors[irun] = active_sensors[k]
 
-# Pedestal and calibration files to be used per detector by a given run
-# { runNumber: (Pedestal, Calibration), ... }
-#pedcalfiles = {
-#        'LGAD7859W1H6_0_b1': { 
-#            275: ('2017-05-18_01-03_gerva_MB2_LGAD7859W1H6_-150V_-837uA_20C_lat131_ped.dat',
-#            '2017-05-18_01-15_gerva_MB2_LGAD7859W1H6_-150V_-837uA_20C_lat131_cal.dat'),
-#            410: (,) },
-#        'iLGAD8533W1K05T_0_b2' : { 274: (),},
-#        'REF_0_b1': {},
-#        'M1-5_0_b2': {},
-#        'M2-3_1e16_b2': {},
-#
-#
-#
-#}
 
