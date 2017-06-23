@@ -49,12 +49,12 @@ void print_error_codes()
 {
     std::cout << "*************** Error codes ***************" << std::endl;
     std::cout << "0: Succesful execution" << std::endl;
-    std::cout << "1: Invalid number of input arguments" << std::endl;
-    std::cout << "2: Undefined input option" << std::endl;
-    std::cout << "3: Invalid raw input binary file" << std::endl;
-    std::cout << "4: Invalid firmware version from raw data" << std::endl;
-    std::cout << "5: Invalid data type (user)" << std::endl;
-    std::cout << "6: Inconsistent Run Header in calibration file" << std::endl;
+    std::cout << "-1: Invalid number of input arguments" << std::endl;
+    std::cout << "-2: Undefined input option" << std::endl;
+    std::cout << "-3: Invalid raw input binary file" << std::endl;
+    std::cout << "-4: Invalid firmware version from raw data" << std::endl;
+    std::cout << "-5: Invalid data type (user)" << std::endl;
+    std::cout << "-6: Inconsistent Run Header in calibration file" << std::endl;
 }
 
 // Input parser functions
@@ -84,7 +84,7 @@ int main(int argc, char* argv[])
         std::cerr << " Unexpected number of command-line arguments. \n You are"
             << " expected to provide one input file name. \n"
             << " Program stopped! " << std::endl;
-        return 1;
+        return -1;
     }
 
     // The options 
@@ -138,7 +138,7 @@ int main(int argc, char* argv[])
             {
                 std::cerr << " Command-line file '" << argv[i] << "' was not found. \n"
                     << " Program stopped! " << std::endl;
-                return 2;
+                return -2;
             }
             opt.cmndfile = argv[i];
         }
@@ -150,7 +150,15 @@ int main(int argc, char* argv[])
     iomanager.book_tree();
 
     // process the file
-    int status = IOAlibavaReader::read_data(opt,iomanager);
+    const int events = IOAlibavaReader::read_data(opt,&iomanager);
+    std::cout << "Processed " << events;
+    int status = 0; 
+    if(events < 0)
+    {
+        // A event < 0 is actually an error code, something went 
+        // wrong
+        status = events;
+    }
     iomanager.close();
     
     // process calibration file
@@ -170,7 +178,11 @@ int main(int argc, char* argv[])
         // change the name of the input file
         input_options opt_cal(opt);
         opt_cal.cmndfile = opt.calibration_file;
-        status += IOAlibavaReader::read_data(opt_cal,iomanager_cal);
+        const int events_cal = IOAlibavaReader::read_data(opt_cal,&iomanager_cal);
+        if(events_cal < 0)
+        {
+            status += events_cal;
+        }
         // calibrating
         AlibavaPostProcessor postproc;
         std::cout << " - Calibrating" << std::endl;
@@ -198,7 +210,11 @@ int main(int argc, char* argv[])
         // change the name of the input file
         input_options opt_ped(opt);
         opt_ped.cmndfile = opt.pedestal_file;
-        status += IOAlibavaReader::read_data(opt_ped,iomanager_ped);
+        const int events_ped= IOAlibavaReader::read_data(opt_ped,&iomanager_ped);
+        if(events_ped < 0)
+        {
+            status += events_ped;
+        }
     
         // calculate pedestals and common noise: { bettle: { channels ,,, } }
         AlibavaPostProcessor postproc;

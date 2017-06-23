@@ -15,11 +15,18 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 # and the source dir to build some useful libraries
 add_subdirectory(src)
 
+# fortythieves
 add_executable(fortythieves bin/fortythieves.cc)
-
 target_link_libraries(fortythieves IOManagersAlibava)
 
+# genfa
+add_executable(genfa bin/genfa.cc)
+target_link_libraries(genfa IOManagersAlibava)
+
+
 install(TARGETS fortythieves
+    RUNTIME DESTINATION bin)
+install(TARGETS genfa
     RUNTIME DESTINATION bin)
 #install(PROGRAMS utils/processhzroot.py 
 #    DESTINATION bin

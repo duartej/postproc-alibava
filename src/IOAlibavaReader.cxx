@@ -77,7 +77,7 @@ double IOAlibavaReader::get_temperature(const unsigned short & temp)
 }
 
 
-int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager) 
+int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager) 
 {
     // this event counter is used to stop the processing when it is
     // greater than numEvents.
@@ -97,7 +97,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
         std::cerr << "\033[1;31mIOAlibavaReader.read_data\033[1;m could not read the file "
             << auxfunc::path_filename(opt.cmndfile)<<" correctly. Please check the path and file names that" 
             << " have been input" << std::endl;
-        return 3;
+        return -3;
     }
     /////////////////
     // Read Header //
@@ -157,7 +157,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
             std::cerr << "Inconsistency in the Run Header of the input file."
                 << "The HEADER STRING does not have the expected format: "
                 << "'Npulses'; 'InitialCharge'; 'FinalCharge'; 'StepSize'"<< std::endl;
-            return 6;
+            return -6;
         }
         // The delta charge to be used in each step should be
         if(std::fabs(float(elements[3])-(elements[2]-elements[1])/float(elements[0])) > 1e-9)
@@ -166,10 +166,13 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
                 << " input file. The HEADER STRING provides a deltaCharge"
                 << " which does not fulfill "
                 << "deltaCharge=(finalCharge-initialCharge)/numberPulses" << std::endl;
-            return 6;
+            return -6;
         }
         // Update the manager with this info
-        iomanager.set_calibration_parameters(elements);
+        if(iomanager != nullptr)
+        {
+            iomanager->set_calibration_parameters(elements);
+        }
     }
 
     ////////////////////////////////////
@@ -211,7 +214,10 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
     runHeader->run_number = opt.runNumber;
     
     // Store the run header
-    iomanager.fill_header(runHeader);
+    if(iomanager != nullptr)
+    {
+        iomanager->fill_header(runHeader);
+    }
     delete runHeader;
     runHeader = nullptr;
 
@@ -225,7 +231,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
         // this code is not written for version<=1.
         std::cerr <<" Not supported data version found (version="
             <<version<<"<2). Data is not saved."<<std::endl;
-	return 4;
+	return -4;
     }
     
     // Event loop
@@ -245,7 +251,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
             if(infile.bad() || infile.eof())
             {
                 std::cout << std::endl;
-                return 0;
+                return eventCounter;
             }
 	    eventTypeCode = (headerCode>>16) & 0xFFFF;
         } while( eventTypeCode != 0xCAFE );
@@ -257,7 +263,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
         {	
             std::cout << std::endl;
             std::cout<<"Unexpected data type (user type). Data is not saved"<<std::endl;
-            return 5;
+            return -5;
         }
         unsigned int eventSize = 0;
         infile.read(reinterpret_cast< char *> (&eventSize), sizeof(unsigned int));
@@ -367,7 +373,10 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
         anEvent->beetle2_data = beetles_data[1];
         
         // and store it 
-        iomanager.fill_event(anEvent);
+        if(iomanager != nullptr)
+        {
+            iomanager->fill_event(anEvent);
+        }
 
         // Free memory
         delete anEvent;
@@ -381,7 +390,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager & iomanager)
             << " StopEventNum: " <<opt.stopEventNum<<". The file has "
             << eventCounter << " events."<<std::endl;
     }
-    return 0;
+    return eventCounter;
 }
 
 
