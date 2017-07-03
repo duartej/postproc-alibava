@@ -13,7 +13,18 @@ __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
 def list_raw_files(parent_folder,verbose):
-    """XXX: MISSING DOC
+    """Extract the list of alibava raw data files from a parent folder.
+    The folder should contain subdirectories with the name
+    of the involved sensors, and the file names follows a pre-defined
+    naming convention.
+
+    Parameters
+    ----------
+    parent_folder: str
+        the path under where the sensors subdirectories must be localized
+    verbose: bool
+        whether or not to dump out more information whenever a file has
+        been not included
     """
     import alibavaSkifftools.SPS2017TB_metadata as tb2017
     import glob
