@@ -110,20 +110,45 @@ if __name__ == '__main__':
                 print " - {0}".format(sensor)
             parser.exit()
     
+    # Helper class to allow list steering steps (without introducing
+    # the positional arguments
+    class StepNamesAction(Action):
+        def __init__(self,option_strings,dest,default=False,required=False,help=None):
+            super(StepNamesAction, self).__init__(
+                    option_strings=option_strings,
+                    dest=dest,
+                    nargs=0,
+                    const=True,
+                    default=default,
+                    required=required,
+                    help=help)
 
-    parser = ArgumentParser(prog='open_sesame')
+        def __call__(self, parser, namespace, values, option_string=None):
+            _steps = [ ('pedestal-conversion','Convert RAW binary data into LCIO, pedestal runs'),\
+                    ('pedestal-preevaluation','Estimate pedestal and noise from a gaussian distribution'),\
+                    ('','')]
+            print "\033[1;34mAvailable steps:\033[1;m"
+            for _name,_info in _steps:
+                print " - \033[1;29m{0}\033[1;m: {1}".format(_name,_info)
+            parser.exit()
+    
+    mesdsc="A suite of tools to deal with the ALIBAVA (and EUTelescope)"
+    mesdsc+=" data output"
+    parser = ArgumentParser(prog='open_sesame',description=mesdsc)
     
     # Sub-command parsers
     subparsers = parser.add_subparsers(title='subcommands',
             description='valid subcommands', 
             help='additional help')
-
+    
+    # -- Subparser: list data sensor, test beam data associated to their
+    #               respective pedestal and calibration files 
     usage_ld  = "Extract the list of alibava raw data files from a parent folder. "
     usage_ld += "The folder should contain subdirectories with the name of the"
     usage_ld += " involved sensors; and the file names follow a pre-defined naming "
     usage_ld += "convention."
     
-    ld_parser = subparsers.add_parser("list_files",help=usage_ld)
+    ld_parser = subparsers.add_parser("list_files",description=usage_ld)
     ld_parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
     ld_parser.add_argument('--print-available-sensors',dest="available_sensors",\
@@ -132,9 +157,23 @@ if __name__ == '__main__':
     ld_parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
             " because of any problem")
     ld_parser.set_defaults(which='list_files',parent_folder=eospath,ignore_runs=[])
+    
+    # -- Subparser: steering file creator for the ALIBAVA/TELESCOPE data 
+    #               reconstruction
+    usage_st  = "Build the needed steering files to run a given step of the marlin"
+    usage_st += " framework reconstruction for the ALIBAVA or TELESCOPE data"
+
+    st_parser = subparsers.add_parser("steering",description=usage_st)
+    st_parser.add_argument('step',help="The step to create the steering file "\
+            " [See `--print-available-steps` option] ")
+    st_parser.add_argument('--print-available-steps',dest="available_steps",\
+            action=StepNamesAction,help='Just print the available step names')
+    st_parser.set_defaults(which='steering',ignore_runs=[])
 
     args = parser.parse_args()
     
     if args.which == 'list_files':
         list_raw_files(args.parent_folder,args.verbose)
+    elif args.which == 'steering':
+        print args.step
 

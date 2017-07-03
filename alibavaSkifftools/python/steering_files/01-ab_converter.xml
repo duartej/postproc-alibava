@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
+<!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
+
+<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/CEDViewer/v01-12/lib/libCEDViewer.so.1.12.0 (libCEDViewer.so)-->
+<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/Eutelescope/v1.0/lib/libEutelescope.so.1.0.0 (libEutelescope.so)-->
+<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/Eutelescope/v1.0/external/eudaq/v1.6.0/lib/libNativeReader.so (libNativeReader.so)-->
+
+<!--##########################################
+    #                                        #
+    #     Example steering file for marlin   #
+    #                                        #
+    ##########################################-->
+
+
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+ <execute>
+   <processor name="AIDA"/> 
+   <processor name="MyAlibavaConverter"/>
+   <processor name="MyLCIOOutputProcessor"/>  
+ </execute>
+
+ <global>
+  <parameter name="LCIOInputFiles"></parameter>
+  <!-- limit the number of processed records (run+evt): -->  
+  <!-- parameter name="MaxRecordNumber" value="5001" /-->  
+  <parameter name="SkipNEvents" value="0" />  
+  <parameter name="SupressCheck" value="false" />  
+  <parameter name="AllowToModifyEvent" value="false" />  
+  <parameter name="GearXMLFile"> dummy_gear.xml </parameter>  
+  <parameter name="Verbosity" options="DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT">WARNING0 </parameter> 
+  <parameter name="RandomSeed" value="1234567890" />
+  <!-- optionally limit the collections that are read from the input file: -->  
+  <!--parameter name="LCIOReadCollectionNames">MCParticle PandoraPFOs</parameter-->
+ </global>
+
+ <processor name="AIDA" type="AIDAProcessor">
+  <!--Processor that handles AIDA files. Creates on directory per processor.  
+      Processors only need to create and fill the histograms, clouds and 
+      tuples. Needs to be the first ActiveProcessor-->
+  <!-- compression of output file 0: false >0: true (default) -->
+  <parameter name="Compress" type="int">1 </parameter>
+  <!-- filename without extension-->
+  <parameter name="FileName" type="string" value= "@ROOT_FILENAME@_@RUN_NUMBER@"/>
+  <!-- type of output file root (default) or xml )-->
+  <parameter name="FileType" type="string">root </parameter>
+  <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+  <parameter name="Verbosity" type="string">WARNING </parameter>
+ </processor>
+
+
+<processor name="MyAlibavaConverter" type="AlibavaConverter">
+ <!--Reads data streams produced by Alibava and produces the corresponding LCIO output-->
+ <!--Selection of chip that you want to store data from. Chip numbers start from 0. 
+      If not set, all data (i.e. chip 0 and 1) will be stored-->
+  <!--parameter name="ChipSelection" type="IntVec"> </parameter-->
+  <!--The geometry identification number-->
+  <parameter name="GeoID" type="int">0 </parameter>
+  <!--This is the input file name-->
+  <parameter name="InputFileName" type="string">@INPUT_FILENAME@ </parameter>
+  <!--Name of the collection-->
+  <parameter name="RawChipHeaderCollectionName" type="string" lcioOutType="TrackerData">chipheader </parameter>
+  <!--Name of the collection-->
+  <parameter name="RawDataCollectionName" type="string" lcioOutType="TrackerData">rawdata </parameter>
+  <!--Run number of file (formatted)-->
+  <parameter name="RunNumber" type="int">@RUN_NUMBER@ </parameter>
+  <!--The event number that AlibavaConverter should start storing. Default value is -1, in this case it will store every event-->
+  <!--parameter name="StartEventNum" type="int">-1 </parameter-->
+  <!--The event number that AlibavaConverter should stop storing. Default value is -1, in this case it will store every event-->
+  <!--parameter name="StopEventNum" type="int">-1 </parameter-->
+  <!--Alibava stores a pedestal and noise set in the run header. These values are not 
+       used in te rest of the analysis, so it is optional to store it. By default it 
+       will not be stored, but it you want you can set this variable to true to store 
+       it in the header of slcio file-->
+  <!--parameter name="StoreHeaderPedestalNoise" type="bool">false </parameter-->
+  <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+  <parameter name="Verbosity" type="string">WARNING0 </parameter>
+</processor>
+
+<processor name="MyEventSelector" type="EventSelector">
+ <!--EventSelector returns true if given event was specified in EvenList-->
+  <!--event list - pairs of Eventnumber RunNumber-->
+  <parameter name="EventList" type="IntVec"></parameter>
+  <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+  <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
+</processor>
+
+<processor name="MyLCIOOutputProcessor" type="LCIOOutputProcessor">
+ <!--Writes the current event to the specified LCIO outputfile. Needs to be the last ActiveProcessor.-->
+  <!--drops the named collections from the event-->
+  <!--parameter name="DropCollectionNames" type="StringVec">TPCHits HCalHits  </parameter-->
+  <!--drops all collections of the given type from the event-->
+  <!--parameter name="DropCollectionTypes" type="StringVec">SimTrackerHit SimCalorimeterHit  </parameter-->
+  <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
+  <!--parameter name="FullSubsetCollections" type="StringVec">MCParticlesSkimmed  </parameter-->
+  <!--force keep of the named collections - overrules DropCollectionTypes (and DropCollectionNames)-->
+  <parameter name="LCIOOutputFile" type="string">@OUTPUT_FILENAME@ </parameter>
+  <!--write mode for output file:  WRITE_APPEND or WRITE_NEW-->
+  <parameter name="LCIOWriteMode" type="string">WRITE_NEW</parameter>
+  <!--will split output file if size in kB exceeds given value - doesn't work with APPEND and NEW-->
+  <!--parameter name="SplitFileSizekB" type="int">1992294 </parameter-->
+  <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+  <parameter name="Verbosity" type="string">WARNING0 </parameter>
+</processor>
+
+</marlin>
