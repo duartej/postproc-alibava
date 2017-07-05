@@ -86,6 +86,10 @@ def list_raw_files(parent_folder,verbose):
                             finst.sensor_name,finst.run_number,
                             pedflen,calflen)
 
+def create_steering_file(step_name):
+    """
+    """
+    from alibavaSkifftools import steering_processing
 
 if __name__ == '__main__':
     from argparse import ArgumentParser,Action
@@ -125,9 +129,6 @@ if __name__ == '__main__':
 
         def __call__(self, parser, namespace, values, option_string=None):
             from alibavaSkifftools.steering_processing import available_steps as _steps
-            #_steps = [ ('pedestal-conversion','Convert RAW binary data into LCIO, pedestal runs'),\
-            #        ('pedestal-preevaluation','Estimate pedestal and noise from a gaussian distribution'),\
-            #        ('','')]
             print "\033[1;34mAvailable steps:\033[1;m"
             for step in _steps:
                 print " - \033[1;29m{0}\033[1;m: {1}".format(step.__name__,step.get_description())
@@ -176,5 +177,5 @@ if __name__ == '__main__':
     if args.which == 'list_files':
         list_raw_files(args.parent_folder,args.verbose)
     elif args.which == 'steering':
-        print args.step
+        create_steering_file(args.step)
 

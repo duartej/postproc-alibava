@@ -139,5 +139,32 @@ class pedestal_preevaluation(marlin_step):
     def get_description():
         return 'Estimate pedestal and noise from a gaussian distribution'
 
-# The available steps (ordered)
+
+# The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation)
+
+# Factory to create the concrete marlin step given its name of class
+def create_marlin_step(step_name):
+    """Creates a marlin_step concrete class instance given the name 
+    of the class. 
+    
+    Parameters
+    ----------
+    step_name: str
+        Name of the concrete marlin_step class 
+
+    Return
+    ------
+    marlin_step concrete class instance
+
+    Raises
+    ------
+    NotImplementedError
+        If the class name does not implemented
+    """
+    try:
+        theclass = filter(lambda x: x.__name__ == step_name,available_steps)[0]
+    except IndexError:
+        raise NotImplementedError("Not Implemented class '{0}'".format(step_name))
+    return theclass()
+
