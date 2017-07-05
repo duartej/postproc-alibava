@@ -124,12 +124,13 @@ if __name__ == '__main__':
                     help=help)
 
         def __call__(self, parser, namespace, values, option_string=None):
-            _steps = [ ('pedestal-conversion','Convert RAW binary data into LCIO, pedestal runs'),\
-                    ('pedestal-preevaluation','Estimate pedestal and noise from a gaussian distribution'),\
-                    ('','')]
+            from alibavaSkifftools.steering_processing import available_steps as _steps
+            #_steps = [ ('pedestal-conversion','Convert RAW binary data into LCIO, pedestal runs'),\
+            #        ('pedestal-preevaluation','Estimate pedestal and noise from a gaussian distribution'),\
+            #        ('','')]
             print "\033[1;34mAvailable steps:\033[1;m"
-            for _name,_info in _steps:
-                print " - \033[1;29m{0}\033[1;m: {1}".format(_name,_info)
+            for step in _steps:
+                print " - \033[1;29m{0}\033[1;m: {1}".format(step.__name__,step.get_description())
             parser.exit()
     
     mesdsc="A suite of tools to deal with the ALIBAVA (and EUTelescope)"

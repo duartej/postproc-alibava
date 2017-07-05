@@ -26,8 +26,10 @@ def get_template_path():
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data)',
-        'INPUT_FILENAME': 'The list of input file names (LCIO DATA)',
+        'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
+        'GEAR_FILE': 'The name of the gear file to be used',
+        'PEDESTAL_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaPedestalNoiseProcessor',
         }
 
 # Dummy class to define what steering file is associated
@@ -39,7 +41,11 @@ class marlin_step(object):
         self.step_name = step_name
         self.token = '@'
         self.steering_file = os.path.join(os.getcwd(),"{0}.xml".format(self.step_name))
-    
+        # To be fill with the concrete class
+        self.steering_file_template = None
+        self.required_arguments     = None
+        self.step_description       = None
+
     @property
     def steering_file_content(self):
         """Getter for the steering file template content.
@@ -106,7 +112,9 @@ class marlin_step(object):
         self.steering_file_content = self.steering_file_content.replace("{0}{1}{0}".format(self.token,argument),str(value))
 
 
-# Concrete implementations
+############################ 
+# Concrete implementations # 
+############################
 class pedestal_conversion(marlin_step):
     def __init__(self):
         import os
@@ -114,4 +122,22 @@ class pedestal_conversion(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME')
+    
+    @staticmethod
+    def get_description():
+        return 'Convert RAW binary data into LCIO, pedestal runs'  
 
+class pedestal_preevaluation(marlin_step):
+    def __init__(self):
+        import os
+        super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
+
+        self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
+    
+    @staticmethod
+    def get_description():
+        return 'Estimate pedestal and noise from a gaussian distribution'
+
+# The available steps (ordered)
+available_steps = (pedestal_conversion,pedestal_preevaluation)
