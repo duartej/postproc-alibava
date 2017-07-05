@@ -223,14 +223,21 @@ class marlin_step(object):
         for key in kwd.keys():
             if key not in _ARGUMENTS.keys():
                 raise NotImplementedError("The argument '{0}' is not implemented".format(key))
-        # Setting the values    
+        # Setting the values provided by the user
         for arg,value in kwd.iteritems():
             self.set_argument_value(arg,value)
-        # Those arguments not set by the user, set using the
-        # default values
-        for argument in filter(lambda _a: _a not in kwd.keys(),self.required_arguments):
+        # Those arguments not set by the user (i.e. not present in the
+        # argument_values dictionary -- this allows to define tuned defaults
+        # depending of the step), set using the default values
+        #for argument in filter(lambda _a: _a not in kwd.keys(),self.required_arguments):
+        for argument in filter(lambda _a: _a not in self.argument_values.keys(),self.required_arguments):
             val = self.get_default_argument_value(argument)
             self.set_argument_value(argument,val)
+        # And the tuned default values (note that if the user already set it,
+        # the next lines do not affect anything as the @KEY@ is not present
+        # anymore in steering_file_content
+        for argdef,val in self.argument_values.iteritems():
+            self.set_argument_value(argdef,val)
 
         # Create the steering file
         with open(self.steering_file,"w") as f:
@@ -277,9 +284,25 @@ class cmmd_calculation(marlin_step):
     def get_description():
         return 'Common mode noise calculation'
 
+class pedestal_evaluation(marlin_step):
+    def __init__(self):
+        import os
+        super(pedestal_evaluation,self).__init__('pedestal_evaluation')
+
+        self.steering_file_template = os.path.join(get_template_path(),'04-ped_evaluation.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME',\
+                'MAXADC','MINADC','NBINS')
+        # Define a tuned default for the histogram bin and ranges
+        self.argument_values['MAXADC']=800.0
+        self.argument_values['MINADC']=200.0
+        self.argument_values['NBINS']=600
+    
+    @staticmethod
+    def get_description():
+        return 'Estimate pedestal and noise from a gaussian distribution (common mode subtracted)'
 
 # The available marlin_steps classes (ordered)
-available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation)
+available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation)
 
 # Factory to create the concrete marlin step given its name of class
 def create_marlin_step(step_name):
