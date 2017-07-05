@@ -170,6 +170,8 @@ class marlin_step(object):
         RuntimeError
             If the argument must be set by the user
         """
+        import os
+
         if argument == 'ROOT_FILENAME':
             return self.step_name
         elif argument == 'RUN_NUMBER':
@@ -182,11 +184,11 @@ class marlin_step(object):
             pass
         elif argument == 'OUTPUT_FILENAME':
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
-                return self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio')
+                return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
             elif self.argument.values.has_key('INPUT_FILENAMES'):
-                return self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name))
+                return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name)))
         elif self.argument.values.has_key('PEDESTAL_OUTPUT_FILENAME'):
-            return self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name))
+            return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name)))
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
