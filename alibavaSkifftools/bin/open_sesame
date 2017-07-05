@@ -117,6 +117,7 @@ def create_steering_file(step_name,**args):
 if __name__ == '__main__':
     from argparse import ArgumentParser,Action
     from alibavaSkifftools.SPS2017TB_metadata import eospath,sensor_names
+    from alibavaSkifftools.steering_processing import _ARGUMENTS as template_args
 
     # Helper class to allow list sensor names (without introducing
     # the positional arguments
@@ -192,8 +193,20 @@ if __name__ == '__main__':
     st_parser = subparsers.add_parser("steering",description=usage_st)
     st_parser.add_argument('step',help="The step name to create the steering file"\
             " [See `--print-available-steps` option] ")
-    st_parser.add_argument('--alibava-input-file',dest="ALIBAVA_INPUT_FILENAME",action='store',\
-            help='The raw alibava input file')
+    st_parser.add_argument('--alibava-input-filename',dest="ALIBAVA_INPUT_FILENAME",action='store',\
+            help=template_args['ALIBAVA_INPUT_FILENAME'])
+    st_parser.add_argument('--input-filename',dest="INPUT_FILENAMES",action='store',\
+            help=template_args['INPUT_FILENAMES'])
+    st_parser.add_argument('--run-number',dest="RUN_NUMBER",action='store',\
+            help=template_args['RUN_NUMBER'])
+    st_parser.add_argument('--root-filename',dest="ROOT_FILENAME",action='store',\
+            help=template_args['ROOT_FILENAME'])
+    st_parser.add_argument('--gear-file',dest="GEAR_FILE",action='store',\
+            help=template_args['GEAR_FILE'])
+    st_parser.add_argument('--output-filename',dest="OUTPUT_FILENAME",action='store',\
+            help=template_args['OUTPUT_FILENAME'])
+    st_parser.add_argument('--pedestal-output-filename',dest="PEDESTAL_OUTPUT_FILENAME",action='store',\
+            help=template_args['PEDESTAL_OUTPUT_FILENAME'])
     st_parser.add_argument('--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
@@ -203,8 +216,7 @@ if __name__ == '__main__':
     if args.which == 'list_files':
         list_raw_files(args.parent_folder,args.verbose)
     elif args.which == 'steering':
-        from alibavaSkifftools.steering_processing import _ARGUMENTS as tmp
-        valid_args = tmp.keys()
+        valid_args = template_args.keys()
         # Get the list of arguments related with the steering file template
         # which are filled
         the_args = dict(filter(lambda (k,v): k in valid_args and v is not None,args.__dict__.iteritems()))
