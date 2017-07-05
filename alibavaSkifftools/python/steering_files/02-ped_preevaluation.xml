@@ -23,7 +23,7 @@
    <global>
        <parameter name="LCIOInputFiles">@INPUT_FILENAMES@</parameter>
        <parameter name="GearXMLFile"/>dummy_gear.xml</parameter>
-       <parameter name="Verbosity" options="DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT">MESSAGE0 </parameter>
+       <parameter name="Verbosity" options="DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT">WARNING0 </parameter>
        <!--To set of channels to be used, ex.The format should be like 
             $ChipNumber:StartChannel-EndChannel$ 
             ex. $0:5-20$ $0:30-100$ $1:50-70$ means from chip 0 channels
