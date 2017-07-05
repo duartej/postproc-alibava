@@ -86,8 +86,18 @@ def list_raw_files(parent_folder,verbose):
                             finst.sensor_name,finst.run_number,
                             pedflen,calflen)
 
-def create_steering_file(step_name):
-    """
+def create_steering_file(step_name,**args):
+    """Create the steering file for the given step. The steering
+    file will be created in the working directory. If no extra
+    arguments are provided, the default will be applied
+
+    Parameters
+    ----------
+    step_name: str
+        the name of the step. Must correspond to a concrete class 
+        of alibavaSkifftools.steering_processing.marlin_step
+
+
     """
     from alibavaSkifftools import steering_processing
 
@@ -163,10 +173,11 @@ if __name__ == '__main__':
     # -- Subparser: steering file creator for the ALIBAVA/TELESCOPE data 
     #               reconstruction
     usage_st  = "Build the needed steering files to run a given step of the marlin"
-    usage_st += " framework reconstruction for the ALIBAVA or TELESCOPE data"
+    usage_st += " framework reconstruction for the ALIBAVA or TELESCOPE data. Note"
+    usage_st += " that the steering file is created in the working directory"
 
     st_parser = subparsers.add_parser("steering",description=usage_st)
-    st_parser.add_argument('step',help="The step to create the steering file "\
+    st_parser.add_argument('step',help="The step name to create the steering file"\
             " [See `--print-available-steps` option] ")
     st_parser.add_argument('--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
