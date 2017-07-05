@@ -12,7 +12,7 @@ setup(name='alibavaSkifftools',
         # for changes in the package distribution
         package_dir={'alibavaSkifftools':'python'},
         # Additional steering files used as templates
-        package_data = { 'alibavaSkifftools': ['steering_files/01-ab_converter.xml'] },
+        package_data = { 'alibavaSkifftools': ['steering_files/*.xml'] },
         packages = ['alibavaSkifftools'],
         scripts=['bin/open_sesame'],
         )
