@@ -57,7 +57,7 @@
   <!--The geometry identification number-->
   <parameter name="GeoID" type="int">0 </parameter>
   <!--This is the input file name-->
-  <parameter name="InputFileName" type="string">@INPUT_FILENAME@ </parameter>
+  <parameter name="InputFileName" type="string">@ALIBAVA_INPUT_FILENAME@ </parameter>
   <!--Name of the collection-->
   <parameter name="RawChipHeaderCollectionName" type="string" lcioOutType="TrackerData">chipheader </parameter>
   <!--Name of the collection-->
