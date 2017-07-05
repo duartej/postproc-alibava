@@ -186,9 +186,9 @@ class marlin_step(object):
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
             elif self.argument.values.has_key('INPUT_FILENAMES'):
-                return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name)))
+                return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}.slcio'.format(self.step_name)))
         elif argument == 'PEDESTAL_OUTPUT_FILENAME':
-            return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name)))
+            return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}_PEDESTALFILE.slcio'.format(self.step_name)))
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
