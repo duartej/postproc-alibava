@@ -97,9 +97,22 @@ def create_steering_file(step_name,**args):
         the name of the step. Must correspond to a concrete class 
         of alibavaSkifftools.steering_processing.marlin_step
 
+    ALIBAVA_INPUT_FILENAME: str, optional
+        The input file name of the RAW alibava file
 
+    See also
+    --------
+    alibavaSkifftools.steering_processing.marlin_step and
+    their concrete classes, to get a list of valid and needed 
+    template arguments
     """
     from alibavaSkifftools import steering_processing
+
+    # create the marlin step instance
+    step = steering_processing.create_marlin_step(step_name)
+    # And create the steering file
+    step.publish_steering_file(**args)
+
 
 if __name__ == '__main__':
     from argparse import ArgumentParser,Action
@@ -179,6 +192,8 @@ if __name__ == '__main__':
     st_parser = subparsers.add_parser("steering",description=usage_st)
     st_parser.add_argument('step',help="The step name to create the steering file"\
             " [See `--print-available-steps` option] ")
+    st_parser.add_argument('--alibava-input-file',dest="ALIBAVA_INPUT_FILENAME",action='store',\
+            help='The raw alibava input file')
     st_parser.add_argument('--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
@@ -188,5 +203,11 @@ if __name__ == '__main__':
     if args.which == 'list_files':
         list_raw_files(args.parent_folder,args.verbose)
     elif args.which == 'steering':
-        create_steering_file(args.step)
+        from alibavaSkifftools.steering_processing import _ARGUMENTS as tmp
+        valid_args = tmp.keys()
+        # Get the list of arguments related with the steering file template
+        # which are filled
+        the_args = dict(filter(lambda (k,v): k in valid_args and v is not None,args.__dict__.iteritems()))
+        # arguments in the template steering files
+        create_steering_file(args.step,**the_args)
 
