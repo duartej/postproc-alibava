@@ -42,9 +42,13 @@ class marlin_step(object):
         self.token = '@'
         self.steering_file = os.path.join(os.getcwd(),"{0}.xml".format(self.step_name))
         # To be fill with the concrete class
+        # The complete path of the template file
         self.steering_file_template = None
+        # A list of the required arguments and its default values
         self.required_arguments     = None
-        self.step_description       = None
+        # Dict mapping the required argument names with the particular
+        # and concrete values used
+        self.argument_values        = None
 
     @property
     def steering_file_content(self):
@@ -100,7 +104,8 @@ class marlin_step(object):
 
     def set_argument_value(self,argument,value):
         """Substitute the argument by the introduced value
-        in the steering file
+        in the steering file and fill the argument dict, mapping
+        the argument name with its concrete value
 
         Parameters
         ----------
@@ -110,7 +115,45 @@ class marlin_step(object):
             the value to be substituted
         """
         self.steering_file_content = self.steering_file_content.replace("{0}{1}{0}".format(self.token,argument),str(value))
+        self.argument_values[argument] = value
 
+    def get_default_argument_value(self,argument):
+        """Get the argument value per default
+
+        Parameters
+        ----------
+        argument: str
+            the name of the argument
+
+        Return
+        ------
+        str: the default value
+
+        Raises
+        ------
+        RuntimeError
+            If the argument must be set by the user
+        """
+        if argument == 'ROOT_FILENAME':
+            return self.step_name
+        elif argument == 'RUN_NUMBER':
+            return -1
+        elif argument == 'GEAR_FILE':
+            return 'gear_dummy.xml'
+        elif argument == 'ALIBAVA_INPUT_FILENAME':
+            pass
+        elif argument == 'INPUT_FILENAMES':
+            pass
+        elif argument == 'OUTPUT_FILENAME':
+            if self.argument.values.has_key('ALIBAVA_INPUT_FILENAME'):
+                return self.argument.values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio')
+            elif self.argument.values.has_key('INPUT_FILENAMES'):
+                return self.argument0values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name))
+        elif self.argument.values.has_key('PEDESTAL_OUTPUT_FILENAME'):
+            return self.argument0values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name))
+               
+        raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
+            
 
 ############################ 
 # Concrete implementations # 
@@ -133,7 +176,7 @@ class pedestal_preevaluation(marlin_step):
         super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
 
         self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
+        self.required_arguments = ('ROOT_FILENAME','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
     
     @staticmethod
     def get_description():
