@@ -32,11 +32,41 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'PEDESTAL_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaPedestalNoiseProcessor',
         }
 
-# Dummy class to define what steering file is associated
-# with a given step and what arguments should be provided
-# to fill the template steering file
+# Marlin step class definition
 class marlin_step(object):
+    """Abstract class to define what steering file is associated
+    with a given step and what arguments should be provided
+    to fill the template steering file. 
+
+    Attributes
+    ----------
+    step_name: str
+        The name of the step, it corresponds to the name of the 
+        concrete class
+    token: str
+        The token to be used to define the substitutible arguments 
+        in the template steering file
+    steering_file: str
+        The absolute path name of the steering file created by 
+        the class
+    steering_file_template: str
+        The absolute path name of the template associated
+    steering_file_content: str (property)
+        The proper content of the steering file
+    required_arguments: tuple(str)
+        The substitutible arguments of the template steering file
+    argument_values: dict(str,GenericType)
+        The map bewteen the argument template name and the concrete
+        value used
+    """
     def __init__(self,step_name):
+        """
+        Parameters
+        ----------
+        step_name: str
+            name of the step, which corresponds a concrete class
+            name 
+        """
         import os
         self.step_name = step_name
         self.token = '@'
@@ -48,7 +78,7 @@ class marlin_step(object):
         self.required_arguments     = None
         # Dict mapping the required argument names with the particular
         # and concrete values used
-        self.argument_values        = None
+        self.argument_values        = {}
 
     @property
     def steering_file_content(self):
@@ -113,6 +143,12 @@ class marlin_step(object):
             the name of the argument
         value: Any python type
             the value to be substituted
+
+        Raises
+        ------
+        KeyError
+            If the argument is not defined in the _ARGUMENTS static
+            dict
         """
         self.steering_file_content = self.steering_file_content.replace("{0}{1}{0}".format(self.token,argument),str(value))
         self.argument_values[argument] = value
@@ -145,19 +181,50 @@ class marlin_step(object):
         elif argument == 'INPUT_FILENAMES':
             pass
         elif argument == 'OUTPUT_FILENAME':
-            if self.argument.values.has_key('ALIBAVA_INPUT_FILENAME'):
-                return self.argument.values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio')
+            if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
+                return self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio')
             elif self.argument.values.has_key('INPUT_FILENAMES'):
-                return self.argument0values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name))
+                return self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}.slcio'.format(self.step_name))
         elif self.argument.values.has_key('PEDESTAL_OUTPUT_FILENAME'):
-            return self.argument0values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name))
+            return self.argument_values['INPUT_FILENAMES'].replace('.slcio','{0}_PEDESTALFILE.slcio'.format(self.step_name))
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
-            
 
-############################ 
-# Concrete implementations # 
-############################
+    def publish_steering_file(self,**kwd):
+        """Creates a copy of the steering file with the particular
+        values introduced substituted. If a given argument is not
+        provided, the default value will be used
+
+        Parameters
+        ----------
+
+        Raises
+        ------
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        # Check for inconsistencies
+        for key in kwd.keys():
+            if key not in _ARGUMENTS.keys():
+                raise NotImplementedError("The argument '{0}' is not implemented".format(key))
+        # Setting the values    
+        for arg,value in kwd.iteritems():
+            self.set_argument_value(arg,value)
+        # Those arguments not set by the user, set using the
+        # default values
+        for argument in filter(lambda _a: _a not in kwd.keys(),self.required_arguments):
+            val = self.get_default_argument_value(argument)
+            self.set_argument_value(argument,val)
+
+        # Create the steering file
+        with open(self.steering_file,"w") as f:
+            f.write(self.steering_file_content)
+
+
+# Marlin step concrete implementations
+# ------------------------------------
+
 class pedestal_conversion(marlin_step):
     def __init__(self):
         import os
