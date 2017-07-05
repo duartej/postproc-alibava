@@ -1,17 +1,12 @@
 <?xml version="1.0" encoding="us-ascii"?>
 <!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
 <!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
-
-<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/CEDViewer/v01-12/lib/libCEDViewer.so.1.12.0 (libCEDViewer.so)-->
-<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/Eutelescope/v1.0/lib/libEutelescope.so.1.0.0 (libEutelescope.so)-->
-<!-- Loading shared library : /home/duarte/repos/ilcsoft-eutelescope/v01-17-10/Eutelescope/v1.0/external/eudaq/v1.6.0/lib/libNativeReader.so (libNativeReader.so)-->
-
 <!--##########################################
     #                                        #
-    #     Example steering file for marlin   #
+    #     Steering file for marlin created   #
+    #     by alibavaSkifftools               #
     #                                        #
     ##########################################-->
-
 
 <marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
  <execute>
