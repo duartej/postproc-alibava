@@ -207,6 +207,8 @@ if __name__ == '__main__':
             help=template_args['OUTPUT_FILENAME'])
     st_parser.add_argument('--pedestal-output-filename',dest="PEDESTAL_OUTPUT_FILENAME",action='store',\
             help=template_args['PEDESTAL_OUTPUT_FILENAME'])
+    st_parser.add_argument('--pedestal-input-filename',dest="PEDESTAL_INPUT_FILENAME",action='store',\
+            help=template_args['PEDESTAL_INPUT_FILENAME']+" (Related with --pedestal-ouput-filename)")
     st_parser.add_argument('--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])

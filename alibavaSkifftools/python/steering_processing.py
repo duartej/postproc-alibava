@@ -30,6 +30,11 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
         'GEAR_FILE': 'The name of the gear file to be used',
         'PEDESTAL_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaPedestalNoiseProcessor',
+        'PEDESTAL_INPUT_FILENAME': 'Name of the input LCIO file created by the AlibavaPedestalNoiseProcessor,'\
+                ' containing the pedestals',
+        'MAXADC':'Max ADCs counts for the common mode histograms (600 per default)',
+        'MINADC':'Min ADCs counts for the common mode histograms (400 per default)',
+        'NBINS': 'Number of bins to be used in the histograms (200 default)',
         }
 
 # Marlin step class definition
@@ -182,13 +187,21 @@ class marlin_step(object):
             pass
         elif argument == 'INPUT_FILENAMES':
             pass
+        elif argument == 'PEDESTAL_INPUT_FILENAME':
+            pass
         elif argument == 'OUTPUT_FILENAME':
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
-            elif self.argument.values.has_key('INPUT_FILENAMES'):
+            elif self.argument_values.has_key('INPUT_FILENAMES'):
                 return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}.slcio'.format(self.step_name)))
         elif argument == 'PEDESTAL_OUTPUT_FILENAME':
             return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}_PEDESTALFILE.slcio'.format(self.step_name)))
+        elif argument == 'MAXADC':
+            return 600.0
+        elif argument == 'MINADC':
+            return 400.0
+        elif argument == 'NBINS':
+            return 200
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -245,15 +258,28 @@ class pedestal_preevaluation(marlin_step):
         super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
 
         self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
-        self.required_arguments = ('ROOT_FILENAME','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
     
     @staticmethod
     def get_description():
         return 'Estimate pedestal and noise from a gaussian distribution'
 
+class cmmd_calculation(marlin_step):
+    def __init__(self):
+        import os
+        super(cmmd_calculation,self).__init__('cmmd_calculation')
+
+        self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NU~MBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS')
+    
+    @staticmethod
+    def get_description():
+        return 'Common mode noise calculation'
+
 
 # The available marlin_steps classes (ordered)
-available_steps = (pedestal_conversion,pedestal_preevaluation)
+available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation)
 
 # Factory to create the concrete marlin step given its name of class
 def create_marlin_step(step_name):
