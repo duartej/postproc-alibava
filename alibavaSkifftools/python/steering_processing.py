@@ -36,6 +36,8 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MAXADC':'Max ADCs counts for the common mode histograms (600 per default)',
         'MINADC':'Min ADCs counts for the common mode histograms (400 per default)',
         'NBINS': 'Number of bins to be used in the histograms (200 default)',
+        'TIMECUT_MIN': 'The minimum TDC time that is acceptable to use an event',
+        'TIMECUT_MAX': 'The maximum TDC time that is acceptable to use an event',
         }
 
 # Marlin step class definition
@@ -216,6 +218,10 @@ class marlin_step(object):
             return 400.0
         elif argument == 'NBINS':
             return 200
+        elif argument == 'TIMECUT_MIN':
+            return 3.0
+        elif argument == 'TIMECUT_MAX':
+            return 30.0
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -340,13 +346,14 @@ class calibration_extraction(marlin_step):
     def get_description():
         return 'Extract calibration constant per channel'
 
-class rs_conversion(pedestal_conversion):
+class rs_conversion(marlin_step):
     def __init__(self):
         import os
-        super(rs_conversion,self).__init__()
-        # Change the step name
-        self.step_name='rs_conversion'
-        self.steering_file = self.steering_file.replace('pedestal_conversion',self.step_name)
+        super(rs_conversion,self).__init__('rs_conversion')
+
+        self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter_rs.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
+                "TIMECUT_MIN","TIMECUT_MAX")
     
     @staticmethod
     def get_description():
