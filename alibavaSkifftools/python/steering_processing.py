@@ -32,6 +32,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'PEDESTAL_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaPedestalNoiseProcessor',
         'PEDESTAL_INPUT_FILENAME': 'Name of the input LCIO file created by the AlibavaPedestalNoiseProcessor,'\
                 ' containing the pedestals',
+        'CALIBRATION_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaCalibrateProcessor',
         'MAXADC':'Max ADCs counts for the common mode histograms (600 per default)',
         'MINADC':'Min ADCs counts for the common mode histograms (400 per default)',
         'NBINS': 'Number of bins to be used in the histograms (200 default)',
@@ -199,6 +200,8 @@ class marlin_step(object):
                 return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}.slcio'.format(self.step_name)))
         elif argument == 'PEDESTAL_OUTPUT_FILENAME':
             return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}_PEDESTALFILE.slcio'.format(self.step_name)))
+        elif argument == 'CALIBRATION_OUTPUT_FILENAME':
+            return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}_CALIBRATIONFILE.slcio'.format(self.step_name)))
         elif argument == 'MAXADC':
             return 600.0
         elif argument == 'MINADC':
@@ -304,8 +307,34 @@ class pedestal_evaluation(marlin_step):
     def get_description():
         return 'Estimate pedestal and noise from a gaussian distribution (common mode subtracted)'
 
+class calibration_conversion(pedestal_conversion):
+    def __init__(self):
+        import os
+        super(calibration_conversion,self).__init__()
+        # Change the step name
+        self.step_name='calibration_conversion'
+        self.steering_file = self.steering_file.replace('pedestal_conversion',self.step_name)
+    
+    @staticmethod
+    def get_description():
+        return 'Convert RAW binary data into LCIO, calibration runs'  
+
+class calibration_extraction(marlin_step):
+    def __init__(self):
+        import os
+        super(calibration_extraction,self).__init__('calibration_extraction')
+
+        self.steering_file_template = os.path.join(get_template_path(),'02-cal_extraction.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'CALIBRATION_OUTPUT_FILENAME',\
+                'GEAR_FILE')
+    
+    @staticmethod
+    def get_description():
+        return 'Extract calibration constant per channel'
+
 # The available marlin_steps classes (ordered)
-available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation)
+available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,
+        calibration_conversion,calibration_extraction)
 
 # Factory to create the concrete marlin step given its name of class
 def create_marlin_step(step_name):
