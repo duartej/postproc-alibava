@@ -38,6 +38,10 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'NBINS': 'Number of bins to be used in the histograms (200 default)',
         'TIMECUT_MIN': 'The minimum TDC time that is acceptable to use an event',
         'TIMECUT_MAX': 'The maximum TDC time that is acceptable to use an event',
+        'MAXCMMDERR': 'Maximum value for the common mode error histogram',
+        'MINCMMDERR': 'Minimum value for the common mode error histogram',
+        'CMMDCUT_MIN': 'The minimum common mode noise ADC counts acceptable to use an event',
+        'CMMDCUT_MAX': 'The maximum common mode noise ADC counts acceptable to use an event',
         }
 
 # Marlin step class definition
@@ -222,6 +226,14 @@ class marlin_step(object):
             return 3.0
         elif argument == 'TIMECUT_MAX':
             return 30.0
+        elif argument == 'MAXCMMDERR':
+            return 20.0
+        elif argument == 'MINCMMDERR':
+            return 0.0
+        elif argument == 'CMMDCUT_MIN':
+            return -10.0
+        elif argument == 'CMMDCUT_MAX':
+            return 10.0
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -298,7 +310,7 @@ class cmmd_calculation(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','GEAR_FILE')
+                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','GEAR_FILE')
     
     @staticmethod
     def get_description():
@@ -359,10 +371,30 @@ class rs_conversion(marlin_step):
     def get_description():
         return 'Convert RAW binary data into LCIO, beam or RS runs'  
 
+class signal_reconstruction(marlin_step):
+    def __init__(self):
+        import os
+        super(signal_reconstruction,self).__init__('signal_reconstruction')
+
+        self.steering_file_template = os.path.join(get_template_path(),'02-signal_reconstruction.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','CMMDCUT_MIN','CMMDCUT_MAX','GEAR_FILE')
+        # Define a tuned default for the histogram bin and ranges
+        self.argument_values['MAXADC']=1000.0
+        self.argument_values['MINADC']=-1000.0
+        self.argument_values['NBINS']=2000
+        self.argument_values['MAXCMMDERR']=30.0
+        self.argument_values['MINCMMDERR']=0.0
+    
+    @staticmethod
+    def get_description():
+        return 'Signal reconstruction: pedestal and common mode subtraction, plus common mode cut'
+
+
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
-        rs_conversion)
+        rs_conversion,signal_reconstruction)
 
 # END -- Marlin step concrete implementations
 # -------------------------------------------

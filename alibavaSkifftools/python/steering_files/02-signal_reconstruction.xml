@@ -15,6 +15,7 @@
       <processor name="MyAlibavaPedestalSubtraction"/>
       <processor name="MyAlibavaConstantCommonModeProcessor"/>
       <processor name="MyAlibavaCommonModeSubtraction"/>
+      <processor name="MyAlibavaConstantCommonModeCutProcessor"/>
       <processor name="PrintEventNumber"/>
       <processor name="Save"/>
    </execute>
@@ -96,7 +97,7 @@
         <!--Input reco data collection name-->
         <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> rawdata </parameter>
         <!--Output data collection name-->
-        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> rawdata_cmmd </parameter>
+        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> recodata_cmmd </parameter>
         <!--Common mode collection name, better not to change-->
         <parameter name="CommonModeCollectionName" type="string" value="commonmode"/>
         <!--Common mode error collection name, better not to change-->
@@ -110,6 +111,27 @@
         <!--"The number of bins for the histograms"-->
         <parameter name="NbinsForHistograms" type="int" value="@NBINS@"/>
         <!--parameter name="Verbosity" type="string" value=""/-->
+    </processor>
+    
+    <processor name="MyAlibavaConstantCommonModeCutProcessor" type="AlibavaConstantCommonModeCutProcessor">
+        <!--AlibavaConstantCommonModeCutProcessor masks the events if their 
+             common mode correction value is not in the range specified by 
+             CommonModeCutMin and CommonModeCutMax.-->
+	<!--Input collection name that will be masked if common mode noise is not in the range-->
+	<parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> recodata_cmmd </parameter>
+	<!--The common mode collection name-->
+	<parameter name="CommonModeCollectionName" type="string">commonmode </parameter>
+	<!--The minimum common mode noise that is acceptable to use that Event-->
+	<parameter name="CommonModeCutMin" type="float">@CMMDCUT_MIN@ </parameter>
+	<!--The maximum common mode noise that is acceptable to use that Event-->
+	<parameter name="CommonModeCutMax" type="float">@CMMDCUT_MAX@ </parameter>
+        <!--If MaskIfAnyChipsCommonModeIsNotInRange variable is set to "true", the whole 
+             event will be masked even if only one chip has common mode noise that is 
+             not in the range. In case it is set to "false" then the event will be 
+             masked if all chips selected has common mode noise not in the range.-->
+	<parameter name="MaskIfAnyChipsCommonModeIsNotInRange" type="bool">true</parameter>
+	<!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+        <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
     </processor>
 
     <processor name="Save" type="LCIOOutputProcessor">
@@ -137,7 +159,7 @@
     <processor name="PrintEventNumber" type="EUTelUtilityPrintEventNumber">
         <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
         <!--Print event number for every n-th event-->
-        <parameter name="EveryNEvents" type="int" value="2500"/>
+        <parameter name="EveryNEvents" type="int" value="5000"/>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
         <!--parameter name="Verbosity" type="string" value=""/-->
         <!--print the event timestamp as read from LCIO-->

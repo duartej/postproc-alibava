@@ -41,6 +41,13 @@ class TestProcessingModule(unittest.TestCase):
                         " in the associated template file '{2}'".format(req_arg,a.step_name,\
                         os.path.basename(a.steering_file_template)))
     
+    #def test_required_arguments_from_template_file(self):
+    #    import os
+    #    for _step in steering_processing.available_steps:
+    #        a = _step()
+    #        # Extract the arguments to be substituted present in the templates
+    #        a.steering_file_content
+    # I need to find an suitable algorithm to extract all the @STRING@ 
 if __name__ == "__main__":
     unittest.main()
 
