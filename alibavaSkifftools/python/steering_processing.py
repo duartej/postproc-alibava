@@ -177,14 +177,22 @@ class marlin_step(object):
             If the argument must be set by the user
         """
         import os
+        import shutil
+        from .SPS2017TB_metadata import filename_parser
 
         if argument == 'ROOT_FILENAME':
             return self.step_name
         elif argument == 'RUN_NUMBER':
+            # if RS or beam, the run number can be extracted from
+            # the datafile 
+            for key in ['ALIBAVA_INPUT_FILENAME', 'INPUT_FILENAMES' ]:
+                if self.argument_values.has_key(key):
+                    fnp = filename_parser(self.argument_values[key])
+                    if fnp.is_beam:
+                        return fnp.run_number
             return -1
         elif argument == 'GEAR_FILE':
             # First copy the file to the cwd
-            import shutil
             shutil.copyfile(os.path.join(get_template_path(),'dummy_gear.xml'),os.path.join(os.getcwd(),'dummy_gear.xml'))
             return 'dummy_gear.xml'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
@@ -332,9 +340,26 @@ class calibration_extraction(marlin_step):
     def get_description():
         return 'Extract calibration constant per channel'
 
+class rs_conversion(pedestal_conversion):
+    def __init__(self):
+        import os
+        super(rs_conversion,self).__init__()
+        # Change the step name
+        self.step_name='rs_conversion'
+        self.steering_file = self.steering_file.replace('pedestal_conversion',self.step_name)
+    
+    @staticmethod
+    def get_description():
+        return 'Convert RAW binary data into LCIO, beam or RS runs'  
+
 # The available marlin_steps classes (ordered)
-available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,
-        calibration_conversion,calibration_extraction)
+available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
+        calibration_conversion,calibration_extraction,\
+        rs_conversion)
+
+# END -- Marlin step concrete implementations
+# -------------------------------------------
+
 
 # Factory to create the concrete marlin step given its name of class
 def create_marlin_step(step_name):
