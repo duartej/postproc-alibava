@@ -1,0 +1,6 @@
+<gear>
+  <!--DUMMY GEAR FILE, ASSUMING YOU KNOW WHY YOU ARE USING IT -->
+
+  <global detectorName="DUMMY"/>
+  <detectors></detectors>
+</gear>

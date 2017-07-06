@@ -182,7 +182,10 @@ class marlin_step(object):
         elif argument == 'RUN_NUMBER':
             return -1
         elif argument == 'GEAR_FILE':
-            return 'gear_dummy.xml'
+            # First copy the file to the cwd
+            import shutil
+            shutil.copyfile(os.path.join(get_template_path(),'dummy_gear.xml'),os.path.join(os.getcwd(),'dummy_gear.xml'))
+            return 'dummy_gear.xml'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
         elif argument == 'INPUT_FILENAMES':
@@ -253,7 +256,7 @@ class pedestal_conversion(marlin_step):
         super(pedestal_conversion,self).__init__('pedestal_conversion')
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
     
     @staticmethod
     def get_description():
@@ -265,7 +268,7 @@ class pedestal_preevaluation(marlin_step):
         super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
 
         self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME','GEAR_FILE')
     
     @staticmethod
     def get_description():
@@ -278,7 +281,7 @@ class cmmd_calculation(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NU~MBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS')
+                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','GEAR_FILE')
     
     @staticmethod
     def get_description():
@@ -291,7 +294,7 @@ class pedestal_evaluation(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'04-ped_evaluation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME',\
-                'MAXADC','MINADC','NBINS')
+                'MAXADC','MINADC','NBINS','GEAR_FILE')
         # Define a tuned default for the histogram bin and ranges
         self.argument_values['MAXADC']=800.0
         self.argument_values['MINADC']=200.0
