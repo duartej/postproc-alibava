@@ -280,7 +280,7 @@ class cmmd_calculation(marlin_step):
         super(cmmd_calculation,self).__init__('cmmd_calculation')
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NU~MBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','GEAR_FILE')
     
     @staticmethod
