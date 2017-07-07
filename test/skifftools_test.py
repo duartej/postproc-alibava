@@ -41,13 +41,20 @@ class TestProcessingModule(unittest.TestCase):
                         " in the associated template file '{2}'".format(req_arg,a.step_name,\
                         os.path.basename(a.steering_file_template)))
     
-    #def test_required_arguments_from_template_file(self):
-    #    import os
-    #    for _step in steering_processing.available_steps:
-    #        a = _step()
-    #        # Extract the arguments to be substituted present in the templates
-    #        a.steering_file_content
-    # I need to find an suitable algorithm to extract all the @STRING@ 
+    def test_required_arguments_from_template_file(self):
+        import os
+        import re
+        for _step in steering_processing.available_steps:
+            a = _step()
+            # Extract the arguments to be substituted present in the templates
+            # Note we need to split first potential double arguments 
+            # (as @ARG1@_@ARG2@ -> @ARG1@ @ARG2@)
+            arglist=re.findall("@(.*)@",a.steering_file_content.replace("@_@","@\n@"))
+            for arg in arglist:
+                self.assertTrue(arg in a.required_arguments,\
+                        "Argument '{0}' present in the template file '{1}'"\
+                        " is not explicitely required in the class '{2}'"\
+                        .format(arg,os.path.basename(a.steering_file_template),a.step_name))
 if __name__ == "__main__":
     unittest.main()
 
