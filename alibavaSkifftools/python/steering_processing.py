@@ -390,7 +390,8 @@ class signal_reconstruction(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'02-signal_reconstruction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','CMMDCUT_MIN','CMMDCUT_MAX','GEAR_FILE')
+                'MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','CMMDCUT_MIN','CMMDCUT_MAX','GEAR_FILE',\
+                'OUTPUT_FILENAME')
         # Define a tuned default for the histogram bin and ranges
         self.argument_values['MAXADC']=1000.0
         self.argument_values['MINADC']=-1000.0
@@ -409,7 +410,7 @@ class alibava_clustering(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS')
+                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME')
     
     @staticmethod
     def get_description():
