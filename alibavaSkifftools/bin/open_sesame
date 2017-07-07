@@ -177,7 +177,7 @@ if __name__ == '__main__':
     ld_parser = subparsers.add_parser("list_files",description=usage_ld)
     ld_parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
-    ld_parser.add_argument('--print-available-sensors',dest="available_sensors",\
+    ld_parser.add_argument('-p','--print-available-sensors',dest="available_sensors",\
             action=SensorNamesAction,help='Just print the available'\
             ' sensor names')
     ld_parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
@@ -188,7 +188,10 @@ if __name__ == '__main__':
     #               reconstruction
     usage_st  = "Build the needed steering files to run a given step of the marlin"
     usage_st += " framework reconstruction for the ALIBAVA or TELESCOPE data. Note"
-    usage_st += " that the steering file is created in the working directory"
+    usage_st += " that the steering file is created in the working directory."
+    usage_st += " All the available options but the `--print-availble-steps` are"
+    usage_st += " directly related with the relevant steering file (see the"
+    usage_st += " steering files under `steering_files` directory "
 
     st_parser = subparsers.add_parser("steering",description=usage_st)
     st_parser.add_argument('step',help="The step name to create the steering file"\
@@ -221,7 +224,19 @@ if __name__ == '__main__':
             help=template_args['TIMECUT_MIN'])
     st_parser.add_argument('--timecut-max',dest="TIMECUT_MAX",action='store',\
             help=template_args['TIMECUT_MAX'])
-    st_parser.add_argument('--print-available-steps',dest="available_steps",\
+    st_parser.add_argument('--cmmdcut-min',dest="CMMDCUT_MIN",action='store',\
+            help=template_args['CMMDCUT_MIN'])
+    st_parser.add_argument('--cmmdcut-max',dest="CMMDCUT_MAX",action='store',\
+            help=template_args['CMMDCUT_MAX'])
+    st_parser.add_argument('--snrcut-seed',dest="SNRCUT_SEED",action='store',\
+            help=template_args['SNRCUT_SEED'])
+    st_parser.add_argument('--snrcut-neighbour',dest="SNRCUT_NGB",action='store',\
+            help=template_args['SNRCUT_NGB'])
+    st_parser.add_argument('--signal-polarity',dest="SIGNAL_POLARITY",action='store',\
+            help=template_args['SIGNAL_POLARITY'])
+    st_parser.add_argument('--sensor-id-starts-at',dest="SENSORID_STARTS",action='store',\
+            help=template_args['SENSORID_STARTS'])
+    st_parser.add_argument('-p','--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
 

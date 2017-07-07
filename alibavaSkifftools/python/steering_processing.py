@@ -42,6 +42,10 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MINCMMDERR': 'Minimum value for the common mode error histogram',
         'CMMDCUT_MIN': 'The minimum common mode noise ADC counts acceptable to use an event',
         'CMMDCUT_MAX': 'The maximum common mode noise ADC counts acceptable to use an event',
+        'SNRCUT_SEED': 'The minimum signal to noise ratio that a channel has to pass to be used as cluster seed', 
+        'SNRCUT_NGB': 'The minimum signal to noise ratio that a neighbour channel has to pass to be added to a cluster', 
+        'SIGNAL_POLARITY': 'The polarity of the signal (-1 for negative signals)',
+        'SENSORID_STARTS': 'The sensor ID for the alibava data which will be stored as SENSORID_STARTS+chip_number',
         }
 
 # Marlin step class definition
@@ -234,6 +238,14 @@ class marlin_step(object):
             return -10.0
         elif argument == 'CMMDCUT_MAX':
             return 10.0
+        elif argument == 'SNRCUT_SEED':
+            return 5
+        elif argument == 'SNRCUT_NGB':
+            return 3
+        elif argument == 'SIGNAL_POLARITY':
+            return -1
+        elif argument == 'SENSORID_STARTS':
+            return 5
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -390,11 +402,23 @@ class signal_reconstruction(marlin_step):
     def get_description():
         return 'Signal reconstruction: pedestal and common mode subtraction, plus common mode cut'
 
+class alibava_clustering(marlin_step):
+    def __init__(self):
+        import os
+        super(alibava_clustering,self).__init__('alibava_clustering')
+
+        self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS')
+    
+    @staticmethod
+    def get_description():
+        return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
 
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
-        rs_conversion,signal_reconstruction)
+        rs_conversion,signal_reconstruction,alibava_clustering)
 
 # END -- Marlin step concrete implementations
 # -------------------------------------------
