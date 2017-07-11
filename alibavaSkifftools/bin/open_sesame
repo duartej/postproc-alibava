@@ -72,18 +72,17 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
         for _fb in beam_files:
             try:
                 sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
-            except IOError as e:
+            except IOError:
                 # No pedestals nor calibration, skip this file
                 # Store if verbose
-                print "KKKITA",str(e)
                 if verbose:
-                    failed.append( (_fb,ped_cal) )
+                    failed.append( (_fb,'NO CAL/PED FOUND') )
                 continue
             except RuntimeError as e:
+                # One pedestal or one calibration
                 # Store if verbose
-                print "THEREEOR",str(e)
                 if verbose:
-                    failed.append( (_fb,ped_cal) )
+                    failed.append( (_fb,str(e)) )
                 continue
         # If a beam file is provided, check if the file is in this sensor folder
         if beam_file is not None:
@@ -106,12 +105,7 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
     if verbose:
         print "\033[1;33mVERBOSE: Sensors and runs with incomplete/inconsistent files\033[1;m"
         for (finst,pedcallist) in failed:
-            pedflen=len(filter(lambda x: x.is_pedestal,pedcallist))
-            calflen=len(filter(lambda x: x.is_calibration,pedcallist))
-            print "{0}, run: {1}, [# ped. files:{2}, "\
-                    "# cal. files:{3}]".format(
-                            finst.sensor_name,finst.run_number,
-                            pedflen,calflen)
+            print "{0}, run: {1}, '{2}'".format(finst.sensor_name,finst.run_number,pedcallist)
 
 def create_steering_file(step_name,**args):
     """Create the steering file for the given step. The steering
