@@ -165,7 +165,7 @@ class filename_parser(object):
         # First convert to an Epoch time to fairly compare
         our_hour  = self.get_epoch_time()
         other_hour= other.get_epoch_time() 
-        if abs(our_hour-other_hour) > 5.0*3600.0:
+        if abs(our_hour-other_hour) > 15.0*3600.0:
             return False
         # The propose float equalizers :
         equalizers = [ ('voltage_bias',1e-19), ('current_leak',10.0), 
@@ -223,8 +223,6 @@ class associated_filenames(object):
         if len(pre_associated_files) > 2:
             pedfile = fn_instance.closest(filter(lambda x: x.is_pedestal,pre_associated_files))
             calfile = fn_instance.closest(filter(lambda x: x.is_calibration,pre_associated_files))
-            #pedfile = sorted(filter(lambda x: x.is_pedestal,pre_associated_files),key=lambda x: x.get_epoch_time())[0]
-            #calfile = sorted(filter(lambda x: x.is_calibration,pre_associated_files),key=lambda x: x.get_epoch_time())[0]
             associated_files = [pedfile,calfile]
         else:
             associated_files = pre_associated_files
