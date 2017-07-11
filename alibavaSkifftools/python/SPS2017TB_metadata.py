@@ -177,8 +177,36 @@ class filename_parser(object):
         return True
 
     def closest(self,list_of_others):
-        """Returning the instance closest (in hour, equ
+        """Returning the instance (pedestal and/or calibration instances)
+        closest to this beam instance.
+
+        Note
+        ----
+        This functions is only useful (and make sense) for a beam instance
+        and a list of pedestal/calibration instances
+
+        Parameters
+        ----------
+        list_of_others: list(filename_parser instances)
+            the list of pedestal/calibration files
+
+        Returns
+        -------
+        the filename_parser closest to this beam instance
         """
+        closest=list_of_others[0]
+        for other in list_of_others[1:]:
+            # Just the time taken as the nearby handle
+            delta_hour_other   = self.get_epoch_time()-other.get_epoch_time()
+            delta_hour_closest = self.get_epoch_time()-closest.get_epoch_time()
+            # A positive distance is preferable (the beam run has been taken after
+            # the calibration/pedestal run) 
+            if delta_hour_other > 0 and delta_hour_closest < 0:
+                closest = other
+                continue
+            if abs(delta_hour_other) < abs(delta_hour_closest):
+                closest = other
+        return closest
 
 # A class to associate a beam file with the pedestal and calibration
 class associated_filenames(object):
@@ -193,8 +221,10 @@ class associated_filenames(object):
                 (_fcp.is_calibration or _fcp.is_pedestal), list_available_pedcal)
         # Just cleaning a bit if there is too close 
         if len(pre_associated_files) > 2:
-            pedfile = sorted(filter(lambda x: x.is_pedestal,pre_associated_files),key=lambda x: x.hour)[0]
-            calfile = sorted(filter(lambda x: x.is_calibration,pre_associated_files),key=lambda x: x.hour)[0]
+            pedfile = fn_instance.closest(filter(lambda x: x.is_pedestal,pre_associated_files))
+            calfile = fn_instance.closest(filter(lambda x: x.is_calibration,pre_associated_files))
+            #pedfile = sorted(filter(lambda x: x.is_pedestal,pre_associated_files),key=lambda x: x.get_epoch_time())[0]
+            #calfile = sorted(filter(lambda x: x.is_calibration,pre_associated_files),key=lambda x: x.get_epoch_time())[0]
             associated_files = [pedfile,calfile]
         else:
             associated_files = pre_associated_files
@@ -207,7 +237,7 @@ class associated_filenames(object):
             raise RuntimeError("Just found 1 non-beam run type for the"\
                     " current 'filename_parser' instance:\n{0}\n{1}".format(fn_instance,associated_files[0]))
         elif len(associated_files) > 2:
-            # Let's take the one with closest values
+            # Never it could be here!!!
             message = ""
             for af in associated_files:
                 message += " - "+af.filename+"\n"

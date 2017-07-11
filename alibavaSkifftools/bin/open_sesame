@@ -74,7 +74,9 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
                 sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
             except IOError:
                 # No pedestals nor calibration, skip this file
-                failed.append( (_fb,ped_cal) )
+                # Store if verbose
+                if verbose:
+                    failed.append( (_fb,ped_cal) )
                 continue
             except RuntimeError:
                 # Store if verbose
