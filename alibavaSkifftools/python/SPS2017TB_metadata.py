@@ -168,7 +168,7 @@ class filename_parser(object):
         if abs(our_hour-other_hour) > 15.0*3600.0:
             return False
         # The propose float equalizers :
-        equalizers = [ ('voltage_bias',1e-19), ('current_leak',10.0), 
+        equalizers = [ ('voltage_bias',1e-19), ('current_leak',20.0), 
                 ('temperature',1e-19) ]
         for (equalizer,max_diff) in equalizers:
             if abs(getattr(other,equalizer)-getattr(self,equalizer)) > max_diff:
