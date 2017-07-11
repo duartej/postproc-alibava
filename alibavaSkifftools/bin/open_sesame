@@ -72,14 +72,16 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
         for _fb in beam_files:
             try:
                 sensor_files[sensor].append(tb2017.associated_filenames(_fb,ped_cal))
-            except IOError:
+            except IOError as e:
                 # No pedestals nor calibration, skip this file
                 # Store if verbose
+                print "KKKITA",str(e)
                 if verbose:
                     failed.append( (_fb,ped_cal) )
                 continue
-            except RuntimeError:
+            except RuntimeError as e:
                 # Store if verbose
+                print "THEREEOR",str(e)
                 if verbose:
                     failed.append( (_fb,ped_cal) )
                 continue
