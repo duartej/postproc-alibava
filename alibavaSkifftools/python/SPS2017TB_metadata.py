@@ -140,6 +140,17 @@ class filename_parser(object):
         except ValueError:
             self._latency = int(latency.upper().replace("LAT",""))
 
+    def get_epoch_time(self):
+        """Return the date and hour in epoch time
+
+        Returns
+        -------
+        epoch time
+        """
+        import time
+        pattern='%Y-%m-%d'
+        return int(time.mktime(time.strptime(self.date,pattern)))+self.hour
+
     def __eq__(self,other):
         """Pseudo equality to match the beam runs with the pedestal ones
         """
@@ -147,7 +158,10 @@ class filename_parser(object):
                 self.motherboard != other.motherboard:
             return False
         # And also not so far in time (5 hours)
-        if abs(self.hour-other.hour) > 5.0*3600.0:
+        # First convert to an Epoch time to fairly compare
+        our_hour  = self.get_epoch_time()
+        other_hour= other.get_epoch_time() 
+        if abs(our_hour-other_hour) > 5.0*3600.0:
             return False
         # The propose float equalizers :
         equalizers = [ ('voltage_bias',1e-19), ('current_leak',10.0), 

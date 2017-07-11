@@ -55,6 +55,7 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
         sensor_files[sensor] = []
         beam_files =[]
         ped_cal = []
+        # Find all the raw alibava data files
         for fname in glob.glob(os.path.join(os.path.join(parent_folder,sensor),"*.dat")):
             try:
                 _prv = tb2017.filename_parser(fname)
@@ -80,8 +81,6 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
                 if verbose:
                     failed.append( (_fb,ped_cal) )
                 continue
-            ped_cal.remove(sensor_files[sensor][-1].pedestal_instance)
-            ped_cal.remove(sensor_files[sensor][-1].calibration_instance)
         # If a beam file is provided, check if the file is in this sensor folder
         if beam_file is not None:
             if os.path.basename(beam_file) in \
