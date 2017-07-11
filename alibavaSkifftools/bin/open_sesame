@@ -12,11 +12,17 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
-def list_raw_files(parent_folder,verbose):
+def list_raw_files(parent_folder,verbose,beam_file=None):
     """Extract the list of alibava raw data files from a parent folder.
     The folder should contain subdirectories with the name
     of the involved sensors, and the file names follows a pre-defined
     naming convention.
+
+    If `beam_file` is not None, the function will print the pedestal
+    and calibration files (absolute paths) associated to that beam
+    file; raising a RuntimeError if no pedestal and/or calibration
+    file have been found, or if more than one pedestal and/or calibration
+    file have been found.
 
     Parameters
     ----------
@@ -25,6 +31,9 @@ def list_raw_files(parent_folder,verbose):
     verbose: bool
         whether or not to dump out more information whenever a file has
         been not included
+    beam_file: str | None
+        if is not None, the name (basename) of a beam-type alibava RAW
+        file
     """
     import alibavaSkifftools.SPS2017TB_metadata as tb2017
     import glob
@@ -72,6 +81,20 @@ def list_raw_files(parent_folder,verbose):
                 continue
             ped_cal.remove(sensor_files[sensor][-1].pedestal_instance)
             ped_cal.remove(sensor_files[sensor][-1].calibration_instance)
+        # If a beam file is provided, check if the file is in this sensor folder
+        if beam_file is not None:
+            if os.path.basename(beam_file) in \
+                    map(lambda x: os.path.basename(x.beam_instance.filename),sensor_files[sensor]):
+                tf_inst = filter(lambda x: os.path.basename(beam_file) in \
+                        os.path.basename(x.beam_instance.filename),\
+                        sensor_files[sensor])[0]
+                print "{0},{1}".format(tf_inst.pedestal_instance.filename,tf_inst.calibration_instance.filename)
+                return
+            continue
+    if beam_file is not None:
+        # Not found, so a raise the error
+        raise RuntimeError("Not found '{0}'".format(beam_file))
+
     for sname,flist in sensor_files.iteritems():
         print "\033[1;34mSENSOR:\033[1;m \033[1;20m{0}\033[1;m".format(sname)
         for af in flist:
@@ -172,17 +195,21 @@ if __name__ == '__main__':
     usage_ld  = "Extract the list of alibava raw data files from a parent folder. "
     usage_ld += "The folder should contain subdirectories with the name of the"
     usage_ld += " involved sensors; and the file names follow a pre-defined naming "
-    usage_ld += "convention."
+    usage_ld += "convention. If `--beam-filename` option is used, the pedestal,calibration"
+    usage_ld += " files will be printed instead."
     
     ld_parser = subparsers.add_parser("list_files",description=usage_ld)
     ld_parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
+    ld_parser.add_argument('-b','--beam-filename',action='store',dest='beam_file',\
+            help="The file name of the beam-type file to obtain the pedestal and calibration"\
+            " files associated to it")
     ld_parser.add_argument('-p','--print-available-sensors',dest="available_sensors",\
             action=SensorNamesAction,help='Just print the available'\
             ' sensor names')
     ld_parser.add_argument('-v',dest="verbose",action='store_true',help="Show the list of ignored run numbers"\
             " because of any problem")
-    ld_parser.set_defaults(which='list_files',parent_folder=eospath,ignore_runs=[])
+    ld_parser.set_defaults(which='list_files',parent_folder=eospath,beam_file=None,ignore_runs=[])
     
     # -- Subparser: steering file creator for the ALIBAVA/TELESCOPE data 
     #               reconstruction
@@ -243,7 +270,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.which == 'list_files':
-        list_raw_files(args.parent_folder,args.verbose)
+        list_raw_files(args.parent_folder,args.verbose,args.beam_file)
     elif args.which == 'steering':
         valid_args = template_args.keys()
         # Get the list of arguments related with the steering file template
