@@ -170,6 +170,12 @@ class filename_parser(object):
         # The propose float equalizers :
         equalizers = [ ('voltage_bias',1e-19), ('current_leak',20.0), 
                 ('temperature',1e-19) ]
+        # [HARDCODED CASES]
+        ###################
+        if self.sensor_name == "M2-3" and other.run_number in [ 282,283,284]:
+            equalizers[0] = ('voltage_bias',5.0)
+            equalizers[1] = ('current_leak', 400.0)
+        # [END HARDCODED CASES]
         for (equalizer,max_diff) in equalizers:
             if abs(getattr(other,equalizer)-getattr(self,equalizer)) > max_diff:
                 return False
