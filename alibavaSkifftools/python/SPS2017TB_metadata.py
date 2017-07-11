@@ -147,9 +147,13 @@ class filename_parser(object):
         -------
         epoch time
         """
-        import time
-        pattern='%Y-%m-%d'
-        return int(time.mktime(time.strptime(self.date,pattern)))+self.hour
+        try:
+            return self._epoch_time
+        except AttributeError:
+            import time
+            pattern='%Y-%m-%d'
+            self._epoch_time = int(time.mktime(time.strptime(self.date,pattern)))+self.hour
+            return self._epoch_time
 
     def __eq__(self,other):
         """Pseudo equality to match the beam runs with the pedestal ones
@@ -171,6 +175,10 @@ class filename_parser(object):
                 return False
         # we are here, then everything is equal
         return True
+
+    def closest(self,list_of_others):
+        """Returning the instance closest (in hour, equ
+        """
 
 # A class to associate a beam file with the pedestal and calibration
 class associated_filenames(object):
@@ -199,6 +207,7 @@ class associated_filenames(object):
             raise RuntimeError("Just found 1 non-beam run type for the"\
                     " current 'filename_parser' instance:\n{0}\n{1}".format(fn_instance,associated_files[0]))
         elif len(associated_files) > 2:
+            # Let's take the one with closest values
             message = ""
             for af in associated_files:
                 message += " - "+af.filename+"\n"
