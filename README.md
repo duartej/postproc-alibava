@@ -2,8 +2,14 @@
 Some utilities for the post-processing of data acquired with
 the alibava systems [alibava DAQ](https://www.alibavasystems.com)
 
- * *fortythieves*: a utility to convert the raw binary data 
+ * *fortythieves*     : a utility to convert the raw binary data 
  format obtained from the Alibava DAQ into a ROOT trees
+ * *genfa*            : get the number of events of a RAW alibava data file
+ * *alibavaSkifftools*: configuration and auxiliary tools to deal
+ with the Alibava Marlin processors defined at the [EUTelescope](https://github.com/duartej/eutelescope) package. 
+ Deals also with the static data produced from the IFCA Test-Beam campaing
+ at CERN SPS realized at May-2017.
+  * See sub-package [README](https://github.com/duartej/postproc-alibava/blob/master/alibavaSkifftools/README.md) for details
 
  author: Jordi Duarte-Campderros (June.2017)
 
@@ -16,7 +22,7 @@ $ cd build
 $ cmake ..
 $ make install
 ```
-Per default it will create the executable *fortythieves* in the
+Per default it will create the executable *fortythieves* and *genfa* in the
 ```$HOME/.local/bin/``` directory, so you should have the environment
 variable ```PATH``` pointing to that folder:
 ```bash
@@ -36,14 +42,41 @@ $ cmake -DCMAKE_INSTALL_PREFIX=your_favorite_path ..
 and then don't forget to export the ```PATH``` and the ```LD_LIBRARY_PATH``` to
 include both folders.
 
+In order to compile and use the *alibavaSkifftools* sub-package, go to the 
+sub-package folder and use the ([Distutils](https://docs.python.org/2/distutils/))`setup.py` to build and install it 
+```bash
+$ cd alibavaSkifftools
+$ python setup.py install --user
+```
+The `--user` option is used when you don't have root privilegies (or you don't 
+want to install the package in the global site-packages directories). The package 
+will be installed inside of the user directory '$HOME/.local'. You have to modify 
+the enviroment variables:
+```bash
+% export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
+% export PATH=$PATH:$HOME/.local/bin
+```
+in order to use the new scripts and modules of the sub-package.
+
+
 #### Dependencies
  * ROOT >= 6.0 (Note that some problems has been spotted when using 5.34)
  * CMAKE >= 2.8
 
 ### Usage
 After succesful compilation and the exportation of the environment
-variable, you are ready to use the executables of this package. 
+variables, you are ready to use the executables of this package. 
 Please take a look to the ```help``` option to use them:
+```bash
+$ genfa -h
+usage: genfaol [OPTIONS] alibava_data.raw
+
+Extract the number of events from ALIBAVA raw binary data
+
+[OPTIONS]
+ -h show this help
+```
+
 ```bash
 $ fortythieves -h
 usage: fortythieves [OPTIONS] alibava_data.raw
@@ -87,4 +120,8 @@ Use the ```AddFriend``` mechanism to relate and connect the original and the ```
 postproc_Events->AddFriend("Events");
 # Now you can use the branches of Events (as eventTime) as if they belong to postproc_Events
 postproc_Events->Draw("postproc_data_beetle1[13]","eventTime < 30 && eventTime > 3");
+# An exemple to draw a map of the calibrated signal versus the channel on the beetle 1
+postproc_Events->Draw("postproc_cal_data_beetle1[][]:Iteration$","eventTime < 30 && eventTime > 3","COLZ");
 ```
+
+See also the *alibavaSkifftools* [README](https://github.com/duartej/postproc-alibava/blob/master/alibavaSkifftools/README.md).
