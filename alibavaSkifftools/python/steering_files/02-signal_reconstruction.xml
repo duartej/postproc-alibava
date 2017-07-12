@@ -58,9 +58,9 @@
         <!--Output data collection name-->
         <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> tmprecodata </parameter>
         <!--Input noise collection name, better not to change-->
-        <parameter name="NoiseCollectionName" type="string" value="noise_notcmmd"/>
+        <parameter name="NoiseCollectionName" type="string" value="noise_cmmd"/>
         <!--Input pedestal collection name, better not to change-->
-        <parameter name="PedestalCollectionName" type="string" value="pedestal_notcmmd"/>
+        <parameter name="PedestalCollectionName" type="string" value="pedestal_cmmd"/>
         <!--The filename where the pedestal and noise values stored-->
         <parameter name="PedestalInputFile" type="string" value="@PEDESTAL_INPUT_FILENAME@"/>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
