@@ -17,7 +17,7 @@
 
    <global>
        <parameter name="LCIOInputFiles">@INPUT_FILENAMES@</parameter>
-       <parameter name="GearXMLFile"/>@GEAR_FILE@</parameter>
+       <parameter name="GearXMLFile">@GEAR_FILE@</parameter>
        <parameter name="Verbosity" options="DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT">WARNING0 </parameter>
        <!--To set of channels to be used, ex.The format should be like 
             $ChipNumber:StartChannel-EndChannel$ 
@@ -29,6 +29,8 @@
       <parameter name="ChannelsToBeUsed">$0:0-127$ $1:0-127$</parameter>
       <!--To choose if processor should skip masked events. Set the value to 0 for false, to 1 for true -->
       <parameter name="SkipMaskedEvents"> 0 </parameter>
+      <!-- Need a number to provide to the algorithm... PROV-->
+      <parameter name="MaxRecordNumber" value="100001"/>
    </global>
 
    <processor name="AIDA" type="AIDAProcessor">
