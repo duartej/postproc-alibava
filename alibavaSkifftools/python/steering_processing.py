@@ -423,7 +423,7 @@ class alibava_full_reco(marlin_step):
         super(alibava_full_reco,self).__init__('alibava_full_reco')
         
         # -- Dummy 
-        self.required_arguments = None 
+        self.required_arguments = () 
 
         # The list of steps with their needed arguments
         self.step_chain = ( 
