@@ -35,7 +35,7 @@ The tool has two main subcommands:
  of the marlin framework reconstruction for the ALIBAVA or TELESCOPE data.
    * Get the list of available reconstruction steps
    ```bash
-   $ open_sesames steering_files -p
+   $ open_sesame steering_files -p
    ```
    * Get the full reconstruction chain for an alibava raw data
    ```bash
