@@ -215,7 +215,7 @@ class marlin_step(object):
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
             elif self.argument_values.has_key('INPUT_FILENAMES'):
-                return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','.{0}.slcio'.format(self.step_name)))
+                return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','.{0}.slcio'.format(self.step_name.replace("_","."))))
         elif argument == 'PEDESTAL_OUTPUT_FILENAME':
             return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','_{0}_PEDESTALFILE.slcio'.format(self.step_name)))
         elif argument == 'CALIBRATION_OUTPUT_FILENAME':
@@ -416,10 +416,120 @@ class alibava_clustering(marlin_step):
     def get_description():
         return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
 
+# Metaclass to deal with the full reconstruction for ALIBAVA
+class alibava_full_reco(marlin_step):
+    def __init__(self):
+        import os
+        super(alibava_full_reco,self).__init__('alibava_full_reco')
+        
+        # -- Dummy 
+        self.required_arguments = None 
+
+        # The list of steps with their needed arguments
+        self.step_chain = ( 
+                (pedestal_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.pedestal_raw_file},self.update_output),
+                (pedestal_preevaluation(), {'INPUT_FILENAMES':self.last_output_filename},self.update_pedestal),
+                (cmmd_calculation(), { 'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file },self.update_output),
+                (pedestal_evaluation(),{'INPUT_FILENAMES': self.last_output_filename},self.update_pedestal),
+                (rs_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.beam_raw_file},self.update_output),
+                (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
+                (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
+                )
+
+    # Some datamembers used in the step_chain are not going to be 
+    # populated until the call to the step is performed, using them
+    # as properties. Note the use of the updaters (like the setters of
+    # a property) methods (defined below, are the mechanism to update
+    # this elements)
+    def pedestal_raw_file(self):
+        return self._pedestal_raw_file
+    
+    def beam_raw_file(self):
+        return self._beam_raw_file
+
+    def last_output_filename(self):
+        return self._last_output_filename
+    
+    def pedestal_file(self):
+        return self._pedestal_file
+    
+    # Updaters
+    def update_output(self,step_inst):
+        """Update the last_output_filename data member using the value
+        from the last step
+        """
+        self._last_output_filename = step_inst.argument_values['OUTPUT_FILENAME']
+
+    def update_pedestal(self,step_inst):
+        self._pedestal_file = step_inst.argument_values['PEDESTAL_OUTPUT_FILENAME']
+
+    @staticmethod
+    def get_description():
+        return 'Metaclass to perform the whole bunch of steps to process the ALiBaVa data'
+
+    def publish_steering_file(self,**kwd):
+        """Creates every steering file needed for reconstruct
+        the ALiBaVa data using only the RAW alibava beam and 
+        pedestal input filenames. Note that the other values should
+        be change manually later in the created steering files
+
+        Parameters
+        ----------
+        ALIBAVA_INPUT_FILENAME: str
+            the name of the raw alibava data beam file
+        PEDESTAL_INPUT_FILENAME: str
+            the name of the raw alibava data pedestal file
+
+        Raises
+        ------
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        import time
+        import datetime
+    
+        # Check for inconsistencies
+        for key in ['ALIBAVA_INPUT_FILENAME','PEDESTAL_INPUT_FILENAME']:
+            if key not in kwd.keys():
+                raise NotImplementedError("Relevant argument '{0}' not present!".format(key))
+        # The input files
+        self._pedestal_raw_file = kwd['PEDESTAL_INPUT_FILENAME']
+        self._beam_raw_file     = kwd['ALIBAVA_INPUT_FILENAME']
+        
+        # remove all the lcio files except the last one...
+        toremove = []
+        # The bash file to concatenate all the process
+        thebash = '#!/bin/bash\n\n'
+        ts = time.time()
+        st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+        thebash += '# Automaticaly created by open_sesame script at {0}\n\n'.format(st)
+        # Setting the values provided by the user
+        for (step,args,action) in self.step_chain:
+            # Redefine the args dict, activating the values of the dict
+            newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
+            # Create the steering file for this step
+            step.publish_steering_file(**newargs)
+            # The particular action defined: it will update file names...
+            # See the properties and updaters defined above
+            action(step)
+            thebash += 'Marlin {0}\n'.format(step.steering_file)
+            toremove.append(self.last_output_filename())
+        thebash += "\nrm "
+        for i in toremove[:-1]:
+            thebash += i+" "
+        thebash+="\n#END"
+        print thebash
+
+
+
+# ==================================================================================================
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
-        rs_conversion,signal_reconstruction,alibava_clustering)
+        rs_conversion,signal_reconstruction,alibava_clustering,
+        alibava_full_reco)
+# ==================================================================================================
 
 # END -- Marlin step concrete implementations
 # -------------------------------------------
