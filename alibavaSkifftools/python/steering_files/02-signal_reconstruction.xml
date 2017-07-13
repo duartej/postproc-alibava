@@ -56,7 +56,7 @@
         <!--Input raw data collection name-->
         <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> rawdata</parameter>
         <!--Output data collection name-->
-        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> tmprecodata </parameter>
+        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> recodata_notcmmd </parameter>
         <!--Input noise collection name, better not to change-->
         <parameter name="NoiseCollectionName" type="string" value="noise_cmmd"/>
         <!--Input pedestal collection name, better not to change-->
@@ -71,7 +71,7 @@
         <!--AlibavaConstantCommonModeProcessor computes
              the common mode values of each chip and their errors-->
         <!--Input data collection name (should be pedestal subtracted!)-->
-        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> tmprecodata </parameter>
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> recodata_notcmmd </parameter>
         <!--Common mode collection name, better not to change-->
         <parameter name="CommonModeCollectionName" type="string" value="commonmode"/>
         <!--The number of iteration that should be used in common mode calculation-->
@@ -95,7 +95,7 @@
         <!--AlibavaCommonModeSubtraction subtracts the provided 
              common mode values from the input reco (pedestal subtracted) data. -->
         <!--Input reco data collection name-->
-        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> rawdata </parameter>
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData"> recodata_notcmmd </parameter>
         <!--Output data collection name-->
         <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData"> recodata_cmmd </parameter>
         <!--Common mode collection name, better not to change-->
@@ -138,7 +138,7 @@
         <!--Writes the current event to the specified 
              LCIO outputfile. Needs to be the last ActiveProcessor.-->
         <!--drops the named collections from the event-->
-        <parameter name="DropCollectionNames" type="StringVec"> tmprecodata </parameter>
+        <parameter name="DropCollectionNames" type="StringVec"> recodata_notcmmd </parameter>
         <!--drops all collections of the given type from the event-->
         <!--parameter name="DropCollectionTypes" type="StringVec"> SimTrackerHit SimCalorimeterHit </parameter-->
         <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
