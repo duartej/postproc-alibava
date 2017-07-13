@@ -517,7 +517,7 @@ class alibava_full_reco(marlin_step):
             # See the properties and updaters defined above
             action(step)
             thebash += 'echo "\033[1;34mRUNNING\033[1;m: \033[1;29mMarlin {0}\033[1;m"\n'.format(step.steering_file)
-            thebash += 'Marlin {0}\n'.format(step.steering_file)
+            thebash += 'time Marlin {0}\n'.format(step.steering_file)
             # remove the intermediate created files
             toremove.add(self.last_output_filename())
             try:
