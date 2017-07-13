@@ -488,6 +488,8 @@ class alibava_full_reco(marlin_step):
         """
         import time
         import datetime
+        import os
+        import stat
     
         # Check for inconsistencies
         for key in ['ALIBAVA_INPUT_FILENAME','PEDESTAL_INPUT_FILENAME']:
@@ -498,12 +500,13 @@ class alibava_full_reco(marlin_step):
         self._beam_raw_file     = kwd['ALIBAVA_INPUT_FILENAME']
         
         # remove all the lcio files except the last one...
-        toremove = []
+        toremove = set([])
         # The bash file to concatenate all the process
         thebash = '#!/bin/bash\n\n'
         ts = time.time()
         st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
-        thebash += '# Automaticaly created by open_sesame script at {0}\n\n'.format(st)
+        thebash += '# Automaticaly created by open_sesame script at {0}\n'.format(st)
+        thebash += '# ALIBAVA data chain reconstruction\n\n'.format(st)
         # Setting the values provided by the user
         for (step,args,action) in self.step_chain:
             # Redefine the args dict, activating the values of the dict
@@ -513,13 +516,27 @@ class alibava_full_reco(marlin_step):
             # The particular action defined: it will update file names...
             # See the properties and updaters defined above
             action(step)
+            thebash += 'echo "\033[1;34mRUNNING\033[1;m: \033[1;29mMarlin {0}\033[1;m"\n'.format(step.steering_file)
             thebash += 'Marlin {0}\n'.format(step.steering_file)
-            toremove.append(self.last_output_filename())
+            # remove the intermediate created files
+            toremove.add(self.last_output_filename())
+            try:
+                toremove.add(self.pedestal_file())
+            except AttributeError:
+                # still not available
+                pass
         thebash += "\nrm "
-        for i in toremove[:-1]:
+        for i in filter(lambda x: x not in [self.pedestal_file(),self.last_output_filename()],toremove):
             thebash += i+" "
-        thebash+="\n#END"
-        print thebash
+        thebash+='\n\necho "ALiBaVa marlin data reconstruction chain DONE"\n'
+        bashname = "alibava_full_reconstruction.sh"
+        print "Created '{0}' script".format(bashname)
+        # create the file
+        with open(bashname,"w") as f:
+            f.write(thebash)
+        # get the mode
+        bash_st = os.stat(bashname)
+        os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
 
