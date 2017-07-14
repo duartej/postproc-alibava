@@ -9,7 +9,7 @@ the alibava systems [alibava DAQ](https://www.alibavasystems.com)
  with the Alibava Marlin processors defined at the [EUTelescope](https://github.com/duartej/eutelescope) package. 
  Deals also with the static data produced from the IFCA Test-Beam campaing
  at CERN SPS realized at May-2017.
-  * See sub-package [README](https://github.com/duartej/postproc-alibava/blob/master/alibavaSkifftools/README.md) for details
+   * See sub-package [README](https://github.com/duartej/postproc-alibava/blob/master/alibavaSkifftools/README.md) for details
 
  author: Jordi Duarte-Campderros (June.2017)
 
