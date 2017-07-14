@@ -223,6 +223,8 @@ if __name__ == '__main__':
             " [See `--print-available-steps` option] ")
     st_parser.add_argument('--alibava-input-filename',dest="ALIBAVA_INPUT_FILENAME",action='store',\
             help=template_args['ALIBAVA_INPUT_FILENAME'])
+    st_parser.add_argument('--telescope-input-filename',dest="TELESCOPE_INPUT_FILENAME",action='store',\
+            help=template_args['TELESCOPE_INPUT_FILENAME'])
     st_parser.add_argument('--input-filename',dest="INPUT_FILENAMES",action='store',\
             help=template_args['INPUT_FILENAMES'])
     st_parser.add_argument('--run-number',dest="RUN_NUMBER",action='store',\

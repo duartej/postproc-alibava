@@ -26,6 +26,7 @@ def get_template_path():
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data)',
+        'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
         'GEAR_FILE': 'The name of the gear file to be used',
@@ -46,6 +47,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'SNRCUT_NGB': 'The minimum signal to noise ratio that a neighbour channel has to pass to be added to a cluster', 
         'SIGNAL_POLARITY': 'The polarity of the signal (-1 for negative signals)',
         'SENSORID_STARTS': 'The sensor ID for the alibava data which will be stored as SENSORID_STARTS+chip_number',
+        'MAX_FIRING_FREQ_PIXEL': 'The maximum allowed firing frequency to consider a pixel as hot',
         }
 
 # Marlin step class definition
@@ -195,8 +197,14 @@ class marlin_step(object):
         elif argument == 'RUN_NUMBER':
             # if RS or beam, the run number can be extracted from
             # the datafile 
-            for key in ['ALIBAVA_INPUT_FILENAME', 'INPUT_FILENAMES' ]:
+            for key in ['ALIBAVA_INPUT_FILENAME', 'TELESCOPE_INPUT_FILENAME','INPUT_FILENAMES' ]:
                 if self.argument_values.has_key(key):
+                    # First, check if is a telescope file: run000XXX.suffix
+                    if os.path.basename(self.argument_values[key]).find('run000') == 0:
+                        rawnumber = os.path.basename(self.argument_values[key]).replace('run000','').split('.')[0]
+                        return int(rawnumber)
+                    # if not telescope data, then check the standard alibava 
+                    # filenames with the parser
                     fnp = filename_parser(self.argument_values[key])
                     if fnp.is_beam:
                         return fnp.run_number
@@ -207,6 +215,8 @@ class marlin_step(object):
             return 'dummy_gear.xml'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
+        elif argument == 'TELESCOPE_INPUT_FILENAME':
+            pass
         elif argument == 'INPUT_FILENAMES':
             pass
         elif argument == 'PEDESTAL_INPUT_FILENAME':
@@ -214,6 +224,8 @@ class marlin_step(object):
         elif argument == 'OUTPUT_FILENAME':
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
+            elif self.argument_values.has_key('TELESCOPE_INPUT_FILENAME'):
+                return os.path.basename(self.argument_values['TELESCOPE_INPUT_FILENAME'].replace('.raw','.slcio'))
             elif self.argument_values.has_key('INPUT_FILENAMES'):
                 return os.path.basename(self.argument_values['INPUT_FILENAMES'].replace('.slcio','.{0}.slcio'.format(self.step_name.replace("_","."))))
         elif argument == 'PEDESTAL_OUTPUT_FILENAME':
@@ -246,6 +258,8 @@ class marlin_step(object):
             return -1
         elif argument == 'SENSORID_STARTS':
             return 5
+        elif argument == 'MAX_FIRING_FREQ_PIXEL':
+            return 0.001
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -538,6 +552,19 @@ class alibava_full_reco(marlin_step):
         bash_st = os.stat(bashname)
         os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
+# Telescope related
+class telescope_conversion(marlin_step):
+    def __init__(self):
+        import os
+        super(telescope_conversion,self).__init__('telescope_conversion')
+
+        self.steering_file_template = os.path.join(get_template_path(),'01-telescope_converter.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
+                "MAX_FIRING_FREQ_PIXEL")
+    
+    @staticmethod
+    def get_description():
+        return 'Convert Telescope ACONITE RAW binary data into LCIO'  
 
 
 # ==================================================================================================
@@ -545,7 +572,10 @@ class alibava_full_reco(marlin_step):
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
         rs_conversion,signal_reconstruction,alibava_clustering,
-        alibava_full_reco)
+        alibava_full_reco,
+        # Telescope related
+        telescope_conversion,
+        )
 # ==================================================================================================
 
 # END -- Marlin step concrete implementations

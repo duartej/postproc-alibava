@@ -286,4 +286,60 @@ for k,runlist in _samecfg.iteritems():
     for irun in runlist:
         active_sensors[irun] = active_sensors[k]
 
+# ------------------------------------------------------------------------------
+# Mapping the run number with its correponding gear file 
+# Available info at https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=343850123
+# The maximum run number which defines a setup, each element is defining a
+# range where the setup is used:
+#  * run number <= 314    --> Setup-0
+#  * run number (314,352] --> Setup-1
+#  ...
+gearfile_setups = [ 314, 352, 372, 385, 410 ]
+setup_map= {
+        0: 'gear_TB2017_CERNSPS_SETUP01_LGAD_REF_T01_M23_N17_T234.xml',
+        1: 'gear_TB2017_CERNSPS_SETUP02_LGAG_REF_T01_N18_XXX_T234.xml',
+        2: 'gear_TB2017_CERNSPS_SETUP03_iLGAD_REF_T01_M23_N17_T234.xml',
+        3: 'gear_TB2017_CERNSPS_SETUP04_REF_T01_M23_M15_M18_T234.xml',
+        4: 'gear_TB2017_CERNSPS_SETUP05_REF_T01_N18_N13_N17_T234.xml'
+        }
+def get_setup(run_number):
+    """Helper function to obtain the setup given a run number
+
+    Parameters
+    ----------
+    run_number: int
+        the run  number 
+
+    Returns
+    -------
+    int: the setup index
+
+    Raises
+    ------
+    RuntimeError
+        if the run number is higher than the maximum recorded
+    """
+    for (k,maxrunnumber) in enumerate(gearfile_setups):
+        if run_number <= maxrunnumber:
+            return k
+    raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,gearfile_setups[-1]))
+
+def get_gearfile(run_number):
+    """Get the gear file corresponding to a run number
+
+    Parameters
+    ----------
+    run_number: int
+        the run  number 
+
+    Returns
+    -------
+    str: the gear file name
+
+    Raises
+    ------
+    RuntimeError
+        if the run number is higher than the maximum recorded
+    """
+    return setup_map[get_setup(run_number)]
 
