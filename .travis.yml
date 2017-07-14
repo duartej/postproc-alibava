@@ -16,7 +16,6 @@ before_script:
 # command to run tests
 script: 
     - mkdir build && cd build && cmake -DCMAKE_INSTALL_PREFIX=$HOME .. && make install && cd ..
-    - cd alibavaSkifftools && python setup.py install --user && cd ..
     - fortythieves test/alibavadatatest.raw 
     - python test/skifftools_test.py -v
 
