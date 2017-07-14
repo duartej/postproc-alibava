@@ -30,9 +30,11 @@ $ export PATH=$PATH:$HOME/.local/bin
 ```
 As well, it will create some shared libraries under the 
 ```$HOME/.local/lib```, so you need to update also the environment
-variable ```LD_LIBRARY-PATH```:
+variable ```LD_LIBRARY-PATH``` and ```PYTHONOPATH``` for the 
+python packages:
 ```bash
 $ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.local/lib
+% export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
 ```
 You can change the install directory by using the cmake variable
 ```CMAKE_INSTALL_PREFIX```
@@ -42,22 +44,13 @@ $ cmake -DCMAKE_INSTALL_PREFIX=your_favorite_path ..
 and then don't forget to export the ```PATH``` and the ```LD_LIBRARY_PATH``` to
 include both folders.
 
-In order to compile and use the *alibavaSkifftools* sub-package, go to the 
-sub-package folder and use the ([Distutils](https://docs.python.org/2/distutils/))`setup.py` to build and install it 
-```bash
-$ cd alibavaSkifftools
-$ python setup.py install --user
-```
-The `--user` option is used when you don't have root privilegies (or you don't 
-want to install the package in the global site-packages directories). The package 
-will be installed inside of the user directory '$HOME/.local'. You have to modify 
-the enviroment variables:
-```bash
-% export PYTHONPATH=$PYTHONPATH:$HOME/.local/lib
-% export PATH=$PATH:$HOME/.local/bin
-```
-in order to use the new scripts and modules of the sub-package.
-
+#### Note
+The *alibavaSkifftools* sub-package is installed always with the
+```--user``` option. This option is used when you don't have root privilegies 
+(or you don't want to install the package in the global site-packages directories). 
+The package will be installed inside of the user directory '$HOME/.local'. 
+If you don't want to use the ```--user``` option, you must change it in 
+the ```alibavaSkifftools/CMakeLists.txt``` file
 
 #### Dependencies
  * ROOT >= 6.0 (Note that some problems has been spotted when using 5.34)
