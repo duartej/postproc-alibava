@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 
 project(postproc-alibava)
+set(postproc-alibava_VERSION_MAJOR 1)
+set(postproc-alibava_VERSION_MINOR 2)
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     set(CMAKE_INSTALL_PREFIX "$ENV{HOME}/.local" CACHE PATH "default install path" FORCE )
@@ -14,6 +16,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -ansi -pedantic -W -Wall -Wshadow -f
 include_directories("${PROJECT_SOURCE_DIR}/include")
 # and the source dir to build some useful libraries
 add_subdirectory(src)
+
+# The alibavaSkiff package
+add_subdirectory(alibavaSkifftools)
 
 # fortythieves
 add_executable(fortythieves bin/fortythieves.cc)
