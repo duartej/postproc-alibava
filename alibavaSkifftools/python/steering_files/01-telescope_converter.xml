@@ -53,7 +53,7 @@
       <!--Type of sparsified pixel data structure (use SparsePixelType enumerator)-->
       <!--parameter name="EUDRBSparsePixelType" type="int">1 </parameter-->
       <!--This si the mimotel output collection when read in ZS mode-->
-      <parameter name="EUDRBZSModeOutputCollection" type="string" lcioOutType="TrackerData">zsdata </parameter>
+      <parameter name="EUDRBZSModeOutputCollection" type="string" lcioOutType="TrackerData">zsdata_m26 </parameter>
       <!--The geometry identification number-->
       <parameter name="GeoID" type="int">0 </parameter>
       <!--This is the input file name-->
@@ -82,7 +82,7 @@
       <!--The sensorID for the generated collection (one per detector)-->
       <parameter name="SensorIDVec" type="IntVec"> 0 1 2 3 4 </parameter>
       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-      <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
+      <parameter name="Verbosity" type="string">MESSAGE </parameter>
       <!--Input of Zero Suppressed data-->
       <parameter name="ZSDataCollectionName" type="string" lcioInType="TrackerData"> zsdata_m26 </parameter>
    </processor>
