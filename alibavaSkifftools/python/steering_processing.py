@@ -602,6 +602,25 @@ class telescope_clustering(marlin_step):
     def get_description():
         return 'Find telescope cluster patterns, removing clusters with hot pixels'  
 
+class telescope_filter(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(telescope_filter,self).__init__('telescope_filter')
+
+        self.steering_file_template = os.path.join(get_template_path(),'03-telescope_filter.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
+        # Define a tuned default for the gear file, describes
+        # telescope with no DUTs at all
+        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        # And copy the gear file to the relevant place
+        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+        self.auxiliary_files.append('histoinfo_telescope.xml')
+    
+    @staticmethod
+    def get_description():
+        return 'Filters the telescope clusters (very slow process!)'  
+
 
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
@@ -610,7 +629,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         rs_conversion,signal_reconstruction,alibava_clustering,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,telescope_clustering
+        telescope_conversion,telescope_clustering,telescope_filter
         )
 # ==================================================================================================
 

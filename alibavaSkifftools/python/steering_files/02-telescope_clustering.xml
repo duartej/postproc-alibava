@@ -2,6 +2,13 @@
 <!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
 <!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
 
+<!--##########################################
+    #                                        #
+    #     Steering file for marlin created   #
+    #     by alibavaSkifftools               #
+    #                                        #
+    ##########################################-->
+
 <marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
 
    <execute>
