@@ -581,7 +581,26 @@ class telescope_conversion(marlin_step):
     
     @staticmethod
     def get_description():
-        return 'Convert Telescope ACONITE RAW binary data into LCIO'  
+        return 'Convert Telescope ACONITE RAW binary data into LCIO, masking hot pixels'  
+
+class telescope_clustering(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(telescope_clustering,self).__init__('telescope_clustering')
+
+        self.steering_file_template = os.path.join(get_template_path(),'02-telescope_clustering.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
+        # Define a tuned default for the gear file, describes
+        # telescope with no DUTs at all
+        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        # And copy the gear file to the relevant place
+        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+        self.auxiliary_files.append('histoinfo_telescope.xml')
+    
+    @staticmethod
+    def get_description():
+        return 'Find telescope cluster patterns, removing clusters with hot pixels'  
 
 
 # ==================================================================================================
@@ -591,7 +610,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         rs_conversion,signal_reconstruction,alibava_clustering,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,
+        telescope_conversion,telescope_clustering
         )
 # ==================================================================================================
 
