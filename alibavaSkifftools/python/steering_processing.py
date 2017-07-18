@@ -25,8 +25,8 @@ def get_template_path():
 # These arguments are dynamically changed on run time
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
         'RUN_NUMBER': 'The run number of the input file',
-        'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data)',
-        'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data)',
+        'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data or slcio for the merger)',
+        'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data or slcio for the merger)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
         'GEAR_FILE': 'The name of the gear file to be used',
@@ -225,6 +225,14 @@ class marlin_step(object):
         elif argument == 'PEDESTAL_INPUT_FILENAME':
             pass
         elif argument == 'OUTPUT_FILENAME':
+            # The merger use of the the Alibava and Telescope input filenames
+            if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME') and \
+                    self.argument_values.has_key('TELESCOPE_INPUT_FILENAME'):
+                # Get the parser and use
+                fnp = filename_parser(self.argument_values['ALIBAVA_INPUT_FILENAME'])
+                return "{0}_{1}_{2}_{3}_{4}_DATAMERGED.slcio".format(fnp.run_number,fnp.self.date,self.sensor_name,\
+                        self.voltage_bias,self.temperature)
+            # The raw binary use of the arguments
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
             elif self.argument_values.has_key('TELESCOPE_INPUT_FILENAME'):
@@ -621,6 +629,25 @@ class telescope_filter(marlin_step):
     def get_description():
         return 'Filters the telescope clusters (very slow process!)'  
 
+# Merge telescope and alibava data
+class merger(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(merger,self).__init__('merger')
+
+        self.steering_file_template = os.path.join(get_template_path(),'10-merger.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME',\
+                'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
+        # Define a tuned default for the gear file, describes
+        # telescope with no DUTs at all
+        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        # And copy the gear file to the relevant place
+        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+    
+    @staticmethod
+    def get_description():
+        return 'Merge the alibava and telescope data'  
 
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
@@ -629,7 +656,9 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         rs_conversion,signal_reconstruction,alibava_clustering,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,telescope_clustering,telescope_filter
+        telescope_conversion,telescope_clustering,telescope_filter,
+        # Join both 
+        merger
         )
 # ==================================================================================================
 
