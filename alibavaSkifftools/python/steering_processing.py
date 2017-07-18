@@ -97,6 +97,9 @@ class marlin_step(object):
         # Dict mapping the required argument names with the particular
         # and concrete values used
         self.argument_values        = {}
+        # List of auxiliary files (basename) to be copied from
+        # get_template_path() to the cwd
+        self.auxiliary_files = []
 
     @property
     def steering_file_content(self):
@@ -189,7 +192,7 @@ class marlin_step(object):
             If the argument must be set by the user
         """
         import os
-        import shutil
+        #import shutil
         from .SPS2017TB_metadata import filename_parser
 
         if argument == 'ROOT_FILENAME':
@@ -211,7 +214,7 @@ class marlin_step(object):
             return -1
         elif argument == 'GEAR_FILE':
             # First copy the file to the cwd
-            shutil.copyfile(os.path.join(get_template_path(),'dummy_gear.xml'),os.path.join(os.getcwd(),'dummy_gear.xml'))
+            self.auxiliary_files.append('dummy_gear.xml')
             return 'dummy_gear.xml'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
@@ -277,6 +280,9 @@ class marlin_step(object):
             If any of the introduced arguments is not defined in 
             the _ARGUMENTS static dictionary
         """
+        import shutil
+        import os
+
         # Check for inconsistencies
         for key in kwd.keys():
             if key not in _ARGUMENTS.keys():
@@ -300,6 +306,11 @@ class marlin_step(object):
         # Create the steering file
         with open(self.steering_file,"w") as f:
             f.write(self.steering_file_content)
+
+        # And copy the needed auxiliary file, if any
+        for _f in self.auxiliary_files:
+            shutil.copyfile(os.path.join(get_template_path(),_f), os.path.join(os.getcwd(),_f))
+
 
 
 # Marlin step concrete implementations
@@ -556,11 +567,17 @@ class alibava_full_reco(marlin_step):
 class telescope_conversion(marlin_step):
     def __init__(self):
         import os
+        import shutil
         super(telescope_conversion,self).__init__('telescope_conversion')
 
         self.steering_file_template = os.path.join(get_template_path(),'01-telescope_converter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
                 "MAX_FIRING_FREQ_PIXEL")
+        # Define a tuned default for the gear file, describes
+        # telescope with no DUTs at all
+        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        # And copy the gear file to the relevant place
+        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
     
     @staticmethod
     def get_description():
