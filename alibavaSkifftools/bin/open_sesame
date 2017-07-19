@@ -135,6 +135,121 @@ def create_steering_file(step_name,**args):
     step.publish_steering_file(**args)
 
 
+def merge_files(lcio_files):
+    """Merge lcio files containing EORE in order to remove those 
+    events. The algorithm will pick every found set of numbers, and
+    will use them, previously discarding those sets common to all the names,
+    to ordered based on that. 
+
+    Parameters
+    ----------
+
+    Returns
+    -------
+    steering_filename: str
+        The name of the steering file
+    """
+    import os
+    import re
+    # Mini class to deal with the sorting problem
+    class mini_list(object):
+        def __init__(self,intlist):
+            """List of integers
+            """
+            self.intlist = intlist
+        def __eq__(self,other):
+            for i,val in enumerate(self.intlist):
+                if val != other.intlist[i]:
+                    return False
+            return True
+
+        def __lt__(self,other):
+            if self == other:
+                return False
+            for i,val in enumerate(self.intlist):
+                if val == other.intlist[i]:
+                    continue
+                if val > other.intlist[i]:
+                    return False
+            return True
+        
+        def __leq__(self,other):
+            if self == other:
+                return True
+            if self < other:
+                return True
+            return False
+
+    # Map of the tuples of set of numbers against their name
+    discriminant_map = {}
+    for fname in lcio_files:
+        # Extract the subset of numbers
+        discriminant_map[fname] = mini_list(map(lambda n: int(n),filter(None,re.findall(r'\d*',fname))))
+    # And ordered using the integer list
+    mergefiles_str =" ".join(map(lambda (k,v): k,sorted(discriminant_map.iteritems(),key=lambda (x,y): y)))
+
+    steering_content = """
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
+<!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
+
+<!--Automaticaly created to gather all output files from a cluster jobs-->
+
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+    <execute>
+      <processor name="Save"/>
+      <processor name="MyEUTelUtilityPrintEventNumber"/>
+   </execute>
+   
+   <global>
+      <parameter name="LCIOInputFiles">{} </parameter>
+      <parameter name="GearXMLFile" value="dummy_gear.xml"/>
+      <parameter name="MaxRecordNumber" value="9999999"/>
+      <parameter name="SkipNEvents" value="0"/>
+      <parameter name="SupressCheck" value="false"/>
+      <parameter name="Verbosity" value="WARNING"/>
+   </global>
+
+   <processor name="Save" type="EUTelOutputProcessor">
+       <!--Writes the current event to the specified LCIO outputfile. 
+            Eventually it adds a EORE at the of the file if it was missing Needs to be the last ActiveProcessor.-->
+       <!--drops the named collections from the event-->
+       <parameter name="DropCollectionNames" type="StringVec"> zsdata_m26 cluster_m26 zsdata </parameter>
+       <!--drops all collections of the given type from the event-->
+       <!--parameter name="DropCollectionTypes" type="StringVec"> SimTrackerHit SimCalorimeterHit </parameter-->
+       <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
+       <!--parameter name="FullSubsetCollections" type="StringVec" value="MCParticlesSkimmed"/-->
+       <!--force keep of the named collections - overrules DropCollectionTypes (and DropCollectionNames)-->
+       <!--parameter name="KeepCollectionNames" type="StringVec" value="MyPreciousSimTrackerHits"/-->
+       <!-- name of output file -->
+       <parameter name="LCIOOutputFile" type="string">run000401.telescope.clustering.telescope.filter.slcio </parameter>
+       <!--write mode for output file:  WRITE_APPEND or WRITE_NEW-->
+       <parameter name="LCIOWriteMode" type="string" value="WRITE_NEW"/>
+       <!--Set it to true to remove intermediate EORE in merged runs-->
+       <parameter name="SkipIntermediateEORE" type="bool" value="true"/>
+       <!--will split output file if size in kB exceeds given value - doesn't work with APPEND and NEW-->
+       <!--parameter name="SplitFileSizekB" type="int" value="1992294"/-->
+       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+       <!--parameter name="Verbosity" type="string" value=""/-->
+   </processor>
+   
+   <processor name="MyEUTelUtilityPrintEventNumber" type="EUTelUtilityPrintEventNumber">
+       <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
+       <!--Print event number for every n-th event-->
+       <parameter name="EveryNEvents" type="int" value="5000"/>
+       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+       <!--parameter name="Verbosity" type="string" value=""/-->
+       <!--print the event timestamp as read from LCIO-->
+       <!--parameter name="printTimestamp" type="bool" value="false"/-->
+   </processor>
+</marlin>
+""".format(mergefiles_str)
+    stname = "merge_files_steering.xml"
+    with open(stname,"w") as f:
+        f.write(steering_content)
+    return stname
+
+
 if __name__ == '__main__':
     from argparse import ArgumentParser,Action
     from alibavaSkifftools.SPS2017TB_metadata import eospath,sensor_names
@@ -180,7 +295,8 @@ if __name__ == '__main__':
             parser.exit()
     
     mesdsc="A suite of tools to deal with the ALIBAVA (and EUTelescope)"
-    mesdsc+=" data output"
+    mesdsc+=" data output. Get the description of each subcommand with"
+    mesdsc+=" help option."
     parser = ArgumentParser(prog='open_sesame',description=mesdsc)
     
     # Sub-command parsers
@@ -266,6 +382,20 @@ if __name__ == '__main__':
     st_parser.add_argument('-p','--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
+    
+    # -- Subparser: simple file merger when dealing with EORE extra events
+    usage_fm  = "Create the steering file to be used to merge a collection "
+    usage_fm += "of slcio files containing the 'End of Run Event' (EORE). "
+    usage_fm += "The usual method (lcio_merge_files) does not take into "
+    usage_fm += "account that last event added by the EUTelescope processors "
+    usage_fm += "and it will result in a lost of synchronization. Using the "
+    usage_fm += "created steering file here, the EOREs will be removed and "
+    usage_fm += "the events merged properly"
+    
+    fm_parser = subparsers.add_parser("merge_eore",description=usage_fm)
+    fm_parser.add_argument('lcio_files',nargs="+",help="The bunch of LCIO files containing"\
+            " the EORE 'End of Run Event' added by some EUTelescope processors")
+    fm_parser.set_defaults(which='merge_eore')
 
     args = parser.parse_args()
     
@@ -278,4 +408,8 @@ if __name__ == '__main__':
         the_args = dict(filter(lambda (k,v): k in valid_args and v is not None,args.__dict__.iteritems()))
         # arguments in the template steering files
         create_steering_file(args.step,**the_args)
+    elif args.which == 'merge_eore':
+        steering_filename=merge_files(args.lcio_files)
+        print "\033[1;34mTo create the merged file, run: \033[1;m\n"\
+                " \033[1;29mMarlin {0}\033[1;m".format(steering_filename)
 
