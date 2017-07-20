@@ -649,6 +649,25 @@ class merger(marlin_step):
     def get_description():
         return 'Merge the alibava and telescope data'  
 
+class hitmaker(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(hitmaker,self).__init__('hitmaker')
+
+        self.steering_file_template = os.path.join(get_template_path(),'11-hitmaker.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
+                 'OUTPUT_FILENAME','GEAR_FILE')
+        # Define a tuned default for the gear file, describes
+        # telescope with no DUTs at all
+        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        # And copy the gear file to the relevant place
+        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+    
+    @staticmethod
+    def get_description():
+        return 'Hit global position and pre-alignment'  
+
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
@@ -658,7 +677,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         # Telescope related
         telescope_conversion,telescope_clustering,telescope_filter,
         # Join both 
-        merger
+        merger, hitmaker
         )
 # ==================================================================================================
 
