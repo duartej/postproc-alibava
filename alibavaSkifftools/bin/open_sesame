@@ -135,7 +135,7 @@ def create_steering_file(step_name,**args):
     step.publish_steering_file(**args)
 
 
-def merge_files(lcio_files):
+def merge_files(lcio_files,output_name):
     """Merge lcio files containing EORE in order to remove those 
     events. The algorithm will pick every found set of numbers, and
     will use them, previously discarding those sets common to all the names,
@@ -143,6 +143,10 @@ def merge_files(lcio_files):
 
     Parameters
     ----------
+    lcio_files: list(str)
+        the list of LCIO files with EORE to be merged
+    output_name: str
+        the name of the merged file [Default:
 
     Returns
     -------
@@ -152,6 +156,9 @@ def merge_files(lcio_files):
     import os
     import re
     # Mini class to deal with the sorting problem
+    # A list of integers extracted from the filenames
+    # are used as the handles to order the files. Assumes
+    # that all the integers in the list are the same but one
     class mini_list(object):
         def __init__(self,intlist):
             """List of integers
@@ -188,8 +195,7 @@ def merge_files(lcio_files):
     # And ordered using the integer list
     mergefiles_str =" ".join(map(lambda (k,v): k,sorted(discriminant_map.iteritems(),key=lambda (x,y): y)))
 
-    steering_content = """
-<?xml version="1.0" encoding="us-ascii"?>
+    steering_content = """<?xml version="1.0" encoding="us-ascii"?>
 <!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
 <!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
 
@@ -202,8 +208,9 @@ def merge_files(lcio_files):
    </execute>
    
    <global>
-      <parameter name="LCIOInputFiles">{} </parameter>
-      <parameter name="GearXMLFile" value="dummy_gear.xml"/>
+      <parameter name="LCIOInputFiles">{0} </parameter>
+      <!-- Not needed, just will show a warning-->
+      <!--parameter name="GearXMLFile" value="dummy_gear.xml"/-->
       <parameter name="MaxRecordNumber" value="9999999"/>
       <parameter name="SkipNEvents" value="0"/>
       <parameter name="SupressCheck" value="false"/>
@@ -213,37 +220,21 @@ def merge_files(lcio_files):
    <processor name="Save" type="EUTelOutputProcessor">
        <!--Writes the current event to the specified LCIO outputfile. 
             Eventually it adds a EORE at the of the file if it was missing Needs to be the last ActiveProcessor.-->
-       <!--drops the named collections from the event-->
-       <parameter name="DropCollectionNames" type="StringVec"> zsdata_m26 cluster_m26 zsdata </parameter>
-       <!--drops all collections of the given type from the event-->
-       <!--parameter name="DropCollectionTypes" type="StringVec"> SimTrackerHit SimCalorimeterHit </parameter-->
-       <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
-       <!--parameter name="FullSubsetCollections" type="StringVec" value="MCParticlesSkimmed"/-->
-       <!--force keep of the named collections - overrules DropCollectionTypes (and DropCollectionNames)-->
-       <!--parameter name="KeepCollectionNames" type="StringVec" value="MyPreciousSimTrackerHits"/-->
        <!-- name of output file -->
-       <parameter name="LCIOOutputFile" type="string">run000401.telescope.clustering.telescope.filter.slcio </parameter>
+       <parameter name="LCIOOutputFile" type="string">{1} </parameter>
        <!--write mode for output file:  WRITE_APPEND or WRITE_NEW-->
        <parameter name="LCIOWriteMode" type="string" value="WRITE_NEW"/>
        <!--Set it to true to remove intermediate EORE in merged runs-->
        <parameter name="SkipIntermediateEORE" type="bool" value="true"/>
-       <!--will split output file if size in kB exceeds given value - doesn't work with APPEND and NEW-->
-       <!--parameter name="SplitFileSizekB" type="int" value="1992294"/-->
-       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-       <!--parameter name="Verbosity" type="string" value=""/-->
    </processor>
    
    <processor name="MyEUTelUtilityPrintEventNumber" type="EUTelUtilityPrintEventNumber">
        <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
        <!--Print event number for every n-th event-->
        <parameter name="EveryNEvents" type="int" value="5000"/>
-       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-       <!--parameter name="Verbosity" type="string" value=""/-->
-       <!--print the event timestamp as read from LCIO-->
-       <!--parameter name="printTimestamp" type="bool" value="false"/-->
    </processor>
 </marlin>
-""".format(mergefiles_str)
+""".format(mergefiles_str,output_name)
     stname = "merge_files_steering.xml"
     with open(stname,"w") as f:
         f.write(steering_content)
@@ -395,7 +386,9 @@ if __name__ == '__main__':
     fm_parser = subparsers.add_parser("merge_eore",description=usage_fm)
     fm_parser.add_argument('lcio_files',nargs="+",help="The bunch of LCIO files containing"\
             " the EORE 'End of Run Event' added by some EUTelescope processors")
-    fm_parser.set_defaults(which='merge_eore')
+    fm_parser.add_argument('-o','--output',dest='output',action='store',\
+            help="The merged file [Default: merged_output.slcio")
+    fm_parser.set_defaults(which='merge_eore',output='merged_output.slcio')
 
     args = parser.parse_args()
     
@@ -409,7 +402,7 @@ if __name__ == '__main__':
         # arguments in the template steering files
         create_steering_file(args.step,**the_args)
     elif args.which == 'merge_eore':
-        steering_filename=merge_files(args.lcio_files)
+        steering_filename=merge_files(args.lcio_files,args.output)
         print "\033[1;34mTo create the merged file, run: \033[1;m\n"\
                 " \033[1;29mMarlin {0}\033[1;m".format(steering_filename)
 
