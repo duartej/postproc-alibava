@@ -230,8 +230,8 @@ class marlin_step(object):
                     self.argument_values.has_key('TELESCOPE_INPUT_FILENAME'):
                 # Get the parser and use
                 fnp = filename_parser(self.argument_values['ALIBAVA_INPUT_FILENAME'])
-                return "{0}_{1}_{2}_{3}_{4}_DATAMERGED.slcio".format(fnp.run_number,fnp.self.date,self.sensor_name,\
-                        self.voltage_bias,self.temperature)
+                return "{0}_{1}_{2}_{3}_{4}_DATAMERGED.slcio".format(fnp.run_number,fnp.date,fnp.sensor_name,\
+                        fnp.voltage_bias,fnp.temperature)
             # The raw binary use of the arguments
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
