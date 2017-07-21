@@ -1,30 +1,32 @@
 #!/usr/bin/env python
-"""Several dictionaries with static information from the SPS
-Test Beam performed at May, 2017 at CERN 
+"""Several dictionaries and functions with static information from 
+the SPS Test Beam performed at May, 2017 at CERN 
 
 Information extracted partially from 
 https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=0
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
-__version__ = "0.1"
+__version__ = "1.0"
 __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
 __all__ = [
-        "sensor_names",
+        "eospath",
         "filename_parser",
         "associated_filenames",
-        "active_sensors"
+        "sensor_names",
+        "sensor_ids",
+        "equivalent_run_number",
+        "get_active_sensor_list",
+        "get_beetle",
+        "get_setup",
+        "get_gear_content"
         ]
 
 # the EOS path where to find the alibava data
 eospath="/eos/user/d/duarte/alibava_data"
-
-# the list of used sensors
-sensor_names = [ 'LGAD7859W1H6_0_b1', 'iLGAD8533W1K05T_0_b2', 'REF_0_b1', 'M1-5_0_b2', 
-        'M1-8_7e15_b2', 'M2-3_1e16_b2', 'N1-3_0_b1', 'N1-7_7e15_b2', 'N1-8_1e16_b1' ]
 
 # A simple parser class for the filenames
 class filename_parser(object):
@@ -261,47 +263,320 @@ class associated_filenames(object):
         return message
 # -----------------------------------------------------------------------------
 
-# list of active sensors per run number, # they are ordered with the
+# the list of used sensors and an integer identifying them
+sensor_names = [ 'LGAD7859W1H6_0_b1', 'iLGAD8533W1K05T_0_b2', 'REF_0_b1', 'M1-5_0_b2', 
+        'M1-8_7e15_b2', 'M2-3_1e16_b2', 'N1-3_0_b1', 'N1-7_7e15_b2', 'N1-8_1e16_b1' ]
+sensor_ids = dict(map(lambda (x,name): (name,x),enumerate(sensor_names)))
+
+# Some characteristics of the sensors
+def _binary_resolution(pitch):
+    """Extract the binary resolution
+    """
+    from math import sqrt
+    return float(pitch)/sqrt(12.0)
+
+class specs_sensor():
+    def __init__(self,sizeX,sizeY,pitchX,pitchY,thickness,polarity=-1.0):
+        # All units are mm
+        self.sizeX = sizeX
+        self.sizeY = sizeY
+        self.pitchX = pitchX
+        self.pitchY = pitchY
+        self.thickness = thickness
+        self.polarity = polarity 
+        self.resolution = _binary_resolution(self.pitchX)
+# Instances
+mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
+ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
+lgad  = specs_sensor(5.12,5.12,0.160,0.0,0.3)
+ilgad = specs_sensor(7.2,7.2,0.160,0.0,0.3,1.0)
+ref   = specs_sensor(10.24,10.24,0.08,0.0,0.3)
+# Maps the name of the sensor with the proper specs_sensor instance
+sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
+        'iLGAD8533W1K05T_0_b2': ilgad,\
+        'M2-3_1e16_b2' : mtype, 'M1-5_0_b2': mtype, 'M1-8_7e15_b2': mtype, \
+        'N1-3_0_b1': ntype, 'N1-7_7e15_b2': ntype, 'N1-8_1e16_b1': ntype
+        }
+
+# list of active sensors per run number. They are ordered with the
 # beam hitting in increasing z-plane (Motherboard). The first 
-# element of the 2-tuple is the name of the sensor while the second 
-# is the beetle number (0,1). Note that the name of the sensor contains
-# the beetle number b1-b2
+# element of the 3-tuple is the name of the sensor while the second 
+# is the beetle number (0,1); the third element is the z-position in mm taking
+# as z=0 the first plane of the telescope.
+# Note that the name of the sensor contains the beetle number b1-b2
 active_sensors = {
-    274: [ ('LGAD7859W1H6_0_b1',0), ('REF_0_b1',0), ('M2-3_1e16_b2',1), ('N1-7_7e15_b2',1) ],
-    345: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('N1-8_1e16_b1',0),('N1-7_7e15_b2',1) ],
-    362: [ ('iLGAD8533W1K05T_0_b2',1),('REF_0_b1',0),('M2-3_1e16_b2',1),('N1-7_7e15_b2',1) ],
-    378: [ ('REF_0_b1',0),('M2-3_1e16_b2',1), ('M1-5_0_b2',1), ('M1-8_7e15_b2',1) ],
-    391: [ ('REF_0_b1',0),('N1-8_1e16_b1',0), ('N1-3_0_b1',0), ('N1-7_7e15_b2',1) ], 
+    314: [ ('LGAD7859W1H6_0_b1',0,-158.0), ('REF_0_b1',0,-106.0), ('M2-3_1e16_b2',1,218.0), ('N1-7_7e15_b2',1,339.0) ],
+    352: [ ('iLGAD8533W1K05T_0_b2',1,-158.0),('REF_0_b1',0,-106.0),('N1-8_1e16_b1',0,218.0) ],
+    372: [ ('iLGAD8533W1K05T_0_b2',1,-158.0),('REF_0_b1',0,-106.0),('M2-3_1e16_b2',1,218.0),('N1-7_7e15_b2',1,339.0) ],
+    385: [ ('REF_0_b1',0,-106.0),('M2-3_1e16_b2',1,218.0), ('M1-5_0_b2',1,278.0), ('M1-8_7e15_b2',1,339.0) ],
+    410: [ ('REF_0_b1',0,-106.0),('N1-8_1e16_b1',0,218.0), ('N1-3_0_b1',0,278.0), ('N1-7_7e15_b2',1,339.0) ], 
     }
-# append those with the same configuration
-_samecfg = { 
-    274: range(275,285)+[286]+range(299,303)+range(304,311)+range(313,316),
-    345: range(346,353),
-    362: range(363,373),
-    378: range(379,386),
-    391: range(392,296)+range(399,410) 
-    }
-# Build the final map
-for k,runlist in _samecfg.iteritems():
-    for irun in runlist:
-        active_sensors[irun] = active_sensors[k]
+
+# The gear file content template. The fields to be filled are defined as
+# ---------------------------------------------------------------
+# 0: "WITHOUT DUT"|"WITH DUT <dut_name>
+# 1: "XX"|<dut_name>
+# 2: "XX"|<dut z-position>
+# 3: 1XXXY (the GeoID, XXX: equivalent_run_number, Y: sensor_id), 
+#    no DUTs means Y=0
+# 4: 5|6 (with DUT)
+# 5: ""|"Mimosa26.so" (with DUT)
+# 6: ""|gear_dut_template(sensor_name)
+# ---------------------------------------------------------------
+# Note that the first column is referring to a gear with Telescope
+# only, and the second one, with a given DUT
+gear_content_template = """
+<gear>
+  <!--
+      GEAR file for CMSPixel CERN SPS July 2017 testbeam setup
+      https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=0
+
+      TELESCOPE {0}
+
+                                                       |<< DUT >>|
+      SETUP:                             REF  T0   T1     {1}      T2   T3   T4
+      The positions (mm) z   :          -106  0   101     {2}    493  594   694
+  -->
+
+  <global detectorName="EUTelescope"/>
+  <BField type="ConstantBField" x="0.0" y="0.0" z="0.0"/>
+  <detectors>
+    <detector name="SiPlanes" geartype="SiPlanesParameters">
+      <siplanesID ID="{3}"/>
+      <siplanesType type="TelescopeWithoutDUT"/>
+      <siplanesNumber number="{4}"/>
+      <parameter name="Geometry" 
+                 type="StringVec" 
+                 value="{5} Mimosa26.so Mimosa26.so Mimosa26.so Mimosa26.so Mimosa26.so"/>
+      <layers>
+	<!--DATURA-Plane 0 - EUD0 -->
+	<layer>
+	  <ladder 	ID="0"
+			positionX="0.00"	positionY="0.00"	positionZ="0.00"
+			rotationZY="0.00"	rotationZX="0.0"	rotationXY="0.0" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.050"
+			radLength="93.660734"
+			/>
+	  <sensitive 	ID="0"
+			positionX="0.00"	positionY="0.00"	positionZ="0.00" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.070"
+			npixelX="1152"		npixelY="576" 
+			pitchX="0.018402778"	pitchY="0.018402778" 	resolution="0.0045" 
+			rotation1="-1.0" 	rotation2="0.0" 
+			rotation3="0.0"		rotation4="-1.0" 
+			radLength="93.660734"
+			/>
+	</layer>
+	<!--DATURA-Plane 1 - EUD1 -->
+	<layer>
+	  <ladder 	ID="1" 
+			positionX="0.00"	positionY="0.00"	positionZ="101.0" 
+			rotationZY="0.0"	rotationZX="0.0"	rotationXY="0.0" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.050" 
+			radLength="93.660734"
+			/>
+	  <sensitive 	ID="1" 
+			positionX="0.00"	positionY="0.00"	positionZ="101.0" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.070"
+			npixelX="1152"		npixelY="576" 
+			pitchX="0.018402778"	pitchY="0.018402778"	resolution="0.0045" 
+			rotation1="-1.0"	rotation2="0.0" 
+			rotation3="0.0"		rotation4="-1.0" 
+			radLength="93.660734"
+			/>
+	</layer>
+	<!--DATURA-Plane 2 - EUD2 -->
+	<layer>
+	  <ladder 	ID="2" 
+			positionX="0.00"	positionY="0.00"	positionZ="493.0" 
+			rotationZY="0.0"	rotationZX="0.0"	rotationXY="0.0" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.050" 
+			radLength="93.660734"
+			/>
+	  <sensitive 	ID="2" 
+			positionX="0.00"	positionY="0.00"	positionZ="493.0" 
+			sizeX="21.2"		sizeY="10.6"		thickness="0.070"
+			npixelX="1152"		npixelY="576"
+			pitchX="0.018402778" 	pitchY="0.018402778" 	resolution="0.0045"
+			rotation1="-1.0"	rotation2="0.0"
+			rotation3="0.0" 	rotation4="-1.0" 
+			radLength="93.660734"
+			/>
+	</layer>
+	
+        <!--DATURA-Plane 3 - EUD0 -->
+        <layer>
+          <ladder         ID="3"
+                          positionX="0.00"        positionY="0.00"        positionZ="594.0"
+                          rotationZY="0.00"       rotationZX="0.0"        rotationXY="0.0" 
+                          sizeX="21.2"            sizeY="10.6"            thickness="0.050"
+                          radLength="93.660734"
+                          />
+          <sensitive      ID="3"
+                          positionX="0.00"        positionY="0.00"        positionZ="594.0" 
+                          sizeX="21.2"            sizeY="10.6"            thickness="0.070"
+                          npixelX="1152"          npixelY="576" 
+                          pitchX="0.018402778"    pitchY="0.018402778"    resolution="0.0045" 
+                          rotation1="-1.0"        rotation2="0.0" 
+                          rotation3="0.0"         rotation4="-1.0" 
+                          radLength="93.660734"
+                          />
+        </layer>
+        <!--DATURA-Plane 4 - EUD0 -->
+        <layer>
+          <ladder         ID="4"
+                          positionX="0.00"        positionY="0.00"        positionZ="694.00"
+                          rotationZY="0.00"       rotationZX="0.0"        rotationXY="0.0" 
+                          sizeX="21.2"            sizeY="10.6"            thickness="0.050"
+                          radLength="93.660734"
+                          />
+          <sensitive      ID="4"
+                          positionX="0.00"        positionY="0.00"        positionZ="694.00" 
+                          sizeX="21.2"            sizeY="10.6"            thickness="0.070"
+                          npixelX="1152"          npixelY="576" 
+                          pitchX="0.018402778"    pitchY="0.018402778"    resolution="0.0045" 
+                          rotation1="-1.0"        rotation2="0.0" 
+                          rotation3="0.0"         rotation4="-1.0" 
+                          radLength="93.660734"
+                          />
+
+        </layer>
+        {6}
+      </layers>
+    </detector>
+  </detectors>
+</gear>
+"""
+# The DUT layer template to be place in the gear template.
+# 0: dut_name
+# 1: chip number
+# 2: size in X-direction (sensitive direction)
+# 3: pitch in X-direction (sensitive direction)
+# 4: size in Y-direction
+# 5: pitch in Y-direction
+# 6: spatial resolution (just the binary resolution)
+# 7: thickness
+gear_dut_template="""<!--{0} - chip {1} -->
+        <!-- WARNING, not sure about specs, first tentative values collected from several 
+             sources. Resolution: (binary resolution, i.e. p/sqrt(12))
+        <layer> 
+          <ladder         ID="5"
+                          positionX="0.00"        positionY="0.0"       positionZ="278.00"
+                          rotationZY="0.00"       rotationZX="0.0"      rotationXY="0.0" 
+                          sizeX="{2}"           sizeY="{3}"           thickness="{7}"
+                          radLength="93.660734"
+                          />
+          <sensitive      ID="6"
+                          positionX="0.00"        positionY="0.00"      positionZ="278.00" 
+                          sizeX="{2}"             sizeY="{3}"           thickness="0.230"
+                          npixelX="128"           npixelY="1" 
+                          pitchX="{4}"           pitchY="{5}"        resolution="{6}" 
+                          rotation1="-1.0"        rotation2="0.0" 
+                          rotation3="0.0"         rotation4="-1.0" 
+                          radLength="93.660734"
+                          />
+        </layer>
+"""
+
 
 # ------------------------------------------------------------------------------
-# Mapping the run number with its correponding gear file 
+# Mapping a run number with its setup
 # Available info at https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=343850123
-# The maximum run number which defines a setup, each element is defining a
-# range where the setup is used:
+# The setups are linked to a range of run numbers. The equivalent_run_number
+# is defined to be as the maximum run number of each range
 #  * run number <= 314    --> Setup-0
 #  * run number (314,352] --> Setup-1
-#  ...
-gearfile_setups = [ 314, 352, 372, 385, 410 ]
-setup_map= {
-        0: 'gear_TB2017_CERNSPS_SETUP01_LGAD_REF_T01_M23_N17_T234.xml',
-        1: 'gear_TB2017_CERNSPS_SETUP02_LGAG_REF_T01_N18_XXX_T234.xml',
-        2: 'gear_TB2017_CERNSPS_SETUP03_iLGAD_REF_T01_M23_N17_T234.xml',
-        3: 'gear_TB2017_CERNSPS_SETUP04_REF_T01_M23_M15_M18_T234.xml',
-        4: 'gear_TB2017_CERNSPS_SETUP05_REF_T01_N18_N13_N17_T234.xml'
-        }
+#  * ...
+setups = [ 314, 352, 372, 385, 410 ]
+def equivalent_run_number(run_number):
+    """Helper function to obtain the equivalent run number given a run 
+    number. Setups are linked to a range of run numbers. The equivalent
+    run number is defined to be as the maximum run number of each range
+
+    Parameters
+    ----------
+    run_number: int
+        the run  number 
+
+    Returns
+    -------
+    int: the equivalent run number
+
+    Raises
+    ------
+    RuntimeError
+        if the run number is higher than the maximum recorded
+    """
+    for (k,maxrunnumber) in enumerate(setups):
+        if run_number <= maxrunnumber:
+            return maxrunnumber
+    raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,setups[-1]))
+
+def get_active_sensor_list(run_number):
+    """Helper function to obtain the active sensor given a run number
+
+    Parameters
+    ----------
+    run_number: int
+        the run  number 
+
+    Returns
+    -------
+    int: the setup index
+    """
+    ern = equivalent_run_number(run_number)
+    return active_sensors[ern]
+
+def get_beetle(run_number,sensor_name):
+    """Helper function to obtain the beetle given a run number and sensor name
+
+    Parameters
+    ----------
+    run_number: int
+        the run number 
+    sensor_name: str
+        
+
+    Returns
+    -------
+    int: the beetle id
+
+    Raises
+    ------
+    RuntimeError
+        if the run number is higher than the maximum recorded
+    """
+    sensorlist = get_active_sensor_list(run_number)
+    try:
+        return filter(lambda (sname,beetle,zpos): sname == sensor_name,sensorlist)[0][1]
+    except IndexError:
+        raise RuntimeError("Invalid sensor name '{0}' OR not present in the run '{1}' ".format(sensor_name,run_number))
+
+def get_z(run_number,sensor_name):
+    """Helper function to obtain z-position of a sensor
+
+    Parameters
+    ----------
+    run_number: int
+        the run number 
+    sensor_name: str
+        
+
+    Returns
+    -------
+    int: the z position [mm]
+
+    Raises
+    ------
+    RuntimeError
+        if the run number is higher than the maximum recorded
+    """
+    sensorlist = get_active_sensor_list(run_number)
+    try:
+        return filter(lambda (sname,beetle,zpos): sname == sensor_name,sensorlist)[0][2]
+    except IndexError:
+        raise RuntimeError("Invalid sensor name '{0}' OR not present in the run '{1}' ".format(sensor_name,run_number))
+
 def get_setup(run_number):
     """Helper function to obtain the setup given a run number
 
@@ -313,33 +588,48 @@ def get_setup(run_number):
     Returns
     -------
     int: the setup index
-
-    Raises
-    ------
-    RuntimeError
-        if the run number is higher than the maximum recorded
     """
-    for (k,maxrunnumber) in enumerate(gearfile_setups):
+    for (k,maxrunnumber) in enumerate(setups):
         if run_number <= maxrunnumber:
             return k
-    raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,gearfile_setups[-1]))
+    raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,setups[-1]))
 
-def get_gearfile(run_number):
+def get_gear_content(run_number,sensor_name=""):
     """Get the gear file corresponding to a run number
 
     Parameters
     ----------
     run_number: int
         the run  number 
+    sensor_name: str
+        the name of the DUT to be included in the gear file. 
+        Empty string assumes only Telescope with no DUT
 
     Returns
     -------
-    str: the gear file name
+    str: the gear template filled
 
     Raises
     ------
     RuntimeError
         if the run number is higher than the maximum recorded
     """
-    return setup_map[get_setup(run_number)]
-
+    ern = equivalent_run_number(run_number)
+    if sensor_name == "":
+        # Only telescope (see gear_content_template)
+        geoid = int("1{0}0".format(equivalent_run_number(run_number)))
+        filler_gear = ("WITHOUT DUT","XXX","XXX",geoid,5,"","")
+    else:
+        # A DUT is defined, see gear_dut_template
+        # Find which instance we need
+        specs=sensor_name_spec_map[sensor_name]
+        # Fill the need input of the template for the dut layer
+        filler_dut = (sensor_name,get_beetle(run_number,sensor_name),\
+                specs.sizeX,specs.pitchX,specs.sizeY,specs.pitchY,specs.resolution,\
+                specs.thickness)
+        dut_layer = gear_dut_template.format(*filler_dut)
+        # And for the Gear file
+        geoid = int("1{0}{1}".format(equivalent_run_number(run_number),sensor_ids[sensor_name]))
+        filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
+                geoid,6,"Mimosa26.so",dut_layer)
+    return gear_content_template.format(*filler_gear)
