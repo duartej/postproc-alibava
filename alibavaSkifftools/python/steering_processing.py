@@ -36,6 +36,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'PEDESTAL_INPUT_FILENAME': 'Name of the input LCIO file created by the AlibavaPedestalNoiseProcessor,'\
                 ' containing the pedestals',
         'CALIBRATION_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaCalibrateProcessor',
+        'CALIBRATION_INPUT_FILENAME': 'Name of the input alibava file for calibration (Only for alibava_full_reco)',
         'MAXADC':'Max ADCs counts for the common mode histograms (600 per default)',
         'MINADC':'Min ADCs counts for the common mode histograms (400 per default)',
         'NBINS': 'Number of bins to be used in the histograms (200 default)',
@@ -345,6 +346,15 @@ class marlin_step(object):
             self.set_argument_value('ACTIVE_CHIP',self.DUT)
             self.set_argument_value('GEO_ID',geoid)
             self.set_argument_value('GEAR_FILE',gear_filename)
+        # The telescope case needs also to create the gear file
+        if self.argument_values.has_key('TELESCOPE_INPUT_FILENAME') \
+                and not self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
+            gear_content = get_gear_content(self.argument_values['RUN_NUMBER'])
+            geoid = get_geo_id(self.argument_values['RUN_NUMBER'])
+            # XXX -- Be CAREFUL WITH this file name (to be centralized)
+            gear_filename = 'gear_file.xml'
+            with open(gear_filename,'w') as f:
+                f.write(gear_content)
         
         # Those arguments not set by the user but set by the class,
         # i.e. not present in the argument_values dictionary. This 
@@ -523,6 +533,8 @@ class alibava_full_reco(marlin_step):
                 (rs_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.beam_raw_file},self.update_output),
                 (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
                 (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
+                (calibration_conversion(), {'ALIBAVA_INPUT_FILENAME': self.calibration_raw_file},self.update_output), 
+                (calibration_extraction(), {'INPUT_FILENAMES': self.last_output_filename},self.update_calibration), 
                 )
 
     # Some datamembers used in the step_chain are not going to be 
@@ -532,6 +544,9 @@ class alibava_full_reco(marlin_step):
     # this elements)
     def pedestal_raw_file(self):
         return self._pedestal_raw_file
+    
+    def calibration_raw_file(self):
+        return self._calibration_raw_file
     
     def beam_raw_file(self):
         return self._beam_raw_file
@@ -551,6 +566,9 @@ class alibava_full_reco(marlin_step):
 
     def update_pedestal(self,step_inst):
         self._pedestal_file = step_inst.argument_values['PEDESTAL_OUTPUT_FILENAME']
+    
+    def update_calibration(self,step_inst):
+        self._calibration_file = step_inst.argument_values['CALIBRATION_OUTPUT_FILENAME']
 
     @staticmethod
     def get_description():
@@ -568,6 +586,8 @@ class alibava_full_reco(marlin_step):
             the name of the raw alibava data beam file
         PEDESTAL_INPUT_FILENAME: str
             the name of the raw alibava data pedestal file
+        CALIBRATION_INPUT_FILENAME: str
+            the name of the raw alibava data calibration file
 
         Raises
         ------
@@ -581,12 +601,13 @@ class alibava_full_reco(marlin_step):
         import stat
     
         # Check for inconsistencies
-        for key in ['ALIBAVA_INPUT_FILENAME','PEDESTAL_INPUT_FILENAME']:
+        for key in ['ALIBAVA_INPUT_FILENAME','PEDESTAL_INPUT_FILENAME','CALIBRATION_INPUT_FILENAME']:
             if key not in kwd.keys():
                 raise NotImplementedError("Relevant argument '{0}' not present!".format(key))
         # The input files
-        self._pedestal_raw_file = kwd['PEDESTAL_INPUT_FILENAME']
-        self._beam_raw_file     = kwd['ALIBAVA_INPUT_FILENAME']
+        self._pedestal_raw_file   = kwd['PEDESTAL_INPUT_FILENAME']
+        self._calibration_raw_file= kwd['CALIBRATION_INPUT_FILENAME']
+        self._beam_raw_file       = kwd['ALIBAVA_INPUT_FILENAME']
         
         # remove all the lcio files except the last one...
         toremove = set([])
@@ -639,9 +660,9 @@ class telescope_conversion(marlin_step):
                 "MAX_FIRING_FREQ_PIXEL")
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
-        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
         # And copy the gear file to the relevant place
-        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
     
     @staticmethod
     def get_description():
@@ -657,9 +678,9 @@ class telescope_clustering(marlin_step):
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
-        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
         # And copy the gear file to the relevant place
-        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
         self.auxiliary_files.append('histoinfo_telescope.xml')
     
     @staticmethod
@@ -676,9 +697,9 @@ class telescope_filter(marlin_step):
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
-        self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
+        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
         # And copy the gear file to the relevant place
-        self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
         self.auxiliary_files.append('histoinfo_telescope.xml')
     
     @staticmethod
