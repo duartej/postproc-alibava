@@ -48,9 +48,9 @@
  <!--Reads data streams produced by Alibava and produces the corresponding LCIO output-->
  <!--Selection of chip that you want to store data from. Chip numbers start from 0. 
       If not set, all data (i.e. chip 0 and 1) will be stored-->
-  <!--parameter name="ChipSelection" type="IntVec"> </parameter-->
+  <parameter name="ChipSelection" type="IntVec">@ACTIVE_CHIP@ </parameter>
   <!--The geometry identification number-->
-  <parameter name="GeoID" type="int">0 </parameter>
+  <parameter name="GeoID" type="int">@GEO_ID@ </parameter>
   <!--This is the input file name-->
   <parameter name="InputFileName" type="string">@ALIBAVA_INPUT_FILENAME@ </parameter>
   <!--Name of the collection-->

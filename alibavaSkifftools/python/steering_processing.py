@@ -26,6 +26,8 @@ def get_template_path():
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data or slcio for the merger)',
+        'ACTIVE_CHIP': 'The beetle chip used, automaticaly defined given the run number and the sensor name',
+        'GEO_ID': 'The geometrical identificator, automaticaly defined given the run number and the sensor name',
         'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data or slcio for the merger)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
@@ -74,7 +76,7 @@ class marlin_step(object):
     required_arguments: tuple(str)
         The substitutible arguments of the template steering file
     argument_values: dict(str,GenericType)
-        The map bewteen the argument template name and the concrete
+        The map between the argument template name and the concrete
         value used
     """
     def __init__(self,step_name):
@@ -100,6 +102,10 @@ class marlin_step(object):
         # List of auxiliary files (basename) to be copied from
         # get_template_path() to the cwd
         self.auxiliary_files = []
+        # The DUT if any, and if the SPS2017TB.filename_parser 
+        # instance used to obtained
+        self.DUT = None
+        self.parser_instance=None
 
     @property
     def steering_file_content(self):
@@ -171,8 +177,14 @@ class marlin_step(object):
             If the argument is not defined in the _ARGUMENTS static
             dict
         """
+        from .SPS2017TB_metadata import filename_parser
+
         self.steering_file_content = self.steering_file_content.replace("{0}{1}{0}".format(self.token,argument),str(value))
         self.argument_values[argument] = value
+        # An special case: just create the parser instance if not there
+        if argument == "ALIBAVA_INPUT_FILENAME" and self.parser_instance is None:
+            fnp = filename_parser(value)
+            self.parser_instance = fnp
 
     def get_default_argument_value(self,argument):
         """Get the argument value per default
@@ -209,13 +221,14 @@ class marlin_step(object):
                     # if not telescope data, then check the standard alibava 
                     # filenames with the parser
                     fnp = filename_parser(self.argument_values[key])
+                    self.parser_instance = fnp
                     if fnp.is_beam:
                         return fnp.run_number
             return -1
         elif argument == 'GEAR_FILE':
             # First copy the file to the cwd
-            self.auxiliary_files.append('dummy_gear.xml')
-            return 'dummy_gear.xml'
+            #self.auxiliary_files.append('dummy_gear.xml')
+            return 'gear_file.xml'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
         elif argument == 'TELESCOPE_INPUT_FILENAME':
@@ -230,8 +243,8 @@ class marlin_step(object):
                     self.argument_values.has_key('TELESCOPE_INPUT_FILENAME'):
                 # Get the parser and use
                 fnp = filename_parser(self.argument_values['ALIBAVA_INPUT_FILENAME'])
-                return "{0}_{1}_{2}_{3}_{4}_DATAMERGED.slcio".format(fnp.run_number,fnp.date,fnp.sensor_name,\
-                        fnp.voltage_bias,fnp.temperature)
+                # The same name than the alibava data, but added the DATAMERGED
+                return "{0}.DATAMERGED.slcio".format("_".join(fnp.filename.split("_")[:-1]))
             # The raw binary use of the arguments
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
@@ -277,10 +290,15 @@ class marlin_step(object):
     def publish_steering_file(self,**kwd):
         """Creates a copy of the steering file with the particular
         values introduced substituted. If a given argument is not
-        provided, the default value will be used
+        provided, the default value will be used (see the __init__
+        methods of the concrete marlin_step classes definitions, 
+        and the `self.get_argument_default` function)
 
         Parameters
         ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined 
+            at _ARGUMENTS            
 
         Raises
         ------
@@ -290,6 +308,10 @@ class marlin_step(object):
         """
         import shutil
         import os
+        from .SPS2017TB_metadata import get_beetle
+        from .SPS2017TB_metadata import get_gear_content
+        from .SPS2017TB_metadata import get_geo_id
+        from .SPS2017TB_metadata import get_standard_sensor_name as ssnm
 
         # Check for inconsistencies
         for key in kwd.keys():
@@ -298,16 +320,36 @@ class marlin_step(object):
         # Setting the values provided by the user
         for arg,value in kwd.iteritems():
             self.set_argument_value(arg,value)
-        # Those arguments not set by the user (i.e. not present in the
-        # argument_values dictionary -- this allows to define tuned defaults
-        # depending of the step), set using the default values
-        #for argument in filter(lambda _a: _a not in kwd.keys(),self.required_arguments):
+        
+        # The default values (note that if the user already set it,
+        # the next lines do not affect anything as the @KEY@ is not present
+        # anymore in steering_file_content
         for argument in filter(lambda _a: _a not in self.argument_values.keys(),self.required_arguments):
             val = self.get_default_argument_value(argument)
             self.set_argument_value(argument,val)
-        # And the tuned default values (note that if the user already set it,
-        # the next lines do not affect anything as the @KEY@ is not present
-        # anymore in steering_file_content
+        
+        # Apply automaticaly the chip number and gear file content,
+        # once the run number is available.
+        # Check for the sensor to be process (if any)
+        if self.parser_instance is not None:
+            sensor_name = ssnm(self.parser_instance.sensor_name)
+            self.DUT = get_beetle(sensor_name)
+            # Obtain the proper GEAR file and create in the working dir
+            gear_content = get_gear_content(self.argument_values['RUN_NUMBER'],sensor_name)
+            geoid = get_geo_id(self.argument_values['RUN_NUMBER'],sensor_name)
+            # XXX -- Be CAREFUL WITH this file name (to be centralized)
+            gear_filename = 'gear_file.xml'
+            with open(gear_filename,'w') as f:
+                f.write(gear_content)
+            # INCLUDE this info int the gear_file
+            self.set_argument_value('ACTIVE_CHIP',self.DUT)
+            self.set_argument_value('GEO_ID',geoid)
+            self.set_argument_value('GEAR_FILE',gear_filename)
+        
+        # Those arguments not set by the user but set by the class,
+        # i.e. not present in the argument_values dictionary. This 
+        # allows to define tuned defaults when defining the concrete
+        # marlin_reco daughters classes inside the __init__ function
         for argdef,val in self.argument_values.iteritems():
             self.set_argument_value(argdef,val)
 
@@ -320,7 +362,6 @@ class marlin_step(object):
             shutil.copyfile(os.path.join(get_template_path(),_f), os.path.join(os.getcwd(),_f))
 
 
-
 # Marlin step concrete implementations
 # ------------------------------------
 
@@ -330,7 +371,12 @@ class pedestal_conversion(marlin_step):
         super(pedestal_conversion,self).__init__('pedestal_conversion')
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME',\
+                'OUTPUT_FILENAME','GEAR_FILE','ACTIVE_CHIP','GEO_ID' )
+        # Dummy definitions to let the class populate the needed
+        # data member (parser_instance) when reading the file name
+        self.argument_values['ACTIVE_CHIP'] = -1
+        self.argument_values['GEO_ID'] = -1
     
     @staticmethod
     def get_description():
@@ -385,6 +431,12 @@ class calibration_conversion(pedestal_conversion):
         # Change the step name
         self.step_name='calibration_conversion'
         self.steering_file = self.steering_file.replace('pedestal_conversion',self.step_name)
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER',\
+                'ALIBAVA_INPUT_FILENAME','GEAR_FILE','OUTPUT_FILENAME','ACTIVE_CHIP','GEO_ID')
+        # Dummy definitions to let the class populate the needed
+        # data member (parser_instance) when reading the file name
+        self.argument_values['ACTIVE_CHIP'] = -1
+        self.argument_values['GEO_ID'] = -1
     
     @staticmethod
     def get_description():
@@ -409,8 +461,12 @@ class rs_conversion(marlin_step):
         super(rs_conversion,self).__init__('rs_conversion')
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter_rs.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
-                "TIMECUT_MIN","TIMECUT_MAX")
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', \
+                'ACTIVE_CHIP','GEO_ID','OUTPUT_FILENAME','GEAR_FILE',"TIMECUT_MIN","TIMECUT_MAX")
+        # Dummy definitions to let the class populate the needed
+        # data member (parser_instance) when reading the file name
+        self.argument_values['ACTIVE_CHIP'] = -1
+        self.argument_values['GEO_ID'] = -1
     
     @staticmethod
     def get_description():
