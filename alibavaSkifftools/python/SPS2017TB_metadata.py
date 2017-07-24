@@ -590,9 +590,33 @@ def get_setup(run_number):
     int: the setup index
     """
     for (k,maxrunnumber) in enumerate(setups):
-        if run_number <= maxrunnumber:
+        if int(run_number) <= maxrunnumber:
             return k
     raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,setups[-1]))
+
+def get_geo_id(run_number,sensor_name=""):
+    """Get the geoID to be related with a particular setup: 
+        ZXXXY ->   Z: 1-telescope only, 2-telescope+DUT
+                 XXX: equivalent_run_number 
+                   Y: sensor_id 
+
+    Parameters
+    ----------
+    run_number: int
+        the run  number 
+    sensor_name: str
+        the name of the DUT to be included in the gear file. 
+        Empty string assumes only Telescope with no DUT
+
+    Returns
+    -------
+    int: the geoId (ZXXXY)
+    """
+    if sensor_name == "":
+        return int("1{0}0".format(equivalent_run_number(run_number)))
+    else:
+        return int("2{0}{1}".format(equivalent_run_number(run_number),sensor_ids[sensor_name]))
+
 
 def get_gear_content(run_number,sensor_name=""):
     """Get the gear file corresponding to a run number
