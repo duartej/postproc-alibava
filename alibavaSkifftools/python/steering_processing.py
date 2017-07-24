@@ -515,6 +515,21 @@ class alibava_clustering(marlin_step):
     def get_description():
         return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
 
+class cluster_histograms(marlin_step):
+    def __init__(self):
+        import os
+        super(cluster_histograms,self).__init__('cluster_histograms')
+
+        self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE')
+        # Needed files
+        self.auxiliary_files.append('histoinfo_alibava.xml')
+    
+    @staticmethod
+    def get_description():
+        return 'Cluster plotter'
+    
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class alibava_full_reco(marlin_step):
     def __init__(self):
@@ -530,11 +545,14 @@ class alibava_full_reco(marlin_step):
                 (pedestal_preevaluation(), {'INPUT_FILENAMES':self.last_output_filename},self.update_pedestal),
                 (cmmd_calculation(), { 'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file },self.update_output),
                 (pedestal_evaluation(),{'INPUT_FILENAMES': self.last_output_filename},self.update_pedestal),
+                (calibration_conversion(), {'ALIBAVA_INPUT_FILENAME': self.calibration_raw_file},self.update_output), 
+                (calibration_extraction(), {'INPUT_FILENAMES': self.last_output_filename},self.update_calibration),
                 (rs_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.beam_raw_file},self.update_output),
                 (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
                 (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
-                (calibration_conversion(), {'ALIBAVA_INPUT_FILENAME': self.calibration_raw_file},self.update_output), 
-                (calibration_extraction(), {'INPUT_FILENAMES': self.last_output_filename},self.update_calibration), 
+                # Note that the cluster_histograms
+                (cluster_histograms(), { 'INPUT_FILENAMES': self.last_output_filename, \
+                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file}, self.dummy )
                 )
 
     # Some datamembers used in the step_chain are not going to be 
@@ -557,6 +575,9 @@ class alibava_full_reco(marlin_step):
     def pedestal_file(self):
         return self._pedestal_file
     
+    def calibration_file(self):
+        return self._calibration_file
+    
     # Updaters
     def update_output(self,step_inst):
         """Update the last_output_filename data member using the value
@@ -569,6 +590,9 @@ class alibava_full_reco(marlin_step):
     
     def update_calibration(self,step_inst):
         self._calibration_file = step_inst.argument_values['CALIBRATION_OUTPUT_FILENAME']
+
+    def dummy(self,step_inst):
+        pass
 
     @staticmethod
     def get_description():
@@ -636,7 +660,7 @@ class alibava_full_reco(marlin_step):
                 # still not available
                 pass
         thebash += "\nrm "
-        for i in filter(lambda x: x not in [self.pedestal_file(),self.last_output_filename()],toremove):
+        for i in filter(lambda x: x not in [self.pedestal_file(),self.calibration_file(),self.last_output_filename()],toremove):
             thebash += i+" "
         thebash+='\n\necho "ALiBaVa marlin data reconstruction chain DONE"\n'
         bashname = "alibava_full_reconstruction.sh"
@@ -750,6 +774,7 @@ class hitmaker(marlin_step):
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
         rs_conversion,signal_reconstruction,alibava_clustering,
+        cluster_histograms,
         alibava_full_reco,
         # Telescope related
         telescope_conversion,telescope_clustering,telescope_filter,

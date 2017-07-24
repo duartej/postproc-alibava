@@ -1,0 +1,216 @@
+<!--
+ Alibava Histogram information file
+ 
+ This file is used to set boundaries and titles of histograms available
+ in a processor. The processor reads this XML file before booking histograms
+ and sets the histograms binning, title, minimum and maximum of the axis
+ 
+ please see below the special requrements from processors
+ -->
+
+
+<!--
+ Requirements by AlibavaBaseHistogramMaker Processor
+ 
+ This Processor takes these as an processor input
+ HistoXMLFile: path of this file
+ TopTagInXMLFile: in this example AlibavaHistoList
+ TagToProcess: for example myExampleAlibavaHistogramMaker
+ 
+ One can define more than one TagToProcess, to be processed by different
+ copies of AlibavaHistogramMaker Processor
+ 
+ Histograms are define in <histo .... />
+ The mandatory fields
+ For all histos
+ name, perEachChip, type
+ For TH1F histos
+ xBin, xMin, xMax
+ For TH1F histos
+ xBin, xMin, xMax, yBin, yMin, yMax
+ 
+ IMPORTANT:
+ DO NOT change histograms name, perEachChip and type options
+ You are only allowed to change
+ xBin, xMin, xMax, yBin, yMin, yMax, title, labelX, labelY
+ DO NOT delete histogram definitions, all histograms defined here
+ are mandatory for HistogramMaker processors
+ -->
+
+
+<AlibavaHistoList>
+    <myAlibavaDataHistogramMaker>
+        <!-- Time -->
+        <histo name="hTDCTime" perEachChip="false" type="TH1F"
+            xBin="500" xMin="0" xMax="100"
+            title="TDC Time" labelX="Time (ns)" labelY="Entries"/>
+
+    	<histo name="hTDCTime_vs_EventNum" perEachChip="false" type="TProfile"
+            xBin="20000" xMin="0" xMax="20000" yMin="0" yMax="100"
+            title="TDC Time vs Event Number" labelX="Event Number" labelY="Average TDC Time (ns)" />
+
+        <!-- Temperature -->
+        <histo name="hEventTemperatures" perEachChip="false"
+            type="TH1F" xBin="500" xMin="-50.0" xMax="50.0"
+            title="Temperature" labelX="Temperature (C)" labelY="Number of Entries" />
+        <histo name="hEventTemperature_vs_EventNum" perEachChip="false" type="TProfile"
+            xBin="10000" xMin="0" xMax="100000" yMin="-50" yMax="100"
+            title="Temperature vs Event Number" labelX="Event Number" labelY="Average Temperature (C)" />
+
+        <!-- Others -->
+        <histo name="hCalibrationChargeValues" perEachChip="false" type="TH1F"
+            xBin="1000" xMin="0" xMax="100000.0"
+            title="Calibration Charge Values" labelX="Charge (e)" labelY="Number of Entries" />
+        <histo name="hDelayValues" perEachChip="false" type="TH1F"
+            xBin="1000" xMin="0" xMax="250"
+            title="Calibration Delay Values" labelX="Delay (ns)" labelY="Number of Entries" />
+        <histo name="hMaskedEvents" perEachChip="false" type="TH1F"
+            xBin="1000" xMin="0" xMax="100000"
+            title="Number of Masked Events" labelX="Event Number" labelY="Number of Masked Events" />
+
+        <!-- Signal -->
+        <histo name="hSignal" perEachChip="true" type="TH1F"
+            xBin="2000" xMin="-1000" xMax="1000"
+            title="Signal" labelX="Signal (ADC)" labelY="Number of Entries" />
+
+        <histo name="hSignal_vs_Channel" perEachChip="true" type="TH2F"
+            xBin="128" xMin="0" xMax="127" yBin="2000" yMin="-1000" yMax="1000"
+            title="Signal vs Strip" labelX="Channel" labelY="Signal (ADC)" />
+        
+        <histo name="hSignal_vs_Time" perEachChip="true" type="TH2F"
+            xBin="100" xMin="0" xMax="100" yBin="2000" yMin="-1000" yMax="1000"
+            title="Signal vs TDC Time" labelX="Time (ns)" labelY="Signal (ADC)" />
+
+        <histo name="hSignal_vs_Temperature" perEachChip="true" type="TH2F"
+            xBin="1000" xMin="-50" xMax="100" yBin="2000" yMin="-1000" yMax="1000"
+            title="Signal vs Temperature" labelX="Temperature (C)" labelY="Signal (ADC)" />
+
+        <!-- SNR -->
+        <histo name="hSNR" perEachChip="true" type="TH1F"
+            xBin="2000" xMin="-200" xMax="200"
+            title="Signal/Noise" labelX="Signal/Noise" labelY="Number of Entries" />
+
+        <histo name="hSNR_vs_Channel" perEachChip="true" type="TH2F"
+            xBin="128" xMin="0" xMax="127" yBin="2000" yMin="-1000" yMax="1000"
+            title="Signal/Noise vs Strip" labelX="Channel" labelY="Signal/Noise (ADC)" />
+        
+        <histo name="hSNR_vs_Time" perEachChip="true" type="TH2F"
+            xBin="100" xMin="0" xMax="100" yBin="1000" yMin="-200" yMax="200"
+            title="SNR vs TDC Time" labelX="Time (ns)" labelY="Signal/Noise" />
+
+        <histo name="hSNR_vs_Temperature" perEachChip="true" type="TH2F"
+            xBin="1000" xMin="-50" xMax="100" yBin="1000" yMin="-200" yMax="200"
+            title="SNR vs Temperature" labelX="Temperature (C)" labelY="Signal/Noise" />
+
+    </myAlibavaDataHistogramMaker>
+    
+    <!--    ExampleAlibavaHistogramMaker -->
+    <myExampleAlibavaHistogramMaker>
+        <histo name="hSomeHisto" perEachChip="false" type="TH2F"
+            xBin="1000" xMin="-1000" xMax="1000" yBin="1000" yMin="-1000" yMax="1000"
+            title="Whatever" labelX="Signal" labelY="Signal" />
+
+        <histo name="hSomeOtherHisto" perEachChip="true" type="TH1F"
+            xBin="2000" xMin="0" xMax="200"
+            title="Some thing" labelX="Event Number" labelY="Number of Entries" />
+
+    </myExampleAlibavaHistogramMaker>
+    
+    <!--     AlibavaClusterHistogramMaker    -->
+    <myAlibavaClusterHistogramMaker>
+        <!-- Hit amplitude (cluster signal) related -->
+        <histo name="hClusterSizeVsHitAmplitude" perEachChip="true" type="TH2F"
+            xBin="20" xMin="-0.5" xMax="19.5" yBin="1000" yMin="0" yMax="500"
+            title="Cluster size vs. Hit Amplitude" labelX="Cluster size" labelY="Signal [ADCs]" />
+        
+        <histo name="hTimeVsHitAmplitude" perEachChip="true" type="TH2F"
+            xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="500"
+            title="TDC time vs. Hit Amplitude" labelX="TDC time [ns]" labelY="Signal [ADCs]" />
+
+        <!-- Do not change the name -->
+        <histo name="hCalibrationChargeValues" perEachChip="true" type="TH2F"
+            xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="100"
+            title="TDC time vs. Calibrated cluster signal" labelY="Charge [electrons x 10^{-3}]" labelX="TDC time [ns]" />
+        
+        <histo name="hTimeVsSNR" perEachChip="true" type="TH2F"
+            xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="100"
+            title="TDC time vs. Cluster Signal-to-Noise" labelY="cluster SNR" labelX="TDC time [ns]" />
+
+        <histo name="hTimeVsSeed" perEachChip="true" type="TH2F"
+            xBin="101" xMin="0" xMax="100" yBin="128" yMin="-0.5" yMax="127.5"
+            title="TDC time vs. Seed channel" labelY="Seed Ch. number" labelX="TDC time [ns]" />
+        
+        <histo name="hSignalVsSeed" perEachChip="true" type="TH2F"
+            xBin="1000" xMin="0" xMax="500" yBin="128" yMin="-0.5" yMax="127.5"
+            title="Total cluster signal  vs. Seed channel" labelY="Seed Ch. number" labelX="Total Cluster signal [ADCs]" />
+        
+        <histo name="hMaskedEvents" perEachChip="false" type="TH1F"
+            xBin="1000" xMin="0" xMax="100000"
+            title="Number of Masked Events" labelX="Event Number" labelY="Number of Masked Events" />
+
+        <histo name="hEta_vs_CoG" perEachChip="true" type="TH2F"
+            xBin="128" xMin="-0.5" xMax="127.5" yBin="100" yMin="-0.05" yMax="1.05"
+            title="Eta vs Center of Gravity of Cluster" labelX="Center of Gravity (channelNum)" labelY="#eta" />
+
+        <histo name="hEta_vs_UCPFA" perEachChip="true" type="TH2F"
+            xBin="128" xMin="-0.5" xMax="127.5" yBin="100" yMin="-0.05" yMax="1.05"
+            title="Eta vs Center Position Cluster (UCPFA)" labelX="Center Position Cluster (channelNum)" labelY="#eta" />
+        
+        <histo name="hEta_vs_ClusterSize" perEachChip="true" type="TH2F"
+            xBin="20" xMin="-0.5" xMax="19.5" yBin="100" yMin="-0.05" yMax="1.05"
+            title="Eta vs Cluster size" labelX="Cluster size" labelY="#eta" />
+
+        <histo name="hEtaFromCluster_vs_ClusterSize" perEachChip="true" type="TH2F"
+            xBin="20" xMin="-0.5" xMax="19.5" yBin="100" yMin="-0.05" yMax="1.05"
+            title="Eta vs Cluster size" labelX="Cluster size" labelY="#eta" />
+
+        <histo name="hClusterSize_vs_CoG" perEachChip="true" type="TH2F"
+            xBin="128" xMin="-0.5" xMax="127.5" yBin="20" yMin="-0.5" yMax="19.5"
+            title="Cluster size vs Center of Gravity of Cluster" labelX="Center of Gravity (channelNum)" labelY="ClusterSize" />
+
+        <histo name="hClusterSize_vs_UCPFA" perEachChip="true" type="TH2F"
+            xBin="128" xMin="-0.5" xMax="127.5" yBin="20" yMin="-0.5" yMax="19.5"
+            title="Cluster size vs Center Position Cluster (UCPFA)" labelX="Center Position Cluster (channelNum)" labelY="ClusterSize" />
+        
+        <histo name="hTimeVsClusters" perEachChip="true" type="TH2F"
+            xBin="101" xMin="0" xMax="100" yBin="20" yMin="-0.5" yMax="19.5"
+            title="TDC time vs. Clusters per event" labelY="Clusters per Event" labelX="TDC time [ns]" />
+    </myAlibavaClusterHistogramMaker>
+    
+    <!--     AlibavaCorrelator    -->
+    <myAlibavaCorrelator>
+        <!-- Detector ID will be added to the title -->
+        <histo name="hHitPosX" perEachChip="false" type="TH1F"
+            xBin="100" xMin="-15" xMax="15"
+            title="Hit X position" labelX="hit position X" labelY="Number of entries" />
+
+        <!-- Detector ID will be added to the title -->
+        <histo name="hHitPosY" perEachChip="false" type="TH1F"
+            xBin="100" xMin="-15" xMax="15"
+            title="Hit Y position" labelX="hit position Y" labelY="Number of entries" />
+
+        <!-- Detector ID will be added to the X and Y labels -->
+        <histo name="hCorX" perEachChip="false" type="TH2F"
+            xBin="100" xMin="-15" xMax="15" yBin="100" yMin="-15" yMax="15"
+            title="Correlation" labelX="hit position X" labelY="hit position X" />
+
+        <!-- Detector ID will be added to the labels -->
+        <histo name="hCorY" perEachChip="false" type="TH2F"
+            xBin="100" xMin="-15" xMax="15" yBin="100" yMin="-15" yMax="15"
+            title="Correlation" labelX="hit position Y" labelY="hit position Y" />
+
+        <!-- Calculation of residual will be added to labelY -->
+        <histo name="hSyncX" perEachChip="false" type="TH2F"
+            xBin="100" xMin="0" xMax="100000" yBin="100" yMin="-15" yMax="15"
+            title="Synchronisation" labelX="Event number" labelY="dX" />
+
+        <!-- Calculation of residual will be added to labelY -->
+        <histo name="hSyncY" perEachChip="false" type="TH2F"
+            xBin="100" xMin="0" xMax="100000" yBin="100" yMin="-15" yMax="15"
+            title="Synchronisation" labelX="Event number" labelY="dY" />
+    </myAlibavaCorrelator>	
+</AlibavaHistoList>
+
+
+
+
