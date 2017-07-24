@@ -254,6 +254,7 @@ class associated_filenames(object):
         self.beam_instance        = fn_instance
         self.pedestal_instance    = filter(lambda x: x.is_pedestal,associated_files)[0]
         self.calibration_instance = filter(lambda x: x.is_calibration,associated_files)[0]
+        self.run_number           = fn_instance.run_number
 
     def __str__(self):
         message = "Beam instance: {0}\n".format(self.beam_instance)
@@ -261,13 +262,20 @@ class associated_filenames(object):
         message += "  - Pedestal file:{0}\n".format(self.pedestal_instance.filename)
         message += "  - Calibration file:{0}".format(self.calibration_instance.filename)
         return message
-# -----------------------------------------------------------------------------
 
 # the list of used sensors and an integer identifying them
 sensor_names = [ 'LGAD7859W1H6_0_b1', 'iLGAD8533W1K05T_0_b2', 'REF_0_b1', 'M1-5_0_b2', 
         'M1-8_7e15_b2', 'M2-3_1e16_b2', 'N1-3_0_b1', 'N1-7_7e15_b2', 'N1-8_1e16_b1' ]
 sensor_ids = dict(map(lambda (x,name): (name,x),enumerate(sensor_names)))
+# A map to convert the names without the fluence nor the beetle
+standard_sensor_name_map = { 'LGAD7859W1H6': 'LGAD7859W1H6_0_b1', 
+        'iLGAD8533W1K05T': 'iLGAD8533W1K05T_0_b2',
+        'REF': 'REF_0_b1', 
+        'M1-5':'M1-5_0_b2', 'M1-8': 'M1-8_7e15_b2', 'M2-3': 'M2-3_1e16_b2',
+        'N1-3_0_b1':'N1-3_0_b1', 'N1-7':'N1-7_7e15_b2','N1-8':'N1-8_1e16_b1'
+        }
 
+# -----------------------------------------------------------------------------
 # Some characteristics of the sensors
 def _binary_resolution(pitch):
     """Extract the binary resolution
@@ -458,7 +466,7 @@ gear_content_template = """
 # 7: thickness
 gear_dut_template="""<!--{0} - chip {1} -->
         <!-- WARNING, not sure about specs, first tentative values collected from several 
-             sources. Resolution: (binary resolution, i.e. p/sqrt(12))
+             sources. Resolution: (binary resolution, i.e. p/sqrt(12))-->
         <layer> 
           <ladder         ID="5"
                           positionX="0.00"        positionY="0.0"       positionZ="278.00"
@@ -475,11 +483,29 @@ gear_dut_template="""<!--{0} - chip {1} -->
                           rotation3="0.0"         rotation4="-1.0" 
                           radLength="93.660734"
                           />
-        </layer>
-"""
-
+        </layer>"""
 
 # ------------------------------------------------------------------------------
+# Useful functions
+def get_standard_sensor_name(sensor_name):
+    """Given the name of a sensor, returns the standarized name,
+    which includes the fluence and the beetle where it was bonded
+
+    Paramaters
+    ----------
+    sensor_name: str
+        the (non-standard) sensor name
+    
+    Returns
+    -------
+    str: the standarized sensor name
+    """
+    try:
+        return standard_sensor_name_map[sensor_name]
+    except IndexError:
+        raise RuntimeError("Invalid sensor name '{0}'".format(sensor_name))
+    
+
 # Mapping a run number with its setup
 # Available info at https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=343850123
 # The setups are linked to a range of run numbers. The equivalent_run_number
@@ -508,34 +534,47 @@ def equivalent_run_number(run_number):
         if the run number is higher than the maximum recorded
     """
     for (k,maxrunnumber) in enumerate(setups):
-        if run_number <= maxrunnumber:
+        if int(run_number) <= maxrunnumber:
             return maxrunnumber
-    raise RuntimeError("Invalid run number '{0}' > {0} (max. stored)".format(run_number,setups[-1]))
+    raise RuntimeError("Invalid run number: {0} (> {1}, max. stored)".format(run_number,setups[-1]))
 
-def get_active_sensor_list(run_number):
+def get_active_sensor_list(run_number=-1):
     """Helper function to obtain the active sensor given a run number
+    If no run number is provided, then all the available sensors
+    are returned
+
+    Note
+    ----
+    When returning the list without a run number assumes
+    that all the sensors do not change between runs, which
+    it is the case so far, but it could change in the future
 
     Parameters
     ----------
-    run_number: int
-        the run  number 
+    run_number: int, optional
+        the run number
 
     Returns
     -------
-    int: the setup index
+    list(ntuple(str,int,float)): the name, the chip and the z-position
     """
-    ern = equivalent_run_number(run_number)
-    return active_sensors[ern]
+    if run_number == -1:
+        sensor_list = []
+        for sensor_ntuple_list in active_sensors.values():
+            for sensor_ntuple in sensor_ntuple_list:
+                sensor_list.append( sensor_ntuple )
+    else:
+        ern = equivalent_run_number(run_number)
+        sensor_list = active_sensors[ern]
+    return sensor_list
 
-def get_beetle(run_number,sensor_name):
-    """Helper function to obtain the beetle given a run number and sensor name
+
+def get_beetle(sensor_name):
+    """Helper function to obtain the beetle given the sensor name
 
     Parameters
     ----------
-    run_number: int
-        the run number 
     sensor_name: str
-        
 
     Returns
     -------
@@ -546,11 +585,11 @@ def get_beetle(run_number,sensor_name):
     RuntimeError
         if the run number is higher than the maximum recorded
     """
-    sensorlist = get_active_sensor_list(run_number)
+    sensorlist = get_active_sensor_list()
     try:
         return filter(lambda (sname,beetle,zpos): sname == sensor_name,sensorlist)[0][1]
     except IndexError:
-        raise RuntimeError("Invalid sensor name '{0}' OR not present in the run '{1}' ".format(sensor_name,run_number))
+        raise RuntimeError("Invalid sensor name '{0}' ".format(sensor_name))
 
 def get_z(run_number,sensor_name):
     """Helper function to obtain z-position of a sensor
@@ -641,19 +680,19 @@ def get_gear_content(run_number,sensor_name=""):
     ern = equivalent_run_number(run_number)
     if sensor_name == "":
         # Only telescope (see gear_content_template)
-        geoid = int("1{0}0".format(equivalent_run_number(run_number)))
+        geoid = get_geo_id(equivalent_run_number(run_number))
         filler_gear = ("WITHOUT DUT","XXX","XXX",geoid,5,"","")
     else:
         # A DUT is defined, see gear_dut_template
         # Find which instance we need
         specs=sensor_name_spec_map[sensor_name]
         # Fill the need input of the template for the dut layer
-        filler_dut = (sensor_name,get_beetle(run_number,sensor_name),\
+        filler_dut = (sensor_name,get_beetle(sensor_name),\
                 specs.sizeX,specs.pitchX,specs.sizeY,specs.pitchY,specs.resolution,\
                 specs.thickness)
         dut_layer = gear_dut_template.format(*filler_dut)
         # And for the Gear file
-        geoid = int("1{0}{1}".format(equivalent_run_number(run_number),sensor_ids[sensor_name]))
+        geoid = get_geo_id(equivalent_run_number(run_number),sensor_name)
         filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
                 geoid,6,"Mimosa26.so",dut_layer)
     return gear_content_template.format(*filler_gear)
