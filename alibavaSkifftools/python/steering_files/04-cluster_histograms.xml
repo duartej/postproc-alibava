@@ -84,7 +84,7 @@
 	<parameter name="MultiplySignalBy" type="float"> @SIGNAL_POLARITY@ </parameter>
         <!--In case this variable is set (say x), x percent of total events will
         be plotted randomly. The number should be between 0-100-->
-        <!--parameter name="PlotSomePercentOfEvents" type="float"> @PlotSomePercentOfEvents@ </parameter-->
+        <!--parameter name="PlotSomePercentOfEvents" type="float"> </parameter-->
 
 </processor>
  
