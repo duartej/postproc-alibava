@@ -91,8 +91,8 @@
             title="Signal/Noise" labelX="Signal/Noise" labelY="Number of Entries" />
 
         <histo name="hSNR_vs_Channel" perEachChip="true" type="TH2F"
-            xBin="128" xMin="0" xMax="127" yBin="2000" yMin="-1000" yMax="1000"
-            title="Signal/Noise vs Strip" labelX="Channel" labelY="Signal/Noise (ADC)" />
+            xBin="128" xMin="0" xMax="127" yBin="2000" yMin="-200" yMax="200"
+            title="Signal/Noise vs Strip" labelX="Channel" labelY="Signal/Noise" />
         
         <histo name="hSNR_vs_Time" perEachChip="true" type="TH2F"
             xBin="100" xMin="0" xMax="100" yBin="1000" yMin="-200" yMax="200"
@@ -101,7 +101,6 @@
         <histo name="hSNR_vs_Temperature" perEachChip="true" type="TH2F"
             xBin="1000" xMin="-50" xMax="100" yBin="1000" yMin="-200" yMax="200"
             title="SNR vs Temperature" labelX="Temperature (C)" labelY="Signal/Noise" />
-
     </myAlibavaDataHistogramMaker>
     
     <!--    ExampleAlibavaHistogramMaker -->

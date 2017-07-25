@@ -13,6 +13,7 @@
 
    <execute>
       <processor name="MyAIDAProcessor"/>
+      <processor name="MyAlibavaDataHistogramMaker"/>
       <processor name="MyAlibavaClusterHistogramMaker"/>
       <processor name="PrintEventNumber"/>
    </execute>
@@ -48,6 +49,44 @@
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
         <!--parameter name="Verbosity" type="string" value=""/-->
     </processor>
+    
+    <processor name="MyAlibavaDataHistogramMaker" type="AlibavaDataHistogramMaker">
+        <!--AlibavaDataHistogramMaker takes TrackerData of Alibava data and produces histograms -->
+        <!--The filename where the calibration values stored-->
+        <!--parameter name="CalibrationInputFile" type="string">notset </parameter-->
+        <!--Charge calibration collection name, better not to change-->
+        <!--parameter name="ChargeCalibrationCollectionName" type="string">notset </parameter-->
+        <!--Input raw data collection name-->
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">recodata_cmmd </parameter>
+        <!--The path of XML file where the histograms are defined-->
+        <parameter name="HistoXMLFile" type="string">histoinfo_alibava.xml </parameter>
+        <!--The top tag in HistoXMLFile-->
+        <parameter name="TopTagInXMLFile" type="string"> AlibavaHistoList </parameter>
+        <!--The tag in TopTagInXMLFile. This processor will only consider the histogram 
+        definitions inside this tag. This tag should be inside <TopTagInXMLFile> ... <TopTagInXMLFile/>-->
+        <parameter name="TagToProcess" type="string"> myAlibavaDataHistogramMaker </parameter>
+        <!--parameter name="TagToProcess" type="string"> myExampleAlibavaHistogramMaker </parameter-->
+        <!--Noise collection name, better not to change-->
+        <parameter name="NoiseCollectionName" type="string"> noise_cmmd </parameter>
+        <!--Pedestal collection name, better not to change-->
+        <parameter name="PedestalCollectionName" type="string"> pedestal_cmmd </parameter>
+        <!--The filename where the pedestal and noise values stored-->
+	<parameter name="PedestalInputFile" type="string">@PEDESTAL_INPUT_FILENAME@ </parameter>
+        <!--Choose if pedestal and noise should be plotted-->
+        <parameter name="PlotPedestalAndNoise" type="bool">1 </parameter>
+        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+        <!--parameter name="Verbosity" type="string"> MESSAGE </parameter-->
+        <!--Choose if pedestal and noise should be plotted. If you want to plot 
+             only noise or pedestal set this variable true and only set the noise
+             or pedestal collection name you want to be plotted.-->
+        <!--parameter name="EventsToPlot" type="IntVec"> </parameter-->
+        <!--In case this variable is set, all signals will be multipled by this value.-->
+	<parameter name="MultiplySignalBy" type="float"> @SIGNAL_POLARITY@ </parameter>
+        <!--In case this variable is set (say x), x percent of total events will
+        be plotted randomly. The number should be between 0-100-->
+        <!--parameter name="PlotSomePercentOfEvents" type="float"> @PlotSomePercentOfEvents@ </parameter-->
+
+</processor>
  
     <processor name="MyAlibavaClusterHistogramMaker" type="AlibavaClusterHistogramMaker">
 	<!--AlibavaClusterHistogramMaker takes some type of Alibava data and produces histograms -->
