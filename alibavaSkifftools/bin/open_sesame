@@ -334,6 +334,8 @@ if __name__ == '__main__':
             help=template_args['TELESCOPE_INPUT_FILENAME'])
     st_parser.add_argument('--input-filename',dest="INPUT_FILENAMES",action='store',\
             help=template_args['INPUT_FILENAMES'])
+    st_parser.add_argument('--active-channels',dest="ACTIVE_CHANNELS",action='store',\
+            help=template_args['ACTIVE_CHANNELS'])
     st_parser.add_argument('--run-number',dest="RUN_NUMBER",action='store',\
             help=template_args['RUN_NUMBER'])
     st_parser.add_argument('--root-filename',dest="ROOT_FILENAME",action='store',\

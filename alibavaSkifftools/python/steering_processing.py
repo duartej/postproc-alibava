@@ -27,6 +27,8 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data or slcio for the merger)',
         'ACTIVE_CHIP': 'The beetle chip used, automaticaly defined given the run number and the sensor name',
+        'ACTIVE_CHANNELS': 'The list of the active channels in ranges comma-separated (range edges are'\
+                ' included as actives), for instance, A:B,C:D ...',
         'GEO_ID': 'The geometrical identificator, automaticaly defined given the run number and the sensor name',
         'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data or slcio for the merger)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
@@ -210,6 +212,12 @@ class marlin_step(object):
 
         if argument == 'ROOT_FILENAME':
             return self.step_name
+        elif argument == 'ACTIVE_CHANNELS':
+            # As the chip number is not available until after this function
+            # is called, just put in front of the ranges the @ACTIVE_CHIP@
+            # in order to be substituted afterwards.
+            # Per default, all of them are active
+            return "$@ACTIVE_CHIP@:0-127$"
         elif argument == 'RUN_NUMBER':
             # if RS or beam, the run number can be extracted from
             # the datafile 
@@ -318,6 +326,21 @@ class marlin_step(object):
         for key in kwd.keys():
             if key not in _ARGUMENTS.keys():
                 raise NotImplementedError("The argument '{0}' is not implemented".format(key))
+        
+        # Just formatting an special argument case: ACTIVE_CHANNELS
+        # the user could enter an string like: A:B,C:D,...
+        # where A B C D are the edges of the channel ranges considered
+        # actives (edges included). As the active chip is given by 
+        # the name of the sensor, the template ACTIVE_CHIP is set and
+        # be filled afterwards
+        if kwd.has_key('ACTIVE_CHANNELS'):
+            active_channels = ''
+            for channels in kwd['ACTIVE_CHANNELS'].split(","):
+                ch_min,ch_max = channels.split(":")
+                active_channels+= "$@ACTIVE_CHIP@:{0}-{1}$ ".format(ch_min,ch_max)
+            # Re-write the channels with the proper formatted string
+            kwd['ACTIVE_CHANNELS'] = active_channels
+
         # Setting the values provided by the user
         for arg,value in kwd.iteritems():
             self.set_argument_value(arg,value)
@@ -342,9 +365,11 @@ class marlin_step(object):
             gear_filename = 'gear_file.xml'
             with open(gear_filename,'w') as f:
                 f.write(gear_content)
-            # INCLUDE this info int the gear_file
+            # More setters: 
+            # First the active channels
             self.set_argument_value('ACTIVE_CHIP',self.DUT)
             self.set_argument_value('GEO_ID',geoid)
+            # INCLUDE all this info int the gear_file 
             self.set_argument_value('GEAR_FILE',gear_filename)
         # The telescope case needs also to create the gear file
         if self.argument_values.has_key('TELESCOPE_INPUT_FILENAME') \
@@ -398,7 +423,8 @@ class pedestal_preevaluation(marlin_step):
         super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
 
         self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME','GEAR_FILE')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', \
+                'PEDESTAL_OUTPUT_FILENAME','GEAR_FILE', 'ACTIVE_CHANNELS')
     
     @staticmethod
     def get_description():
@@ -411,7 +437,8 @@ class cmmd_calculation(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','GEAR_FILE')
+                'OUTPUT_FILENAME','MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','GEAR_FILE',\
+                'ACTIVE_CHANNELS')
     
     @staticmethod
     def get_description():
@@ -424,7 +451,7 @@ class pedestal_evaluation(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'04-ped_evaluation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME',\
-                'MAXADC','MINADC','NBINS','GEAR_FILE')
+                'MAXADC','MINADC','NBINS','GEAR_FILE','ACTIVE_CHANNELS')
         # Define a tuned default for the histogram bin and ranges
         self.argument_values['MAXADC']=800.0
         self.argument_values['MINADC']=200.0
@@ -459,7 +486,7 @@ class calibration_extraction(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'02-cal_extraction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'CALIBRATION_OUTPUT_FILENAME',\
-                'GEAR_FILE')
+                'GEAR_FILE','ACTIVE_CHANNELS')
     
     @staticmethod
     def get_description():
@@ -490,7 +517,7 @@ class signal_reconstruction(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'02-signal_reconstruction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','CMMDCUT_MIN','CMMDCUT_MAX','GEAR_FILE',\
-                'OUTPUT_FILENAME')
+                'OUTPUT_FILENAME','ACTIVE_CHANNELS')
         # Define a tuned default for the histogram bin and ranges
         self.argument_values['MAXADC']=1000.0
         self.argument_values['MINADC']=-1000.0
@@ -509,7 +536,8 @@ class alibava_clustering(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME')
+                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME',\
+                'ACTIVE_CHANNELS')
     
     @staticmethod
     def get_description():
@@ -522,7 +550,7 @@ class cluster_histograms(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE')
+                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS')
         # Needed files
         self.auxiliary_files.append('histoinfo_alibava.xml')
     
@@ -542,17 +570,21 @@ class alibava_full_reco(marlin_step):
         # The list of steps with their needed arguments
         self.step_chain = ( 
                 (pedestal_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.pedestal_raw_file},self.update_output),
-                (pedestal_preevaluation(), {'INPUT_FILENAMES':self.last_output_filename},self.update_pedestal),
-                (cmmd_calculation(), { 'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file },self.update_output),
-                (pedestal_evaluation(),{'INPUT_FILENAMES': self.last_output_filename},self.update_pedestal),
+                (pedestal_preevaluation(), {'INPUT_FILENAMES':self.last_output_filename,'ACTIVE_CHANNELS':self.active_channels},self.update_pedestal),
+                (cmmd_calculation(), { 'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file, \
+                        'ACTIVE_CHANNELS': self.active_channels },self.update_output),
+                (pedestal_evaluation(),{'INPUT_FILENAMES': self.last_output_filename, 'ACTIVE_CHANNELS':self.active_channels},self.update_pedestal),
                 (calibration_conversion(), {'ALIBAVA_INPUT_FILENAME': self.calibration_raw_file},self.update_output), 
-                (calibration_extraction(), {'INPUT_FILENAMES': self.last_output_filename},self.update_calibration),
+                (calibration_extraction(), {'INPUT_FILENAMES': self.last_output_filename,'ACTIVE_CHANNELS':self.active_channels},self.update_calibration),
                 (rs_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.beam_raw_file},self.update_output),
-                (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
-                (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file},self.update_output),
+                (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
+                        'ACTIVE_CHANNELS': self.active_channels },self.update_output),
+                (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
+                        'ACTIVE_CHANNELS': self.active_channels },self.update_output),
                 # Note that the cluster_histograms
                 (cluster_histograms(), { 'INPUT_FILENAMES': self.last_output_filename, \
-                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file}, self.dummy )
+                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file,
+                        'ACTIVE_CHANNELS': self.active_channels}, self.dummy )
                 )
 
     # Some datamembers used in the step_chain are not going to be 
@@ -577,6 +609,9 @@ class alibava_full_reco(marlin_step):
     
     def calibration_file(self):
         return self._calibration_file
+
+    def active_channels(self):
+        return self._active_channels
     
     # Updaters
     def update_output(self,step_inst):
@@ -632,6 +667,9 @@ class alibava_full_reco(marlin_step):
         self._pedestal_raw_file   = kwd['PEDESTAL_INPUT_FILENAME']
         self._calibration_raw_file= kwd['CALIBRATION_INPUT_FILENAME']
         self._beam_raw_file       = kwd['ALIBAVA_INPUT_FILENAME']
+
+        # The active channels
+        self._active_channels = kwd['ACTIVE_CHANNELS']
         
         # remove all the lcio files except the last one...
         toremove = set([])
