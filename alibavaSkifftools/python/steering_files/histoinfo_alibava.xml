@@ -125,7 +125,7 @@
         <histo name="hTimeVsHitAmplitude" perEachChip="true" type="TH2F"
             xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="500"
             title="TDC time vs. Hit Amplitude" labelX="TDC time [ns]" labelY="Signal [ADCs]" />
-
+        
         <!-- Do not change the name -->
         <histo name="hCalibrationChargeValues" perEachChip="true" type="TH2F"
             xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="100"
@@ -134,7 +134,19 @@
         <histo name="hTimeVsSNR" perEachChip="true" type="TH2F"
             xBin="101" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="100"
             title="TDC time vs. Cluster Signal-to-Noise" labelY="cluster SNR" labelX="TDC time [ns]" />
+        
+        <histo name="hSNRVsHitAmplitude" perEachChip="true" type="TH2F"
+            xBin="1000" xMin="0" xMax="100" yBin="1000" yMin="0" yMax="500"
+            title="Cluster Signal-to-Noise vs. Hit Amplitude" labelX="cluster SNR" labelY="Signal [ADCs]" />
 
+        <histo name="hEtaVsSNR" perEachChip="true" type="TH2F"
+            xBin="100" xMin="-0.05" xMax="1.05" yBin="1000" yMin="0" yMax="100"
+            title="Eta (seed) vs. Cluster Signal-to-Noise" labelY="cluster SNR" labelX="#eta_{seed}" />
+        
+        <histo name="hEtaFromClusterVsSNR" perEachChip="true" type="TH2F"
+            xBin="100" xMin="-0.05" xMax="1.05" yBin="1000" yMin="0" yMax="100"
+            title="Eta (cluster) vs. Cluster Signal-to-Noise" labelY="cluster SNR" labelX="#eta_{cluster}" />
+        
         <histo name="hTimeVsSeed" perEachChip="true" type="TH2F"
             xBin="101" xMin="0" xMax="100" yBin="128" yMin="-0.5" yMax="127.5"
             title="TDC time vs. Seed channel" labelY="Seed Ch. number" labelX="TDC time [ns]" />
@@ -149,19 +161,19 @@
 
         <histo name="hEta_vs_CoG" perEachChip="true" type="TH2F"
             xBin="128" xMin="-0.5" xMax="127.5" yBin="100" yMin="-0.05" yMax="1.05"
-            title="Eta vs Center of Gravity of Cluster" labelX="Center of Gravity (channelNum)" labelY="#eta" />
+            title="Eta (seed) vs Center of Gravity of Cluster" labelX="Center of Gravity (channelNum)" labelY="#eta_{seed}" />
 
         <histo name="hEta_vs_UCPFA" perEachChip="true" type="TH2F"
             xBin="128" xMin="-0.5" xMax="127.5" yBin="100" yMin="-0.05" yMax="1.05"
-            title="Eta vs Center Position Cluster (UCPFA)" labelX="Center Position Cluster (channelNum)" labelY="#eta" />
+            title="Eta (seed) vs Center Position Cluster (UCPFA)" labelX="Center Position Cluster (channelNum)" labelY="#eta_{seed}" />
         
         <histo name="hEta_vs_ClusterSize" perEachChip="true" type="TH2F"
             xBin="20" xMin="-0.5" xMax="19.5" yBin="100" yMin="-0.05" yMax="1.05"
-            title="Eta vs Cluster size" labelX="Cluster size" labelY="#eta" />
+            title="Eta (seed) vs Cluster size" labelX="Cluster size" labelY="#eta_{seed}" />
 
         <histo name="hEtaFromCluster_vs_ClusterSize" perEachChip="true" type="TH2F"
             xBin="20" xMin="-0.5" xMax="19.5" yBin="100" yMin="-0.05" yMax="1.05"
-            title="Eta vs Cluster size" labelX="Cluster size" labelY="#eta" />
+            title="Eta (cluster) vs Cluster size" labelX="Cluster size" labelY="#eta_{cluster}" />
 
         <histo name="hClusterSize_vs_CoG" perEachChip="true" type="TH2F"
             xBin="128" xMin="-0.5" xMax="127.5" yBin="20" yMin="-0.5" yMax="19.5"
