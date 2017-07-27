@@ -39,7 +39,7 @@
     <histo name="seedSignal"        type="H1D" xBin="500" xMin="0"        xMax="300"/>
     <histo name="seedSNR"           type="H1D" xBin="150" xMin="0"        xMax="100"/>
     <histo name="clusterSNR"        type="H1D" xBin="200" xMin="0"        xMax="150"/>
-    <histo name="eventMultiplicity" type="H1D" xBin="60"  xMin="0"        xMax="60"/>
+    <histo name="eventMultiplicity" type="H1D" xBin="120" xMin="-0.5"     xMax="119.5"/>
 
     <!-- EUTelCalculateEtaProcessor -->
     <!-- 
