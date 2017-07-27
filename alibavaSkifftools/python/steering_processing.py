@@ -300,7 +300,7 @@ class marlin_step(object):
         elif argument == 'SENSORID_STARTS':
             return 5
         elif argument == 'MAX_FIRING_FREQ_PIXEL':
-            return 0.001
+            return 0.01
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
