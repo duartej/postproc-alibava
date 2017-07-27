@@ -39,7 +39,7 @@
       <!-- The criterium to considered a noisy channel when automasking-->
       <parameter name="AutoMaskingCriterium">@CRITERIUM_AUTOMASKING@</parameter>
       <!--To choose if processor should skip masked events. Set the value to 0 for false, to 1 for true -->
-      <parameter name="SkipMaskedEvents"> 0 </parameter>
+      <parameter name="SkipMaskedEvents"> 1 </parameter>
    </global>
 
    <processor name="MyAIDAProcessor" type="AIDAProcessor">
@@ -91,6 +91,10 @@
         <parameter name="MaxADCsCountsErrorForHistograms" type="float" value="@MAXCMMDERR@"/>
         <!--The min ADCs counts for the common mode error which define the ranges of the histograms-->
         <parameter name="MinADCsCountsErrorForHistograms" type="float" value="@MINCMMDERR@"/>
+        <!--Input noise collection name, in case it is activated the auto-masking-->
+        <parameter name="NoiseCollectionName" type="string" value="noise_cmmd"/>
+        <!--The filename where the pedestal and noise values stored-->
+        <parameter name="NoiseInputFile" type="string" value="@PEDESTAL_INPUT_FILENAME@"/>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
         <!--parameter name="Verbosity" type="string" value=""/-->
     </processor>
