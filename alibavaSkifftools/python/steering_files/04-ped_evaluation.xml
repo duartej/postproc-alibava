@@ -30,7 +30,7 @@
             no space between two $ character-->  
       <parameter name="ChannelsToBeUsed">@ACTIVE_CHANNELS@</parameter>
       <!--To choose if processor should skip masked events. Set the value to 0 for false, to 1 for true -->
-      <parameter name="SkipMaskedEvents"> 0 </parameter>
+      <parameter name="SkipMaskedEvents"> 1 </parameter>
    </global>
 
    <processor name="MyAIDAProcessor" type="AIDAProcessor">
