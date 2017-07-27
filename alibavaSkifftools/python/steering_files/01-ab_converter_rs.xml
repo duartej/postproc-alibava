@@ -77,9 +77,9 @@
   <!--AlibavaTimeCutProcessor masks the events if their TDC time value is 
        not in the range specified by TimeCutMin and TimeCutMax -->
   <!--The maximum tdc time that is acceptable to use that Event-->
-  <parameter name="TimeCutMax" type="float">@TIMECUT_MIN@ </parameter>
+  <parameter name="TimeCutMax" type="float">@TIMECUT_MAX@ </parameter>
   <!--The minimum tdc time that is acceptable to use that Event-->
-  <parameter name="TimeCutMin" type="float"> @TIMECUT_MAX@ </parameter>
+  <parameter name="TimeCutMin" type="float"> @TIMECUT_MIN@ </parameter>
   <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
   <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
  </processor>
