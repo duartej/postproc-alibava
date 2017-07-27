@@ -29,6 +29,10 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'ACTIVE_CHIP': 'The beetle chip used, automaticaly defined given the run number and the sensor name',
         'ACTIVE_CHANNELS': 'The list of the active channels in ranges comma-separated (range edges are'\
                 ' included as actives), for instance, A:B,C:D ...',
+        'ENABLE_AUTOMASKING': 'This option activates the noisy channel auto masking, by masking'\
+                ' those channels with a |noise_ch - <noise>| > [C] sigma_noise. See also '\
+                '"CRITERIUM_AUTOMASKING" option',
+        'CRITERIUM_AUTOMASKING': 'The [C]-value to be used when "ENABLE_AUTOMASKING" is ON [Default: 2.5]',
         'GEO_ID': 'The geometrical identificator, automaticaly defined given the run number and the sensor name',
         'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data or slcio for the merger)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
@@ -218,6 +222,10 @@ class marlin_step(object):
             # in order to be substituted afterwards.
             # Per default, all of them are active
             return "$@ACTIVE_CHIP@:0-127$"
+        elif argument == 'ENABLE_AUTOMASKING':
+            return 1
+        elif argument == 'CRITERIUM_AUTOMASKING':
+            return 2.5
         elif argument == 'RUN_NUMBER':
             # if RS or beam, the run number can be extracted from
             # the datafile 
@@ -517,7 +525,7 @@ class signal_reconstruction(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'02-signal_reconstruction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'MAXADC','MINADC','NBINS','MAXCMMDERR','MINCMMDERR','CMMDCUT_MIN','CMMDCUT_MAX','GEAR_FILE',\
-                'OUTPUT_FILENAME','ACTIVE_CHANNELS')
+                'OUTPUT_FILENAME','ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
         # Define a tuned default for the histogram bin and ranges
         self.argument_values['MAXADC']=1000.0
         self.argument_values['MINADC']=-1000.0
@@ -537,7 +545,7 @@ class alibava_clustering(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME',\
-                'ACTIVE_CHANNELS')
+                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
     
     @staticmethod
     def get_description():
@@ -550,7 +558,8 @@ class cluster_histograms(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS')
+                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS',\
+                'ENABLE_AUTOMASKING','CRITERIUM_AUTOMASKING')
         # Needed files
         self.auxiliary_files.append('histoinfo_alibava.xml')
     

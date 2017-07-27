@@ -31,6 +31,10 @@
             Note that the numbers should be in ascending order and there should be 
             no space between two $ character-->  
       <parameter name="ChannelsToBeUsed">@ACTIVE_CHANNELS@</parameter>
+      <!-- Whether or not to activate the noisy channel automasking-->
+      <parameter name="AutoMaskingActive">@ENABLE_AUTOMASKING@</parameter>
+      <!-- The criterium to considered a noisy channel when automasking-->
+      <parameter name="AutoMaskingCriterium">@CRITERIUM_AUTOMASKING@</parameter>
       <!--To choose if processor should skip masked events. Set the value to 0 for false, to 1 for true -->
       <parameter name="SkipMaskedEvents"> 0 </parameter>
    </global>

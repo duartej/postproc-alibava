@@ -336,6 +336,10 @@ if __name__ == '__main__':
             help=template_args['INPUT_FILENAMES'])
     st_parser.add_argument('--active-channels',dest="ACTIVE_CHANNELS",action='store',\
             help=template_args['ACTIVE_CHANNELS'])
+    st_parser.add_argument('--enable-automasking',dest="ENABLE_AUTOMASKING",action='store',\
+            help=template_args['ENABLE_AUTOMASKING'])
+    st_parser.add_argument('--criterium-automasking',dest="CRITERIUM_AUTOMASKING",action='store',\
+            help=template_args['CRITERIUM_AUTOMASKING'])
     st_parser.add_argument('--run-number',dest="RUN_NUMBER",action='store',\
             help=template_args['RUN_NUMBER'])
     st_parser.add_argument('--root-filename',dest="ROOT_FILENAME",action='store',\
