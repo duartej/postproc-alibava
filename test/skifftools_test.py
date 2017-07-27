@@ -46,8 +46,9 @@ class TestProcessingModule(unittest.TestCase):
         import re
         for _step in steering_processing.available_steps:
             a = _step()
-            if isinstance(a,steering_processing.alibava_full_reco):
-                # No sense for the metaclass alibava full reco
+            if isinstance(a,steering_processing.alibava_full_reco) \
+                or isinstance(a,steering_processing.telescope_full_reco):
+                # No sense for the metaclass alibava/telescope full reco
                 continue
             # Extract the arguments to be substituted present in the templates
             # Note we need to split first potential double arguments 

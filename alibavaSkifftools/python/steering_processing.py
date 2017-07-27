@@ -640,7 +640,7 @@ class alibava_full_reco(marlin_step):
 
     @staticmethod
     def get_description():
-        return 'Metaclass to perform the whole bunch of steps to process the ALiBaVa data'
+        return '\033[1;32mMetaclass\033[1;m to perform the whole bunch of steps to process the ALiBaVa data'
 
     def publish_steering_file(self,**kwd):
         """Creates every steering file needed for reconstruct
@@ -777,6 +777,119 @@ class telescope_filter(marlin_step):
     def get_description():
         return 'Filters the telescope clusters (very slow process!)'  
 
+# Metaclass to deal with the full reconstruction for ALIBAVA
+class telescope_full_reco(marlin_step):
+    """Class to gather a set of marlin_step instances to run serialized, 
+    where the inputs and outputs are related between them. 
+    The 'step_chain' data-member (A,B,C) is a 3-tuple where A is the 
+    marlin_step instance, B is a dictionary with the arguments and values
+    to be used by the instance, and C is the needed functor to be called 
+    when use the 3-tuple (at the 'publish_steering_file' method)
+    
+    """
+    def __init__(self):
+        import os
+        super(telescope_full_reco,self).__init__('telescope_full_reco')
+        
+        # -- Dummy 
+        self.required_arguments = () 
+
+        # The list of steps with their needed arguments
+        self.step_chain = ( 
+                (telescope_conversion(), { 'TELESCOPE_INPUT_FILENAME': self.raw_file},self.update_output),
+                (telescope_clustering(), {'INPUT_FILENAMES':self.last_output_filename},self.update_output),
+                (telescope_filter(), {'INPUT_FILENAMES': self.last_output_filename},self.update_output)
+                )
+
+    # Some datamembers used in the step_chain are not going to be 
+    # populated until the call to the step is performed, using them
+    # as properties. Note the use of the updaters (like the setters of
+    # a property) methods (defined below, are the mechanism to update
+    # this elements)
+    def raw_file(self):
+        return self._raw_file
+
+    def last_output_filename(self):
+        return self._last_output_filename
+    
+    # Updaters
+    def update_output(self,step_inst):
+        """Update the last_output_filename data member using the value
+        from the last step
+        """
+        self._last_output_filename = step_inst.argument_values['OUTPUT_FILENAME']
+
+    def dummy(self,step_inst):
+        pass
+
+    @staticmethod
+    def get_description():
+        return '\033[1;32mMetaclass\033[1;m to perform the whole bunch of steps to process the Telescope data'
+
+    def publish_steering_file(self,**kwd):
+        """Creates every steering file needed for reconstruct
+        the TELESCOPE data using only the RAW telescope data filenames. 
+        Note that the other values should be change manually later in 
+        the created steering files
+
+        Parameters
+        ----------
+        TELESCOPE_INPUT_FILENAME: str
+            the name of the raw alibava data beam file
+
+        Raises
+        ------
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        import time
+        import datetime
+        import os
+        import stat
+    
+        # Check for inconsistencies
+        for key in ['TELESCOPE_INPUT_FILENAME']:
+            if key not in kwd.keys():
+                raise NotImplementedError("Relevant argument '{0}' not present!".format(key))
+        # The input files, initialization
+        self._raw_file       = kwd['TELESCOPE_INPUT_FILENAME']
+
+        # remove all the lcio files except the last one...
+        toremove = set([])
+        # The bash file to concatenate all the process
+        thebash = '#!/bin/bash\n\n'
+        ts = time.time()
+        st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+        thebash += '# Automaticaly created by open_sesame script at {0}\n'.format(st)
+        thebash += '# TELESCOPE data chain reconstruction\n\n'.format(st)
+        # Setting the values provided by the user
+        for (step,args,action) in self.step_chain:
+            # Redefine the args dict, activating the values of the dict
+            newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
+            # Create the steering file for this step
+            step.publish_steering_file(**newargs)
+            # The particular action defined: it will update file names...
+            # See the properties and updaters defined above
+            action(step)
+            thebash += 'echo "\033[1;34mRUNNING\033[1;m: \033[1;29mMarlin {0}\033[1;m"\n'.format(step.steering_file)
+            thebash += 'time Marlin {0}\n'.format(step.steering_file)
+            # remove the intermediate created files
+            toremove.add(self.last_output_filename())
+        thebash += "\nrm "
+        for i in filter(lambda x: x not in [self.last_output_filename()],toremove):
+            thebash += i+" "
+        thebash+='\n\necho "TELESCOPE marlin data reconstruction chain DONE"\n'
+        thebash+='\n\necho "\033[1;31mSOME STEPS ARE VERY DEMANDING, CONSIDER TO SEND THEM THE CLUSTER\033[1;m"\n'
+        bashname = "telescope_full_reconstruction.sh"
+        print "Created '{0}' script".format(bashname)
+        # create the file
+        with open(bashname,"w") as f:
+            f.write(thebash)
+        # get the mode
+        bash_st = os.stat(bashname)
+        os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
 # Merge telescope and alibava data
 class merger(marlin_step):
     def __init__(self):
@@ -825,6 +938,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         alibava_full_reco,
         # Telescope related
         telescope_conversion,telescope_clustering,telescope_filter,
+        telescope_full_reco,
         # Join both 
         merger, hitmaker
         )
