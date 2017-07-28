@@ -422,6 +422,7 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
         non_signal_map.emplace(i,nullsignal[i]);
     }
     unsigned int last_vec_size = nullsignal.size();
+    // FIXME:: NEVER ENTERING HERE -> TO BE CHANGED TO a do-while
     while( non_signal_map.size() != last_vec_size )
     {
         for(auto it = non_signal_map.cbegin(); it != non_signal_map.cend(); /* no increment*/)
