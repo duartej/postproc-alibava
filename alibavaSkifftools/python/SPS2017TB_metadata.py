@@ -296,9 +296,9 @@ class specs_sensor():
 # Instances
 mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
 ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
-lgad  = specs_sensor(5.12,5.12,0.160,0.0,0.3)
-ilgad = specs_sensor(7.2,7.2,0.160,0.0,0.3,1.0)
-ref   = specs_sensor(10.24,10.24,0.08,0.0,0.3)
+lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
+ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,1.0)
+ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3)
 # Maps the name of the sensor with the proper specs_sensor instance
 sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
         'iLGAD8533W1K05T_0_b2': ilgad,\
@@ -459,8 +459,8 @@ gear_content_template = """
 # 0: dut_name
 # 1: chip number
 # 2: size in X-direction (sensitive direction)
-# 3: pitch in X-direction (sensitive direction)
-# 4: size in Y-direction
+# 3: size in Y-direction
+# 4: pitch in X-direction (sensitive direction)
 # 5: pitch in Y-direction
 # 6: spatial resolution (just the binary resolution)
 # 7: thickness
@@ -688,7 +688,7 @@ def get_gear_content(run_number,sensor_name=""):
         specs=sensor_name_spec_map[sensor_name]
         # Fill the need input of the template for the dut layer
         filler_dut = (sensor_name,get_beetle(sensor_name),\
-                specs.sizeX,specs.pitchX,specs.sizeY,specs.pitchY,specs.resolution,\
+                specs.sizeX,specs.sizeY,specs.pitchX,specs.pitchY,specs.resolution,\
                 specs.thickness)
         dut_layer = gear_dut_template.format(*filler_dut)
         # And for the Gear file
