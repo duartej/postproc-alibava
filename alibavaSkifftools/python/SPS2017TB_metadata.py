@@ -286,7 +286,11 @@ def _binary_resolution(pitch):
 class specs_sensor():
     def __init__(self,sizeX,sizeY,pitchX,pitchY,thickness,polarity=-1.0):
         # All units are mm
-        self.sizeX = sizeX
+        # Note that the size is standarize to the 128 sensor 
+        # strip length in order to keep the same indices along 
+        # the processors
+        force_strips = 128
+        self.sizeX = force_strip*pitchX #sizeX
         self.sizeY = sizeY
         self.pitchX = pitchX
         self.pitchY = pitchY
