@@ -290,7 +290,7 @@ class specs_sensor():
         # strip length in order to keep the same indices along 
         # the processors
         force_strips = 128
-        self.sizeX = force_strip*pitchX #sizeX
+        self.sizeX = force_strips*pitchX #sizeX
         self.sizeY = sizeY
         self.pitchX = pitchX
         self.pitchY = pitchY
