@@ -474,7 +474,7 @@ gear_dut_template="""<!--{0} - chip {1} -->
                           sizeX="{2}"           sizeY="{3}"           thickness="{7}"
                           radLength="93.660734"
                           />
-          <sensitive      ID="6"
+          <sensitive      ID="5"
                           positionX="0.00"        positionY="0.00"      positionZ="278.00" 
                           sizeX="{2}"             sizeY="{3}"           thickness="0.230"
                           npixelX="128"           npixelY="1" 
