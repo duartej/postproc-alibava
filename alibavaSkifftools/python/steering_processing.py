@@ -677,8 +677,12 @@ class alibava_full_reco(marlin_step):
         self._calibration_raw_file= kwd['CALIBRATION_INPUT_FILENAME']
         self._beam_raw_file       = kwd['ALIBAVA_INPUT_FILENAME']
 
-        # The active channels
-        self._active_channels = kwd['ACTIVE_CHANNELS']
+        # The active channels, if any
+        try:
+            self._active_channels = kwd['ACTIVE_CHANNELS']
+        except KeyError:
+            # use all if no explicitely put by the user
+            self._active_channels = '0:127'
         
         # remove all the lcio files except the last one...
         toremove = set([])
