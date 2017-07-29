@@ -23,7 +23,7 @@
    <global>
        <parameter name="LCIOInputFiles">@INPUT_FILENAMES@</parameter>
        <!--parameter name="MaxRecordNumber" value="10000" /-->	
-       <parameter name="GearXMLFile">@GEAR_FILE@</parameter>
+       <parameter name="GearXMLFile">@GEAR_FILE@.xml</parameter>
        <parameter name="Verbosity" options="DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT">WARNING0</parameter>
        <!--parameter name="MaxRecordNumber" value="1000"/-->
        <!--To set of channels to be used, ex.The format should be like 

@@ -245,7 +245,7 @@ class marlin_step(object):
         elif argument == 'GEAR_FILE':
             # First copy the file to the cwd
             #self.auxiliary_files.append('dummy_gear.xml')
-            return 'gear_file.xml'
+            return 'gear_file'
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
         elif argument == 'TELESCOPE_INPUT_FILENAME':
@@ -370,7 +370,7 @@ class marlin_step(object):
             gear_content = get_gear_content(self.argument_values['RUN_NUMBER'],sensor_name)
             geoid = get_geo_id(self.argument_values['RUN_NUMBER'],sensor_name)
             # XXX -- Be CAREFUL WITH this file name (to be centralized)
-            gear_filename = 'gear_file.xml'
+            gear_filename = 'gear_file'
             with open(gear_filename,'w') as f:
                 f.write(gear_content)
             # More setters: 
