@@ -371,7 +371,7 @@ class marlin_step(object):
             geoid = get_geo_id(self.argument_values['RUN_NUMBER'],sensor_name)
             # XXX -- Be CAREFUL WITH this file name (to be centralized)
             gear_filename = 'gear_file'
-            with open(gear_filename,'w') as f:
+            with open(gear_filename+".xml",'w') as f:
                 f.write(gear_content)
             # More setters: 
             # First the active channels
