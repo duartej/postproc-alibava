@@ -57,6 +57,10 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'SIGNAL_POLARITY': 'The polarity of the signal (-1 for negative signals)',
         'SENSORID_STARTS': 'The sensor ID for the alibava data which will be stored as SENSORID_STARTS+chip_number',
         'MAX_FIRING_FREQ_PIXEL': 'The maximum allowed firing frequency to consider a pixel as hot',
+        'DUT_PLANES': 'The list of planes which need to find the missing coordinate',
+        'MAX_RESIDUAL': 'The Maximum distance to determine if a hit is correlated [mm]',
+        'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
+        'REF_PLANE_RIGHT': 'The telescope planes nearest to the DUT from the right, to extrapolate the hit',
         }
 
 # Marlin step class definition
@@ -301,6 +305,14 @@ class marlin_step(object):
             return 5
         elif argument == 'MAX_FIRING_FREQ_PIXEL':
             return 0.01
+        elif argument == 'DUT_PLANES':
+            return 5
+        elif argument == 'MAX_RESIDUAL':
+            return 0.005
+        elif argument == 'REF_PLANE_LEFT':
+            return 1
+        elif argument == 'REF_PLANE_RIGHT':
+            return 2
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -933,6 +945,25 @@ class hitmaker(marlin_step):
     def get_description():
         return 'Hit global position and pre-alignment'  
 
+class simple_coordinate_finder_DUT(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(simple_coordinate_finder_DUT,self).__init__('simple_coordinate_finder_DUT')
+
+        self.steering_file_template = os.path.join(get_template_path(),'112-simple_coordinate_finder_DUT.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
+                 'OUTPUT_FILENAME','GEAR_FILE', 'DUT_PLANES', 'MAX_RESIDUAL',
+                 'REF_PLANE_LEFT','REF_PLANE_RIGHT')
+        # NOTE: Defined a tuned default for the gear file, provided by the hitmaker
+        # steps (in the PreAligner, see 11-hitmaker.xml). 
+        # Copy the histogram file
+        self.auxiliary_files.append('histoinfo_alibava.xml')
+    
+    @staticmethod
+    def get_description():
+        return 'Simple coordinate finder for the DUTs: a line extrapolation from Telescope planes'  
+
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
@@ -944,7 +975,8 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         telescope_conversion,telescope_clustering,telescope_filter,
         telescope_full_reco,
         # Join both 
-        merger, hitmaker
+        merger, hitmaker, 
+        simple_coordinate_finder_DUT
         )
 # ==================================================================================================
 
