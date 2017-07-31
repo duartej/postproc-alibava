@@ -58,6 +58,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'SIGNAL_POLARITY': 'The polarity of the signal (-1 for negative signals)',
         'SENSORID_STARTS': 'The sensor ID for the alibava data which will be stored as SENSORID_STARTS+chip_number',
         'MAX_FIRING_FREQ_PIXEL': 'The maximum allowed firing frequency to consider a pixel as hot',
+        'PREALIGN_DUMP_GEAR': 'Whether to use or not a gear file to store the alignment constants, or use a LCIO file',
         'DUT_PLANES': 'The list of planes which need to find the missing coordinate',
         'MAX_RESIDUAL': 'The Maximum distance to determine if a hit is correlated [mm]',
         'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
@@ -316,6 +317,8 @@ class marlin_step(object):
             return 1
         elif argument == 'REF_PLANE_RIGHT':
             return 2
+        elif argument == 'PREALIGN_DUMP_GEAR':
+            return 'false'
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -363,6 +366,12 @@ class marlin_step(object):
                 active_channels+= "$@ACTIVE_CHIP@:{0}-{1}$ ".format(ch_min,ch_max)
             # Re-write the channels with the proper formatted string
             kwd['ACTIVE_CHANNELS'] = active_channels
+        # Need extra formating as well here
+        if kwd.has_key('PREALIGN_DUMP_GEAR'):
+            if kwd['PREALIGN_DUMP_GEAR'] == True:
+                kwd['PREALIGN_DUMP_GEAR'] ='true'
+            else:
+                kwd['PREALIGN_DUMP_GEAR'] ='false'
 
         # Setting the values provided by the user
         for arg,value in kwd.iteritems():
@@ -939,16 +948,25 @@ class hitmaker(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'11-hitmaker.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
-                 'OUTPUT_FILENAME','GEAR_FILE')
-        # Define a tuned default for the gear file, describes
-        # telescope with no DUTs at all
-        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
-        # And copy the gear file to the relevant place
-        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
+                 'OUTPUT_FILENAME','GEAR_FILE','CURRENT_WORKING_DIR')
     
     @staticmethod
     def get_description():
-        return 'Hit global position and pre-alignment'  
+        return 'Hit local position'  
+
+class prealignment(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(prealignment,self).__init__('prealignment')
+
+        self.steering_file_template = os.path.join(get_template_path(),'12-prealignment.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
+                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR','CURRENT_WORKING_DIR')
+    
+    @staticmethod
+    def get_description():
+        return 'Pre-alignment using the distance of the hits to the first telescope plane '  
 
 class simple_coordinate_finder_DUT(marlin_step):
     def __init__(self):
@@ -980,7 +998,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         telescope_conversion,telescope_clustering,telescope_filter,
         telescope_full_reco,
         # Join both 
-        merger, hitmaker, 
+        merger, hitmaker,prealignment,
         simple_coordinate_finder_DUT
         )
 # ==================================================================================================

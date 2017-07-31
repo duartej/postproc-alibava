@@ -378,6 +378,8 @@ if __name__ == '__main__':
             help=template_args['SIGNAL_POLARITY'])
     st_parser.add_argument('--sensor-id-starts-at',dest="SENSORID_STARTS",action='store',\
             help=template_args['SENSORID_STARTS'])
+    st_parser.add_argument('--prealignment-dump-gear',dest='PREALIGN_DUMP_GEAR',action='store_true',\
+            help=template_args['PREALIGN_DUMP_GEAR'])
     st_parser.add_argument('-p','--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
