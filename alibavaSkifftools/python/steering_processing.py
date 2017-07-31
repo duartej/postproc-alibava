@@ -24,6 +24,7 @@ def get_template_path():
 # Available arguments present in the steering file templates.
 # These arguments are dynamically changed on run time
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
+        'CURRENT_WORKING_DIR': 'Working directory',
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data or slcio for the merger)',
         'ACTIVE_CHIP': 'The beetle chip used, automaticaly defined given the run number and the sensor name',
@@ -220,6 +221,8 @@ class marlin_step(object):
 
         if argument == 'ROOT_FILENAME':
             return self.step_name
+        elif argument == 'CURRENT_WORKING_DIR':
+            return os.getcwd()
         elif argument == 'ACTIVE_CHANNELS':
             # As the chip number is not available until after this function
             # is called, just put in front of the ranges the @ACTIVE_CHIP@
@@ -571,7 +574,7 @@ class cluster_histograms(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS',\
-                'ENABLE_AUTOMASKING','CRITERIUM_AUTOMASKING')
+                'ENABLE_AUTOMASKING','CRITERIUM_AUTOMASKING','CURRENT_WORKING_DIR')
         # Needed files
         self.auxiliary_files.append('histoinfo_alibava.xml')
     
@@ -762,7 +765,8 @@ class telescope_clustering(marlin_step):
         super(telescope_clustering,self).__init__('telescope_clustering')
 
         self.steering_file_template = os.path.join(get_template_path(),'02-telescope_clustering.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
+                'OUTPUT_FILENAME','GEAR_FILE','CURRENT_WORKING_DIR')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
         #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
@@ -781,7 +785,8 @@ class telescope_filter(marlin_step):
         super(telescope_filter,self).__init__('telescope_filter')
 
         self.steering_file_template = os.path.join(get_template_path(),'03-telescope_filter.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'OUTPUT_FILENAME','GEAR_FILE')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
+                'OUTPUT_FILENAME','GEAR_FILE','CURRENT_WORKING_DIR')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
         #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
@@ -954,7 +959,7 @@ class simple_coordinate_finder_DUT(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'112-simple_coordinate_finder_DUT.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
                  'OUTPUT_FILENAME','GEAR_FILE', 'DUT_PLANES', 'MAX_RESIDUAL',
-                 'REF_PLANE_LEFT','REF_PLANE_RIGHT')
+                 'REF_PLANE_LEFT','REF_PLANE_RIGHT','CURRENT_WORKING_DIR')
         # NOTE: Defined a tuned default for the gear file, provided by the hitmaker
         # steps (in the PreAligner, see 11-hitmaker.xml). 
         # Copy the histogram file

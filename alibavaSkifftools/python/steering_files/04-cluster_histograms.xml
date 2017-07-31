@@ -63,7 +63,7 @@
         <!--Input raw data collection name-->
         <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">recodata_cmmd </parameter>
         <!--The path of XML file where the histograms are defined-->
-        <parameter name="HistoXMLFile" type="string">histoinfo_alibava.xml </parameter>
+        <parameter name="HistoXMLFile" type="string">@CURRENT_WORKING_DIR@/histoinfo_alibava.xml </parameter>
         <!--The top tag in HistoXMLFile-->
         <parameter name="TopTagInXMLFile" type="string"> AlibavaHistoList </parameter>
         <!--The tag in TopTagInXMLFile. This processor will only consider the histogram 
@@ -97,7 +97,7 @@
 	<!--Input raw data collection name-->
 	<parameter name="InputCollectionName" type="string" lcioInType="TrackerData">alibava_clusters</parameter>
 	<!--The path of XML file where the histograms are defined-->
-	<parameter name="HistoXMLFile" type="string"> histoinfo_alibava.xml </parameter>
+	<parameter name="HistoXMLFile" type="string"> @CURRENT_WORKING_DIR@/histoinfo_alibava.xml </parameter>
 	<!--The top tag in HistoXMLFile-->
 	<parameter name="TopTagInXMLFile" type="string">AlibavaHistoList </parameter>
         <!--The tag in TopTagInXMLFile. This processor will only consider the histogram definitions 

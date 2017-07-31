@@ -168,7 +168,7 @@
        <!--The list of cluster NxN to be filled.For example 3 means filling the 3x3 histogram spectrum-->
        <!--parameter name="ClusterNxN" type="IntVec"> 3 5 </parameter-->  
        <!--This is the name of the histogram information file-->
-       <parameter name="HistoInfoFileName" type="string" value="histoinfo_telescope.xml"/>
+       <parameter name="HistoInfoFileName" type="string" value="@CURRENT_WORKING_DIR@/histoinfo_telescope.xml"/>
        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
        <!--parameter name="Verbosity" type="string" value=""/-->
    </processor>

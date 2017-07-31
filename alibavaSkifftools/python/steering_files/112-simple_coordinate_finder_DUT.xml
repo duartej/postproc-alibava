@@ -95,7 +95,7 @@
       <!--The list of detector IDs-->
       <parameter name="DetectorIDs" type="IntVec"> 0 1 2 3 4 5 </parameter>
       <!--The path of XML file where the histograms are defined-->
-      <parameter name="HistoXMLFile" type="string"> histoinfo_alibava.xml </parameter>
+      <parameter name="HistoXMLFile" type="string"> @CURRENT_WORKING_DIR@/histoinfo_alibava.xml </parameter>
       <!--Input raw data collection name-->
       <parameter name="InputCollectionName" type="string" lcioInType="TrackerHit"> hits_global </parameter>
       <!--The tag in TopTagInXMLFile. This processor will only consider 
