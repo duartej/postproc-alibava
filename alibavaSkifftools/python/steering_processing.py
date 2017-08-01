@@ -974,7 +974,7 @@ class simple_coordinate_finder_DUT(marlin_step):
         import shutil
         super(simple_coordinate_finder_DUT,self).__init__('simple_coordinate_finder_DUT')
 
-        self.steering_file_template = os.path.join(get_template_path(),'112-simple_coordinate_finder_DUT.xml')
+        self.steering_file_template = os.path.join(get_template_path(),'121-simple_coordinate_finder_DUT.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
                  'OUTPUT_FILENAME','GEAR_FILE', 'DUT_PLANES', 'MAX_RESIDUAL',
                  'REF_PLANE_LEFT','REF_PLANE_RIGHT','CURRENT_WORKING_DIR')
