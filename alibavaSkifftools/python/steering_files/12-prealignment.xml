@@ -59,7 +59,7 @@
     <!--Dump alignment into GEAR file instead of prealignment database-->
     <parameter name="DumpGEAR" type="bool"> @PREALIGN_DUMP_GEAR@ </parameter>
     <!--Name of LCIO db file where alignment constantds will be stored-->
-    <parameter name="AlignmentConstantLCIOFile" type="string">@CURRENT_WORKING_DIR@/@RUN_NUMBER@_alignment.slcio </parameter>
+    <parameter name="AlignmentConstantLCIOFile" type="string">@RUN_NUMBER@_alignment.slcio </parameter>
     <!--Suffix for the new GEAR file, set to empty string (this is not default!) to overwrite old GEAR file-->
     <parameter name="NewGEARSuffix" type="string">_@RUN_NUMBER@_pre </parameter>
     <!--SensorID of fixed plane-->
