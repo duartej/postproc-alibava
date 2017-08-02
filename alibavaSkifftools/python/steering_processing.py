@@ -432,6 +432,8 @@ class marlin_step(object):
 # Marlin step concrete implementations
 # ------------------------------------
 
+# Alibava Reconstruction 
+# ======================
 class pedestal_conversion(marlin_step):
     def __init__(self):
         import os
@@ -747,7 +749,8 @@ class alibava_full_reco(marlin_step):
         bash_st = os.stat(bashname)
         os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
-# Telescope related
+# Telescope Reconstruction 
+# ========================
 class telescope_conversion(marlin_step):
     def __init__(self):
         import os
@@ -921,6 +924,7 @@ class telescope_full_reco(marlin_step):
         os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 # Merge telescope and alibava data
+# ================================
 class merger(marlin_step):
     def __init__(self):
         import os
@@ -948,7 +952,7 @@ class hitmaker(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'11-hitmaker.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
-                 'OUTPUT_FILENAME','GEAR_FILE','CURRENT_WORKING_DIR')
+                 'OUTPUT_FILENAME','GEAR_FILE')
     
     @staticmethod
     def get_description():
@@ -962,7 +966,7 @@ class prealignment(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'12-prealignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
-                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR','CURRENT_WORKING_DIR')
+                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR')
     
     @staticmethod
     def get_description():

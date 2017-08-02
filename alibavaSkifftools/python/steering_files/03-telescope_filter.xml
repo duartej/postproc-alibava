@@ -15,6 +15,10 @@
       <processor name="Mimosa26EUTelAutoPedestalNoiseProcessor"/>
       <processor name="Filter"/>
       <processor name="FilterHisto"/>
+      <processor name="LoadHotPixelDB"/>
+      <processor name="HitMakerM26"/>
+      <processor name="PreAligner"/> 
+      <processor name="Correlator"/> 
       <processor name="Save"/>
       <processor name="MyEUTelUtilityPrintEventNumber"/>
    </execute>
@@ -172,37 +176,76 @@
        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
        <!--parameter name="Verbosity" type="string" value=""/-->
    </processor>
+   
+   <processor name="LoadHotPixelDB" type="ConditionsProcessor">
+      <!--ConditionsProcessor provides access to conditions data transparently
+           from LCIO files or a databases, using LCCD-->
+      <!--Initialization of a conditions database handler-->
+      <!--parameter name="DBCondHandler" type="StringVec">conditionsName /lccd/myfolder HEAD  </parameter-->
+      <!--Initialization of a conditions db file handler-->
+      <!--parameter name="DBFileHandler" type="StringVec">conditionsName conditions.slcio collectionName  </parameter-->
+      <!--Initialization string for conditions database-->
+      <parameter name="DBInit" type="string">localhost:lccd_test:calvin:hobbes </parameter>
+      <!--Initialization of a data file handler-->
+      <!--parameter name="DataFileHandler" type="StringVec">conditionsName  </parameter-->
+      <!--Initialization of a simple conditions file handler-->
+      <parameter name="SimpleFileHandler" type="StringVec"> hotpixel_m26 @CURRENT_WORKING_DIR@/telescope-hotpixel_run@RUN_NUMBER@.slcio hotpixel_m26  </parameter>
+      <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+      <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
+  </processor>
 
-   <processor name="Save" type="EUTelOutputProcessor">
-       <!--Writes the current event to the specified LCIO outputfile. 
-            Eventually it adds a EORE at the of the file if it was missing Needs to be the last ActiveProcessor.-->
-       <!--drops the named collections from the event-->
-       <parameter name="DropCollectionNames" type="StringVec"> zsdata_m26 cluster_m26 zsdata </parameter>
-       <!--drops all collections of the given type from the event-->
-       <!--parameter name="DropCollectionTypes" type="StringVec"> SimTrackerHit SimCalorimeterHit </parameter-->
-       <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
-       <!--parameter name="FullSubsetCollections" type="StringVec" value="MCParticlesSkimmed"/-->
-       <!--force keep of the named collections - overrules DropCollectionTypes (and DropCollectionNames)-->
-       <!--parameter name="KeepCollectionNames" type="StringVec" value="MyPreciousSimTrackerHits"/-->
-       <!-- name of output file -->
-       <parameter name="LCIOOutputFile" type="string">@OUTPUT_FILENAME@ </parameter>
-       <!--write mode for output file:  WRITE_APPEND or WRITE_NEW-->
-       <parameter name="LCIOWriteMode" type="string" value="WRITE_NEW"/>
-       <!--Set it to true to remove intermediate EORE in merged runs-->
-       <parameter name="SkipIntermediateEORE" type="bool" value="true"/>
-       <!--will split output file if size in kB exceeds given value - doesn't work with APPEND and NEW-->
-       <!--parameter name="SplitFileSizekB" type="int" value="1992294"/-->
-       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-       <!--parameter name="Verbosity" type="string" value=""/-->
-   </processor>
+  <processor name="HitMakerM26" type="EUTelProcessorHitMaker">
+      <!--EUTelProcessorHitMaker is responsible to translate cluster centers 
+           from the local frame of reference to the external frame of reference
+           using the GEAR geometry description-->
+      <!--Hit coordinates are calculated in local reference frame of sensor-->
+      <parameter name="EnableLocalCoordidates" type="bool"> true </parameter>
+      <!--Cluster (pulse) collection name-->
+      <parameter name="PulseCollectionName" type="string" lcioInType="TrackerPulse"> filtered_cluster_m26 </parameter>
+      <!--Hit (output) collection name-->
+      <parameter name="HitCollectionName" type="string" lcioOutType="TrackerHit"> telescope_hit </parameter>
+      <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+      <!--parameter name="Verbosity" type="string">MESSAGE </parameter-->
+  </processor>
+  
+  <processor name="PreAligner" type="EUTelPreAlign">
+      <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit"> telescope_hit </parameter>
+      <parameter name="AlignmentConstantLCIOFile" type="string"> @RUN_NUMBER@-telescopeOnly-prealign-db.slcio </parameter>
+      <parameter name="UseReferenceCollection" type="bool" value="false"/>
+  </processor>
+  
+  <processor name="Correlator" type="EUTelCorrelator">
+      <!--EUTelCorrelator fills histograms with correlation plots-->
+      <!--Name of histogram info xml file-->
+      <parameter name="HistogramInfoFilename" type="string"> @CURRENT_WORKING_DIR@/histoinfo_telescope.xml</parameter>
+      <!--Hit collection name-->
+      <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit"> telescope_hit </parameter>
+      <!-- -->
+      <parameter name="DumpOffset" type="bool" > false </parameter>
+      <parameter name="UseReferenceCollection" type="bool" value="false"/>
+  </processor>
 
-   <processor name="MyEUTelUtilityPrintEventNumber" type="EUTelUtilityPrintEventNumber">
-       <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
-       <!--Print event number for every n-th event-->
-       <parameter name="EveryNEvents" type="int" value="1000"/>
-       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-       <!--parameter name="Verbosity" type="string" value=""/-->
-       <!--print the event timestamp as read from LCIO-->
-       <!--parameter name="printTimestamp" type="bool" value="false"/-->
-   </processor>
+  <processor name="Save" type="EUTelOutputProcessor">
+      <!--Writes the current event to the specified LCIO outputfile. 
+         Eventually it adds a EORE at the of the file if it 
+         was missing Needs to be the last ActiveProcessor.-->
+      <!--drops the named collections from the event-->
+      <parameter name="DropCollectionNames" type="StringVec">zsdata_m26 zsdata cluster_m26 filtered_cluster_m26 </parameter>
+      <!-- name of output file -->
+      <parameter name="LCIOOutputFile" type="string" value="@OUTPUT_FILENAME@"/>
+      <!--write mode for output file:  WRITE_APPEND or WRITE_NEW-->
+      <parameter name="LCIOWriteMode" type="string" value="WRITE_NEW"/>
+      <!--Set it to true to remove intermediate EORE in merged runs-->
+      <parameter name="SkipIntermediateEORE" type="bool" value="true"/>
+  </processor>
+
+  <processor name="MyEUTelUtilityPrintEventNumber" type="EUTelUtilityPrintEventNumber">
+      <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
+      <!--Print event number for every n-th event-->
+      <parameter name="EveryNEvents" type="int" value="2000"/>
+      <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+      <!--parameter name="Verbosity" type="string" value=""/-->
+      <!--print the event timestamp as read from LCIO-->
+      <!--parameter name="printTimestamp" type="bool" value="false"/-->
+  </processor>
 </marlin>
