@@ -328,6 +328,8 @@ if __name__ == '__main__':
     st_parser = subparsers.add_parser("steering",description=usage_st)
     st_parser.add_argument('step',help="The step name to create the steering file"\
             " [See `--print-available-steps` option] ")
+    # XXX: Could it be possible to add all those arguments by looping the template_args,
+    #      and converting _ -> -, plus capital leters to "miniscula"
     st_parser.add_argument('--alibava-input-filename',dest="ALIBAVA_INPUT_FILENAME",action='store',\
             help=template_args['ALIBAVA_INPUT_FILENAME'])
     st_parser.add_argument('--telescope-input-filename',dest="TELESCOPE_INPUT_FILENAME",action='store',\
@@ -380,6 +382,8 @@ if __name__ == '__main__':
             help=template_args['SENSORID_STARTS'])
     st_parser.add_argument('--prealignment-dump-gear',dest='PREALIGN_DUMP_GEAR',action='store_true',\
             help=template_args['PREALIGN_DUMP_GEAR'])
+    st_parser.add_argument('--iteration',dest='ITERATION',action='store',\
+            help=template_args['ITERATION'])
     st_parser.add_argument('-p','--print-available-steps',dest="available_steps",\
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])

@@ -63,6 +63,21 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MAX_RESIDUAL': 'The Maximum distance to determine if a hit is correlated [mm]',
         'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
         'REF_PLANE_RIGHT': 'The telescope planes nearest to the DUT from the right, to extrapolate the hit',
+        'ITERATION': 'The number of iteration of the alignment job, mandatory argument of the alignment step',
+        'PREITERATION': 'The previous number of iteration, automaticaly set from the ITERATION argument',
+        'ALIGN_CTE_NAME': 'The name of the alignment constant, automaticaly set from the ITERATION argument',
+        'RESIDUAL_XMAX_U': 'The residual cut in X for the upstream planes (0,1)',
+        'RESIDUAL_XMIN_U': 'The residual cut in X for the upstream planes (0,1)',
+        'RESIDUAL_YMAX_U': 'The residual cut in Y for the upstream planes (0,1)',
+        'RESIDUAL_YMIN_U': 'The residual cut in Y for the upstream planes (0,1)',
+        'RESIDUAL_XMAX_D': 'The residual cut in X for the downstream planes (2,3,4)',
+        'RESIDUAL_XMIN_D': 'The residual cut in X for the downstream planes (2,3,4)',
+        'RESIDUAL_YMAX_D': 'The residual cut in Y for the downstream planes (2,3,4)',
+        'RESIDUAL_YMIN_D': 'The residual cut in Y for the downstream planes (2,3,4)',
+        'RESOLUTION_X_U':  'The telescope resolution (in X) in the upstream planes (0,1)',
+        'RESOLUTION_X_D':  'The telescope resolution (in X) in the downstream planes (2,3,4)',
+        'RESOLUTION_Y_U':  'The telescope resolution (in Y) in the upstream planes (0,1)',
+        'RESOLUTION_Y_D':  'The telescope resolution (in Y) in the downstream planes (2,3,4)',
         }
 
 # Marlin step class definition
@@ -317,7 +332,7 @@ class marlin_step(object):
             return 1
         elif argument == 'REF_PLANE_RIGHT':
             return 2
-        elif argument == 'PREALIGN_DUMP_GEAR':
+        elif argument == 'PREALIGN_DUMP_GEAR':    
             return 'false'
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
@@ -340,6 +355,8 @@ class marlin_step(object):
         NotImplementedError
             If any of the introduced arguments is not defined in 
             the _ARGUMENTS static dictionary
+        TypeError
+            If the 'ITERATION' is not an integer
         """
         import shutil
         import os
@@ -353,7 +370,9 @@ class marlin_step(object):
             if key not in _ARGUMENTS.keys():
                 raise NotImplementedError("The argument '{0}' is not implemented".format(key))
         
-        # Just formatting an special argument case: ACTIVE_CHANNELS
+        # Pre-formatted cases
+        # ==================
+        # - ACTIVE_CHANNELS
         # the user could enter an string like: A:B,C:D,...
         # where A B C D are the edges of the channel ranges considered
         # actives (edges included). As the active chip is given by 
@@ -366,13 +385,46 @@ class marlin_step(object):
                 active_channels+= "$@ACTIVE_CHIP@:{0}-{1}$ ".format(ch_min,ch_max)
             # Re-write the channels with the proper formatted string
             kwd['ACTIVE_CHANNELS'] = active_channels
-        # Need extra formating as well here
+        # - PREALIGN_DUMP_GEAR, change the boolean to strings
         if kwd.has_key('PREALIGN_DUMP_GEAR'):
             if kwd['PREALIGN_DUMP_GEAR'] == True:
                 kwd['PREALIGN_DUMP_GEAR'] ='true'
             else:
                 kwd['PREALIGN_DUMP_GEAR'] ='false'
-
+        # - Alignment arguments
+        #   - ITERATION
+        if kwd.has_key('ITERATION'):
+            if int(kwd['ITERATION']) == 0:
+                kwd['PREITERATION'] = 'pre'
+                kwd['ALIGN_CTE_NAME'] = 'prealign'
+            elif kwd['ITERATION'].isdigit():
+                kwd['PREITERATION'] = int(kwd['ITERATION'])-1
+                kwd['ALIGN_CTE_NAME'] = 'alignment'
+            else:
+                raise TypeError("Not valid 'ITERATION' argument passed: "+kwd['ITERATION'])
+            # Set the per default values if the user did not provide them
+            # Note the dependenced of the iteration, therefore cannot 
+            # be set in the __init__
+            args_to_set = ['RESIDUAL_XMAX_U','RESIDUAL_XMIN_U',\
+                    'RESIDUAL_XMAX_D','RESIDUAL_XMIN_D',
+                    'RESIDUAL_YMAX_U','RESIDUAL_YMIN_U',\
+                    'RESIDUAL_YMAX_D','RESIDUAL_YMIN_D',\
+                    'RESOLUTION_X_U','RESOLUTION_X_D',\
+                    'RESOLUTION_Y_U','RESOLUTION_Y_D']
+            for thearg in args_to_set:
+                if not kwd.has_key(thearg):
+                    k = int(kwd['ITERATION'])
+                    # -- Find the last ITERATION value in the 
+                    #    _dependent_cuts dict. Higher iterations
+                    #    are equivalent than the last available one 
+                    while k >= 0:
+                        try:
+                            kwd[thearg] = self._dependent_cuts[thearg][k]
+                            break
+                        except KeyError:
+                            k-=1
+        # End of PRE-FORMATED cases
+        
         # Setting the values provided by the user
         for arg,value in kwd.iteritems():
             self.set_argument_value(arg,value)
@@ -810,6 +862,39 @@ class telescope_filter(marlin_step):
     def get_description():
         return 'Filters the telescope clusters (very slow process!)'  
 
+class telescope_alignment(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(telescope_alignment,self).__init__('telescope_alignment')
+
+        self.steering_file_template = os.path.join(get_template_path(),'04-telescope_alignment.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
+                'GEAR_FILE','CURRENT_WORKING_DIR',\
+                'ITERATION','PREITERATION','ALIGN_CTE_NAME',\
+                'RESIDUAL_XMAX_U','RESIDUAL_XMIN_U','RESIDUAL_XMAX_D','RESIDUAL_XMIN_D',
+                'RESIDUAL_YMAX_U','RESIDUAL_YMIN_U','RESIDUAL_YMAX_D','RESIDUAL_YMIN_D',
+                'RESOLUTION_X_U','RESOLUTION_X_D','RESOLUTION_Y_U','RESOLUTION_Y_D')
+        # Define iteration-dependent cuts
+        self._dependent_cuts = { 
+                'RESIDUAL_XMAX_U': { 0: 1000, 1: 500, 2: 300, 3: 300},
+                'RESIDUAL_XMIN_U': { 0: -1000, 1: -500, 2: -300, 3: -300},
+                'RESIDUAL_XMAX_D': { 0: 1000, 1: 500, 2: 400, 3: 300},
+                'RESIDUAL_XMIN_D': { 0: -1000, 1: -500, 2: -400, 3: -300},
+                'RESIDUAL_YMAX_U': { 0: 1000, 1: 500, 2: 300, 3: 300},
+                'RESIDUAL_YMIN_U': { 0: -1000, 1: -500, 2: -300, 3: -300},
+                'RESIDUAL_YMAX_D': { 0: 1000, 1: 500, 2: 400, 3: 300},
+                'RESIDUAL_YMIN_D': { 0: -1000, 1: -500, 2: -400, 3: -300},
+                'RESOLUTION_X_U': { 0: 50, 1: 20, 2: 18, 3: 10},
+                'RESOLUTION_X_D': { 0: 50, 1: 20, 2: 18, 3: 10},
+                'RESOLUTION_Y_U': { 0: 50, 1: 20, 2: 18, 3: 10},
+                'RESOLUTION_Y_D': { 0: 50, 1: 20, 2: 18, 3: 10},
+                }
+    
+    @staticmethod
+    def get_description():
+        return 'Telescope alignment iteratively'  
+
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class telescope_full_reco(marlin_step):
     """Class to gather a set of marlin_step instances to run serialized, 
@@ -999,7 +1084,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         cluster_histograms,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,telescope_clustering,telescope_filter,
+        telescope_conversion,telescope_clustering,telescope_filter,telescope_alignment,
         telescope_full_reco,
         # Join both 
         merger, hitmaker,prealignment,
