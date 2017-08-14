@@ -13,7 +13,7 @@
 <marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
     <execute>
         <processor name="AIDA"/>
-        <processor name="LoadAlignment"/>
+        @ALIGNMENT_PROCESSOR_LOAD@
         <processor name="ApplyAlignment"/>
         <processor name="Align"/>
         <processor name="MyEUTelUtilityPrintEventNumber"/>
@@ -42,16 +42,20 @@
         <!--parameter name="Verbosity" type="string" value=""/-->
     </processor>
 
-    <processor name="LoadAlignment" type="ConditionsProcessor">
-        <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>
-        <parameter name="SimpleFileHandler" type="StringVec"> @ALIGN_CTE_NAME@ @CURRENT_WORKING_DIR@/@RUN_NUMBER@-telescopeOnly-@PREITERATION@align-db.slcio alignment </parameter>
-    </processor>
+    @ALIGNMENT_PROCESSOR_DESCRIPTION@
   
     <processor name="ApplyAlignment" type="EUTelApplyAlignmentProcessor">
-        <parameter name="AlignmentConstantName" type="string" lcioInType="LCGenericObject"> @ALIGN_CTE_NAME@ </parameter>
-        <parameter name="alignmentCollectionNames"> @ALIGN_CTE_NAME@ </parameter>
+        <!--List of alignment collections to be applied in inverse order-->
+        <parameter name="alignmentCollectionNames">@ALIGN_CTE_LIST@</parameter>
+        <!--List of hit collections after the alignment is applied in inverse order. 
+             Note the first one is the final output collection-->
+        <parameter name="hitCollectionNames"  type="string" lcioInType="TrackerHit">LastAlignedHit @ALIGNED_HIT_LIST@</parameter>
+        <!-- Not used, but needed the proper number of elements (as the hitCollectionNames) -->
+        <parameter name="refhitCollectionNames"  type="string" lcioInType="TrackerHit">@DUMMY_REF_LIST@</parameter>
+        <!--The input hits (not aligned)-->
         <parameter name="InputHitCollectionName"  type="string" lcioInType="TrackerHit"> telescope_hit_global </parameter>
-        <parameter name="OutputHitCollectionName" type="string" lcioOutType="TrackerHit"> alignedHit </parameter>
+        <!-- Needed for the 0-iteration (when use the prealignment) -->
+        <parameter name="OutputHitCollectionName" type="string" lcioOutType="TrackerHit"> LastAlignedHit </parameter>
         <parameter name="CorrectionMethod" type="int" value="1"/>
         <parameter name="DoAlignCollection" type="bool" value="true"/>
         <parameter name="HistogramSwitch" type="bool" value="false"/>
@@ -65,6 +69,8 @@
         <parameter name="UseReferenceCollection" type="bool" value="false"/>
         <!--This is the name of the LCIO file name with the output alignment constants (add .slcio)-->
         <parameter name="AlignmentConstantLCIOFile" type="string" value="@RUN_NUMBER@-telescopeOnly-@ITERATION@align-db.slcio"/>
+        <!--This is the name of the alignment constant collection -->
+        <parameter name="AlignmentConstantCollectionName" type="string" value="@ALIGN_CTE_NAME@"/>
         <!--Name of the Millepede binary file.-->
         <parameter name="BinaryFilename" type="string" value="@RUN_NUMBER@-telescopeOnly-@ITERATION@align-mille.bin"/>
         <!--Generate a steering file for the pede program.-->
@@ -81,7 +87,7 @@
         <parameter name="ResidualsYMax" type="FloatVec"> @RESIDUAL_YMAX_U@  @RESIDUAL_YMAX_U@  @RESIDUAL_YMAX_D@  @RESIDUAL_YMAX_D@  @RESIDUAL_YMAX_D@ </parameter>
         <parameter name="ResidualsYMin" type="FloatVec"> @RESIDUAL_YMIN_U@  @RESIDUAL_YMIN_U@  @RESIDUAL_YMIN_D@  @RESIDUAL_YMIN_D@  @RESIDUAL_YMIN_D@ </parameter>    
         <!--Hit collection input name-->
-        <parameter name="HitCollectionName" type="string" lcioInType="TrackerHit"> alignedHit </parameter>
+        <parameter name="HitCollectionName" type="string" lcioInType="TrackerHit"> LastAlignedHit </parameter>
         <!--Track collection output name-->
         <parameter name="TrackCollectionName" type="string" lcioInType="Track"> fittracks </parameter>
         <!--Number of alignment constants used.

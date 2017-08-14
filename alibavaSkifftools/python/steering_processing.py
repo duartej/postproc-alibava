@@ -64,8 +64,15 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
         'REF_PLANE_RIGHT': 'The telescope planes nearest to the DUT from the right, to extrapolate the hit',
         'ITERATION': 'The number of iteration of the alignment job, mandatory argument of the alignment step',
-        'PREITERATION': 'The previous number of iteration, automaticaly set from the ITERATION argument',
+        'ALIGNMENT_PROCESSOR_LOAD': 'Internal use: The placeholder to put the '\
+                'processor load for the alignment',
+        'ALIGNMENT_PROCESSOR_DESCRIPTION': 'Internal use: The placeholder to '\
+                'put the processor description for the constant alignment load',
+        'PREITERATION': 'Internal use: The previous number of iteration',
         'ALIGN_CTE_NAME': 'The name of the alignment constant, automaticaly set from the ITERATION argument',
+        'ALIGN_CTE_LIST': 'Internal use: The list of the alignment constant to be used',
+        'ALIGNED_HIT_LIST': 'Internal use: The list of hits after the alignment is applied',
+        'DUMMY_REF_LIST': 'Internal use: Just a dummy list with the proper name of elements',
         'RESIDUAL_XMAX_U': 'The residual cut in X for the upstream planes (0,1)',
         'RESIDUAL_XMIN_U': 'The residual cut in X for the upstream planes (0,1)',
         'RESIDUAL_YMAX_U': 'The residual cut in Y for the upstream planes (0,1)',
@@ -337,6 +344,45 @@ class marlin_step(object):
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
+    def special_preprocessing(self,**kwd):
+        """Performs any special preprocessing step needed
+        in the 'publish_steering_file' function, just before
+        of filling the arguments.
+        Note this function must be implemented in the concrete steps, 
+        except for the 'ACTIVE_CHANNELS' argument which is present 
+        in several alibava classes, and therefore, useful to code it
+        here. 
+        In that case, the user could enter an string like: A:B,C:D,...
+        where A B C D are the edges of the channel ranges considered
+        actives (edges included). As the active chip is given by 
+        the name of the sensor, the template ACTIVE_CHIP is set and
+        be filled afterwards
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS
+        
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        if kwd.has_key('ACTIVE_CHANNELS'):
+            active_channels = ''
+            for channels in kwd['ACTIVE_CHANNELS'].split(","):
+                ch_min,ch_max = channels.split(":")
+                active_channels+= "$@ACTIVE_CHIP@:{0}-{1}$ ".format(ch_min,ch_max)
+            # Re-write the channels with the proper formatted string
+            kwd['ACTIVE_CHANNELS'] = active_channels
+        return kwd
+
     def publish_steering_file(self,**kwd):
         """Creates a copy of the steering file with the particular
         values introduced substituted. If a given argument is not
@@ -355,8 +401,6 @@ class marlin_step(object):
         NotImplementedError
             If any of the introduced arguments is not defined in 
             the _ARGUMENTS static dictionary
-        TypeError
-            If the 'ITERATION' is not an integer
         """
         import shutil
         import os
@@ -370,60 +414,8 @@ class marlin_step(object):
             if key not in _ARGUMENTS.keys():
                 raise NotImplementedError("The argument '{0}' is not implemented".format(key))
         
-        # Pre-formatted cases
-        # ==================
-        # - ACTIVE_CHANNELS
-        # the user could enter an string like: A:B,C:D,...
-        # where A B C D are the edges of the channel ranges considered
-        # actives (edges included). As the active chip is given by 
-        # the name of the sensor, the template ACTIVE_CHIP is set and
-        # be filled afterwards
-        if kwd.has_key('ACTIVE_CHANNELS'):
-            active_channels = ''
-            for channels in kwd['ACTIVE_CHANNELS'].split(","):
-                ch_min,ch_max = channels.split(":")
-                active_channels+= "$@ACTIVE_CHIP@:{0}-{1}$ ".format(ch_min,ch_max)
-            # Re-write the channels with the proper formatted string
-            kwd['ACTIVE_CHANNELS'] = active_channels
-        # - PREALIGN_DUMP_GEAR, change the boolean to strings
-        if kwd.has_key('PREALIGN_DUMP_GEAR'):
-            if kwd['PREALIGN_DUMP_GEAR'] == True:
-                kwd['PREALIGN_DUMP_GEAR'] ='true'
-            else:
-                kwd['PREALIGN_DUMP_GEAR'] ='false'
-        # - Alignment arguments
-        #   - ITERATION
-        if kwd.has_key('ITERATION'):
-            if int(kwd['ITERATION']) == 0:
-                kwd['PREITERATION'] = 'pre'
-                kwd['ALIGN_CTE_NAME'] = 'prealign'
-            elif kwd['ITERATION'].isdigit():
-                kwd['PREITERATION'] = int(kwd['ITERATION'])-1
-                kwd['ALIGN_CTE_NAME'] = 'alignment'
-            else:
-                raise TypeError("Not valid 'ITERATION' argument passed: "+kwd['ITERATION'])
-            # Set the per default values if the user did not provide them
-            # Note the dependenced of the iteration, therefore cannot 
-            # be set in the __init__
-            args_to_set = ['RESIDUAL_XMAX_U','RESIDUAL_XMIN_U',\
-                    'RESIDUAL_XMAX_D','RESIDUAL_XMIN_D',
-                    'RESIDUAL_YMAX_U','RESIDUAL_YMIN_U',\
-                    'RESIDUAL_YMAX_D','RESIDUAL_YMIN_D',\
-                    'RESOLUTION_X_U','RESOLUTION_X_D',\
-                    'RESOLUTION_Y_U','RESOLUTION_Y_D']
-            for thearg in args_to_set:
-                if not kwd.has_key(thearg):
-                    k = int(kwd['ITERATION'])
-                    # -- Find the last ITERATION value in the 
-                    #    _dependent_cuts dict. Higher iterations
-                    #    are equivalent than the last available one 
-                    while k >= 0:
-                        try:
-                            kwd[thearg] = self._dependent_cuts[thearg][k]
-                            break
-                        except KeyError:
-                            k-=1
-        # End of PRE-FORMATED cases
+        # Pre-formatted special cases
+        kwd = self.special_preprocessing(**kwd)
         
         # Setting the values provided by the user
         for arg,value in kwd.iteritems():
@@ -870,11 +862,13 @@ class telescope_alignment(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'04-telescope_alignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
-                'GEAR_FILE','CURRENT_WORKING_DIR',\
-                'ITERATION','PREITERATION','ALIGN_CTE_NAME',\
+                'GEAR_FILE',\
+                'ITERATION','ALIGN_CTE_NAME','ALIGN_CTE_LIST',\
+                'ALIGNED_HIT_LIST','DUMMY_REF_LIST',\
                 'RESIDUAL_XMAX_U','RESIDUAL_XMIN_U','RESIDUAL_XMAX_D','RESIDUAL_XMIN_D',
                 'RESIDUAL_YMAX_U','RESIDUAL_YMIN_U','RESIDUAL_YMAX_D','RESIDUAL_YMIN_D',
-                'RESOLUTION_X_U','RESOLUTION_X_D','RESOLUTION_Y_U','RESOLUTION_Y_D')
+                'RESOLUTION_X_U','RESOLUTION_X_D','RESOLUTION_Y_U','RESOLUTION_Y_D',
+                'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
         # Define iteration-dependent cuts
         self._dependent_cuts = { 
                 'RESIDUAL_XMAX_U': { 0: 1000, 1: 500, 2: 300, 3: 300},
@@ -894,6 +888,105 @@ class telescope_alignment(marlin_step):
     @staticmethod
     def get_description():
         return 'Telescope alignment iteratively'  
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Set the alignment constant name, the residuals and
+        resolutions corresponding to the given iteration.
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - ITERATION: the alignment iteration
+            Optionally, could contain (if not, default values
+            are going to be filled):
+             - RESIDUAL_ZZZZ_Z: the (max/min) diference between hit measured
+                   and hit predicted (straight line) in the (X/Y) axis to 
+                   be accepted as valid hit belonging to a track
+             - RESOLUTION_Z_Z: the telescope resolution in the X/Y axis
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        TypeError
+            If the 'ITERATION' is not an integer
+        
+        RuntimeError
+            If ITERATION is not present
+
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        import os
+
+        #   - ITERATION
+        if not kwd.has_key('ITERATION'):
+            raise RuntimeError("Needed 'ITERATION' argument not provided")
+        if int(kwd['ITERATION']) == 0:
+            kwd['PREITERATION'] = 'pre'
+        elif kwd['ITERATION'].isdigit():
+            kwd['PREITERATION'] = int(kwd['ITERATION'])-1
+        else:
+            raise TypeError("Not valid 'ITERATION' argument passed: "+kwd['ITERATION'])
+        kwd['ALIGN_CTE_NAME'] = 'alignment{0}'.format(kwd['ITERATION'])
+
+        # The run number is already needed, so the input filename as well
+        # in order to find the run number -- CAREFUL, breaking the logic flow
+        # contained in the 'publish_steering_file' function
+        self.set_argument_value('INPUT_FILENAMES',kwd['INPUT_FILENAMES'])
+        kwd['RUN_NUMBER'] = self.get_default_argument_value('RUN_NUMBER')
+
+        # Prepare a processor for each alignment already performed (the prealigment is the 
+        # minimum performed)
+        kwd['ALIGNMENT_PROCESSOR_LOAD']='<processor name="LoadPreAlignment"/>'
+        kwd['ALIGNMENT_PROCESSOR_DESCRIPTION']='<processor name="LoadPreAlignment"'\
+                'type="ConditionsProcessor">\n        <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>\n'\
+                '        <parameter name="SimpleFileHandler" type="StringVec">'\
+                'prealign {0}/{1}-telescopeOnly-prealign-db.slcio alignment </parameter>'\
+                '\n    </processor>'.format(os.getcwd(),kwd['RUN_NUMBER'])
+        kwd['ALIGN_CTE_LIST'] = 'prealign'
+        kwd['ALIGNED_HIT_LIST'] = ''
+        kwd['DUMMY_REF_LIST'] = 'dummy0'
+        for i in xrange(1,int(kwd['ITERATION'])+1):
+            kwd['ALIGNMENT_PROCESSOR_LOAD']+='\n\t<processor name="Load{0}Alignment"/>'.format(i-1)
+            kwd['ALIGNMENT_PROCESSOR_DESCRIPTION']+='\n    <processor name="Load{0}Alignment"'\
+                    'type="ConditionsProcessor">\n        <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>\n'\
+                    '        <parameter name="SimpleFileHandler" type="StringVec">'\
+                    'alignment{0} {1}/{2}-telescopeOnly-{0}align-db.slcio alignment{0}</parameter>'\
+                    '\n    </processor>'.format(i-1,os.getcwd(),kwd['RUN_NUMBER'])
+            kwd['ALIGN_CTE_LIST']   = 'alignment{0} {1}'.format(i-1,kwd['ALIGN_CTE_LIST'])
+            kwd['ALIGNED_HIT_LIST'] = 'alignedHit_{0} {1}'.format(i-1,kwd['ALIGNED_HIT_LIST'])
+            kwd['DUMMY_REF_LIST'] = 'dummy{0} {1}'.format(i,kwd['DUMMY_REF_LIST'])
+
+        # Set the per default values if the user did not provide them
+        # Note the dependenced of the iteration, therefore cannot 
+        # be set in the __init__
+        args_to_set = ['RESIDUAL_XMAX_U','RESIDUAL_XMIN_U',\
+                'RESIDUAL_XMAX_D','RESIDUAL_XMIN_D',
+                'RESIDUAL_YMAX_U','RESIDUAL_YMIN_U',\
+                'RESIDUAL_YMAX_D','RESIDUAL_YMIN_D',\
+                'RESOLUTION_X_U','RESOLUTION_X_D',\
+                'RESOLUTION_Y_U','RESOLUTION_Y_D']
+        for thearg in args_to_set:
+            if not kwd.has_key(thearg):
+                k = int(kwd['ITERATION'])
+                # -- Find the last ITERATION value in the 
+                #    _dependent_cuts dict. Higher iterations
+                #    are equivalent than the last available one 
+                while k >= 0:
+                    try:
+                        kwd[thearg] = self._dependent_cuts[thearg][k]
+                        break
+                    except KeyError:
+                        k-=1
+        return kwd
+        
 
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class telescope_full_reco(marlin_step):
@@ -1056,6 +1149,39 @@ class prealignment(marlin_step):
     @staticmethod
     def get_description():
         return 'Pre-alignment using the distance of the hits to the first telescope plane '  
+        
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Just change the boolean content to the equivalent string
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - PREALIGN_DUMP_GEAR
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        RuntimeError
+            If PRE_ALIGNED_DUMP_GEAR is not present
+
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        if not kwd.has_key('PREALIGN_DUMP_GEAR'):
+            raise RuntimeError("Needed 'PREALIGNED_DUMP_GEAR', argument not present")
+        if kwd['PREALIGN_DUMP_GEAR'] == True:
+            kwd['PREALIGN_DUMP_GEAR'] ='true'
+        else:
+            kwd['PREALIGN_DUMP_GEAR'] ='false'
+
+        return kwd
 
 class simple_coordinate_finder_DUT(marlin_step):
     def __init__(self):
