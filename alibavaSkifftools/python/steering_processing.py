@@ -871,18 +871,18 @@ class telescope_alignment(marlin_step):
                 'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
         # Define iteration-dependent cuts
         self._dependent_cuts = { 
-                'RESIDUAL_XMAX_U': { 0: 1000, 1: 500, 2: 300, 3: 300},
-                'RESIDUAL_XMIN_U': { 0: -1000, 1: -500, 2: -300, 3: -300},
-                'RESIDUAL_XMAX_D': { 0: 1000, 1: 500, 2: 400, 3: 300},
-                'RESIDUAL_XMIN_D': { 0: -1000, 1: -500, 2: -400, 3: -300},
-                'RESIDUAL_YMAX_U': { 0: 1000, 1: 500, 2: 300, 3: 300},
-                'RESIDUAL_YMIN_U': { 0: -1000, 1: -500, 2: -300, 3: -300},
-                'RESIDUAL_YMAX_D': { 0: 1000, 1: 500, 2: 400, 3: 300},
-                'RESIDUAL_YMIN_D': { 0: -1000, 1: -500, 2: -400, 3: -300},
-                'RESOLUTION_X_U': { 0: 50, 1: 20, 2: 18, 3: 10},
-                'RESOLUTION_X_D': { 0: 50, 1: 20, 2: 18, 3: 10},
-                'RESOLUTION_Y_U': { 0: 50, 1: 20, 2: 18, 3: 10},
-                'RESOLUTION_Y_D': { 0: 50, 1: 20, 2: 18, 3: 10},
+                'RESIDUAL_XMAX_U': { 0: 300, 1: 100, 2: 50, 3: 50, 4: 25},
+                'RESIDUAL_XMIN_U': { 0: -300, 1: -100, 2: -50, 3: -50, 4: -25},
+                'RESIDUAL_XMAX_D': { 0: 500, 1: 200, 2: 100, 3: 50, 4: 25},
+                'RESIDUAL_XMIN_D': { 0: -500, 1: -200, 2: -100, 3: -50, 4: -25},
+                'RESIDUAL_YMAX_U': { 0: 300, 1: 100, 2: 50, 3: 50, 4: 25},
+                'RESIDUAL_YMIN_U': { 0: -300, 1: -100, 2: -50, 3: -50, 4: -25},
+                'RESIDUAL_YMAX_D': { 0: 500, 1: 200, 2: 100, 3: 50, 4: 25},
+                'RESIDUAL_YMIN_D': { 0: -500, 1: -200, 2: -100, 3: -50, 4: -25},
+                'RESOLUTION_X_U': { 0: 10, 1: 8, 2: 5, 3: 3, 4: 3},
+                'RESOLUTION_X_D': { 0: 10, 1: 8, 2: 5, 3: 3, 4: 3},
+                'RESOLUTION_Y_U': { 0: 10, 1: 8, 2: 5, 3: 3, 4: 3},
+                'RESOLUTION_Y_D': { 0: 10, 1: 8, 2: 5, 3: 3, 4: 3},
                 }
     
     @staticmethod
