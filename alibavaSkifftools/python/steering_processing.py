@@ -988,7 +988,7 @@ class telescope_alignment(marlin_step):
         return kwd
 
 class telescope_update_gear(marlin_step):
-    def __init__(self):
+    def __init__(self,in_full_reco_mode=False):
         import os
         import shutil
         super(telescope_update_gear,self).__init__('telescope_update_gear')
@@ -996,7 +996,12 @@ class telescope_update_gear(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'041-telescope_update_gear.xml')
         self.required_arguments = ('GEAR_FILE','ALIGN_CTE_LIST',\
                 'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
-        # 
+        # Auxiliary member to take into account if the step is run
+        # within the telescope_full_reco metaclass, in that case 
+        # the extraction of the iteration in the special_preprocesing
+        # method is performed in a different approach
+        self._embebbed_metaclass = in_full_reco_mode
+
         #self.auxiliary_files.append('dummy_lcio.slcio')
     
     @staticmethod
@@ -1035,24 +1040,32 @@ class telescope_update_gear(marlin_step):
 
         # The run number is already needed, so we need to obtain it from the 
         # calculated align db present in the working directory
-        # WARNING: this is assuming the telescope_alignment step has been
-        #          performed previously (no sense otherwise) and we are
-        #          running in the working directory where it was run the
-        #          telescope_alingment (this is more a defect of this code)
-        #          Providing  a directory by the user can fix this issue
-        dbfiles = glob.glob(os.path.join(os.getcwd(),"*-telescopeOnly-*align-db.slcio"))
-        try:
-            aligdb_file = os.path.basename(dbfiles[0])
-        except IndexError:
-            raise IOError("Not found in the current working directory the alignment DB files."\
-                    " The 'telescope_alignment' step must be performed previously. "\
-                    " If it was, then lauch the script in the same directory were"\
-                    " the 'telescope_alignment' was run")
-        # Very specific format
-        run_number = int(aligdb_file.split("-")[0])
+        if not self._embebbed_metaclass:
+            # WARNING: this is assuming the telescope_alignment step has been
+            #          performed previously (no sense otherwise) and we are
+            #          running in the working directory where it was run the
+            #          telescope_alingment (this is more a defect of this code)
+            #          Providing  a directory by the user can fix this issue
+            dbfiles = glob.glob(os.path.join(os.getcwd(),"*-telescopeOnly-*align-db.slcio"))
+            try:
+                aligdb_file = os.path.basename(dbfiles[0])
+            except IndexError:
+                raise IOError("Not found in the current working directory the alignment DB files."\
+                        " The 'telescope_alignment' step must be performed previously. "\
+                        " If it was, then lauch the script in the same directory were"\
+                        " the 'telescope_alignment' was run")
+                # Very specific format
+                run_number = int(aligdb_file.split("-")[0])
+                # Extract the maximum number of iterations available 
+                iter_max = len(dbfiles)
+        else:
+            # Just using the steering files created by the metaclass for the telescope_alignment
+            # steps to obtain the run_number and the number of iterations. Also it is needed to
+            # be added plus 1 in order to take into account the prealignment (not present 
+            # as part of the telescope_alignment steps but inside the filter)
+            iter_max = len(glob.glob(os.path.join(os.getcwd(),"telescope_alignment*xml")))+1
+            run_number = kwd['RUN_NUMBER']
 
-        # Extract the maximum number of iterations available 
-        iter_max = len(dbfiles)
 
         # Prepare a processor for each alignment already performed (the prealigment is the 
         # minimum performed)
@@ -1063,7 +1076,6 @@ class telescope_update_gear(marlin_step):
                 'prealign {0}/{1}-telescopeOnly-prealign-db.slcio alignment </parameter>'\
                 '\n    </processor>'.format(os.getcwd(),run_number)
         kwd['ALIGN_CTE_LIST'] = 'prealign'
-        print iter_max
         for i in xrange(1,iter_max):
             kwd['ALIGNMENT_PROCESSOR_LOAD']+='\n\t<processor name="Load{0}Alignment"/>'.format(i-1)
             kwd['ALIGNMENT_PROCESSOR_DESCRIPTION']+='\n    <processor name="Load{0}Alignment"'\
@@ -1091,13 +1103,23 @@ class telescope_full_reco(marlin_step):
         
         # -- Dummy 
         self.required_arguments = () 
+
+        # Iteration for the alignment
+        self._iteration = 0
+        self._iter_init = False
         
         # XXX FIXME: Include the alignment steps
         # The list of steps with their needed arguments
         self.step_chain = ( 
                 (telescope_conversion(), { 'TELESCOPE_INPUT_FILENAME': self.raw_file},self.update_output),
                 (telescope_clustering(), {'INPUT_FILENAMES':self.last_output_filename},self.update_output),
-                (telescope_filter(), {'INPUT_FILENAMES': self.last_output_filename},self.update_output)
+                (telescope_filter(), {'INPUT_FILENAMES': self.last_output_filename},self.update_output),
+                (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
+                (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
+                (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
+                (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
+                (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
+                (telescope_update_gear(True),{'RUN_NUMBER': self.get_run_number},self.dummy)
                 )
 
     # Some datamembers used in the step_chain are not going to be 
@@ -1111,12 +1133,38 @@ class telescope_full_reco(marlin_step):
     def last_output_filename(self):
         return self._last_output_filename
     
+    def get_iteration_without_modification(self):
+        if self._iter_init:
+            return self._iteration-1
+        else:
+            return self._iteration
+    
     # Updaters
     def update_output(self,step_inst):
         """Update the last_output_filename data member using the value
         from the last step
         """
         self._last_output_filename = step_inst.argument_values['OUTPUT_FILENAME']
+
+    def iteration(self):
+        """Return and update iteration
+        """
+        self._iter_init = True
+        self._iteration += 1
+        # Need it as string for posterior processing
+        return "{0}".format(self._iteration-1)
+
+    def get_run_number(self):
+        """Obtain the run number from the current output filename (which should be
+        the corresponding to the telescope_filter step)
+        """
+        import os
+
+        if os.path.basename(self._last_output_filename).find('run000') != 0:
+            raise RuntimeError("The file created by the 'telescope_filter'"\
+                    " step does not follow the name convection: '{0}'".format(self._last_output_filename))
+        rawnumber = os.path.basename(self._last_output_filename).replace('run000','').split('.')[0]
+        return int(rawnumber)
 
     def dummy(self,step_inst):
         pass
@@ -1146,6 +1194,7 @@ class telescope_full_reco(marlin_step):
         import datetime
         import os
         import stat
+        import shutil
     
         # Check for inconsistencies
         for key in ['TELESCOPE_INPUT_FILENAME']:
@@ -1168,6 +1217,12 @@ class telescope_full_reco(marlin_step):
             newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
             # Create the steering file for this step
             step.publish_steering_file(**newargs)
+            # In case of alignment, change the file name to include the alignment
+            # iteration
+            if isinstance(step,telescope_alignment):
+                old_steering_filename = step.steering_file
+                step.steering_file = old_steering_filename.replace(".xml","_{0}.xml".format(self.get_iteration_without_modification()))
+                shutil.move(old_steering_filename,step.steering_file)
             # The particular action defined: it will update file names...
             # See the properties and updaters defined above
             action(step)
