@@ -986,8 +986,95 @@ class telescope_alignment(marlin_step):
                     except KeyError:
                         k-=1
         return kwd
-        
 
+class telescope_update_gear(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(telescope_update_gear,self).__init__('telescope_update_gear')
+
+        self.steering_file_template = os.path.join(get_template_path(),'041-telescope_update_gear.xml')
+        self.required_arguments = ('GEAR_FILE','ALIGN_CTE_LIST',\
+                'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
+        # 
+        #self.auxiliary_files.append('dummy_lcio.slcio')
+    
+    @staticmethod
+    def get_description():
+        return 'Dump the alignment constants to a gear file'  
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Set the alignment constant name, the residuals and
+        resolutions corresponding to the given iteration.
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - ITERATION: the alignment iteration
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        TypeError
+            If the 'ITERATION' is not an integer
+        
+        RuntimeError
+            If ITERATION is not present
+
+        IOError
+            If not found any of the slcio alignment DB files
+        """
+        import os
+        import glob
+
+        # The run number is already needed, so we need to obtain it from the 
+        # calculated align db present in the working directory
+        # WARNING: this is assuming the telescope_alignment step has been
+        #          performed previously (no sense otherwise) and we are
+        #          running in the working directory where it was run the
+        #          telescope_alingment (this is more a defect of this code)
+        #          Providing  a directory by the user can fix this issue
+        dbfiles = glob.glob(os.path.join(os.getcwd(),"*-telescopeOnly-*align-db.slcio"))
+        try:
+            aligdb_file = os.path.basename(dbfiles[0])
+        except IndexError:
+            raise IOError("Not found in the current working directory the alignment DB files."\
+                    " The 'telescope_alignment' step must be performed previously. "\
+                    " If it was, then lauch the script in the same directory were"\
+                    " the 'telescope_alignment' was run")
+        # Very specific format
+        run_number = int(aligdb_file.split("-")[0])
+
+        # Extract the maximum number of iterations available 
+        iter_max = len(dbfiles)
+
+        # Prepare a processor for each alignment already performed (the prealigment is the 
+        # minimum performed)
+        kwd['ALIGNMENT_PROCESSOR_LOAD']='<processor name="LoadPreAlignment"/>'
+        kwd['ALIGNMENT_PROCESSOR_DESCRIPTION']='<processor name="LoadPreAlignment"'\
+                'type="ConditionsProcessor">\n        <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>\n'\
+                '        <parameter name="SimpleFileHandler" type="StringVec">'\
+                'prealign {0}/{1}-telescopeOnly-prealign-db.slcio alignment </parameter>'\
+                '\n    </processor>'.format(os.getcwd(),run_number)
+        kwd['ALIGN_CTE_LIST'] = 'prealign'
+        print iter_max
+        for i in xrange(1,iter_max):
+            kwd['ALIGNMENT_PROCESSOR_LOAD']+='\n\t<processor name="Load{0}Alignment"/>'.format(i-1)
+            kwd['ALIGNMENT_PROCESSOR_DESCRIPTION']+='\n    <processor name="Load{0}Alignment"'\
+                    'type="ConditionsProcessor">\n        <parameter name="DBInit" type="string" value="localhost:lccd_test:align:tel"/>\n'\
+                    '        <parameter name="SimpleFileHandler" type="StringVec">'\
+                    'alignment{0} {1}/{2}-telescopeOnly-{0}align-db.slcio alignment{0}</parameter>'\
+                    '\n    </processor>'.format(i-1,os.getcwd(),run_number)
+            kwd['ALIGN_CTE_LIST']   = '{0} alignment{1}'.format(kwd['ALIGN_CTE_LIST'],i-1)
+
+        return kwd
+        
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class telescope_full_reco(marlin_step):
     """Class to gather a set of marlin_step instances to run serialized, 
@@ -1211,7 +1298,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         cluster_histograms,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,telescope_clustering,telescope_filter,telescope_alignment,
+        telescope_conversion,telescope_clustering,telescope_filter,telescope_alignment, telescope_update_gear,
         telescope_full_reco,
         # Join both 
         merger, hitmaker,prealignment,

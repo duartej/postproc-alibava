@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
+<!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
+
+
+<!--##########################################
+    #                                        #
+    #     Steering file for marlin created   #
+    #     by alibavaSkifftools               #
+    #                                        #
+    ##########################################-->
+
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+    <execute>
+        @ALIGNMENT_PROCESSOR_LOAD@
+        <processor name="UpdateGear"/>
+    </execute>
+ 
+    <global>
+        <parameter name="LCIOInputFiles">dummy_lcio.slcio</parameter>
+        <parameter name="GearXMLFile" value="@GEAR_FILE@.xml"/>
+        <parameter name="MaxRecordNumber" value="9999999"/>
+        <parameter name="SkipNEvents" value="0"/>
+        <parameter name="SupressCheck" value="false"/>
+        <parameter name="Verbosity" value="WARNING"/>
+    </global>
+    
+    @ALIGNMENT_PROCESSOR_DESCRIPTION@
+    
+    <processor name="UpdateGear" type="EUTelAlignConstantConverter">
+        <!--List of alignment collections to be applied in the same order than was calculated-->
+        <parameter name="AlignmentCollectionNames">@ALIGN_CTE_LIST@</parameter>
+    </processor>
+</marlin>
