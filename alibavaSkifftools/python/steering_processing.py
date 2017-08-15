@@ -1004,7 +1004,8 @@ class telescope_full_reco(marlin_step):
         
         # -- Dummy 
         self.required_arguments = () 
-
+        
+        # XXX FIXME: Include the alignment steps
         # The list of steps with their needed arguments
         self.step_chain = ( 
                 (telescope_conversion(), { 'TELESCOPE_INPUT_FILENAME': self.raw_file},self.update_output),

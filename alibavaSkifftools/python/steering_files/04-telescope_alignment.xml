@@ -102,7 +102,7 @@
         <!--Exclude planes from fit.-->
         <parameter name="ExcludePlanes" type="IntVec"> </parameter>
         <!--Fix sensor planes in the fit according to their sensor ids.-->
-        <parameter name="FixedPlanes" type="IntVec">0 4 </parameter>
+        <parameter name="FixedPlanes" type="IntVec">0</parameter>
         <!--Selects the source of input hits.
              0 - hits read from hitfile with simple trackfinding.
              1 - hits read from output of tracking processor.
@@ -124,7 +124,7 @@
              2** 5 = 32 -> XY plane
              i.e., everything fixed: 1+2+4+8+16+32=63
              -->
-        <parameter name="FixParameter" type="int" value="63 4  4 4 63 "/>
+        <parameter name="FixParameter" type="int" value="63 4  4 4 4"/>
         <!--parameter name="FixParameter" type="int" value="63 63 63    63  63 63"/-->
         <!--Start values for the alignment for the angle gamma.-->
         <!--parameter name="PedeUserStartValuesGamma" type="FloatVec"> 0 0 0 0 0 0 </parameter-->
