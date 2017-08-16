@@ -1001,8 +1001,9 @@ class telescope_update_gear(marlin_step):
         # the extraction of the iteration in the special_preprocesing
         # method is performed in a different approach
         self._embebbed_metaclass = in_full_reco_mode
-
-        #self.auxiliary_files.append('dummy_lcio.slcio')
+        
+        # A dummy lcio with one event to enter in the processEvent
+        self.auxiliary_files.append('dummy_lcio.slcio')
     
     @staticmethod
     def get_description():

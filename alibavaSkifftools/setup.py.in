@@ -12,7 +12,7 @@ setup(name='alibavaSkifftools',
         # for changes in the package distribution
         package_dir={'alibavaSkifftools':'${CMAKE_CURRENT_SOURCE_DIR}/python'},
         # Additional steering files used as templates
-        package_data = { 'alibavaSkifftools': ['steering_files/*.xml'] },
+        package_data = { 'alibavaSkifftools': ['steering_files/*.xml','steering_files/dummy_lcio.slcio'] },
         packages = ['alibavaSkifftools'],
         scripts=['${CMAKE_CURRENT_SOURCE_DIR}/bin/open_sesame'],
         )
