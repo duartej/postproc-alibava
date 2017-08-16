@@ -1087,6 +1087,20 @@ class telescope_update_gear(marlin_step):
             kwd['ALIGN_CTE_LIST']   = '{0} alignment{1}'.format(kwd['ALIGN_CTE_LIST'],i-1)
 
         return kwd
+
+class telescope_fitter(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(telescope_fitter,self).__init__('telescope_fitter')
+
+        self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
+                'OUTPUT_FILENAME','GEAR_FILE')
+    
+    @staticmethod
+    def get_description():
+        return 'Track fitter using a Deterministic annealing filter (DAF)'  
         
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class telescope_full_reco(marlin_step):
@@ -1354,7 +1368,8 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         cluster_histograms,
         alibava_full_reco,
         # Telescope related
-        telescope_conversion,telescope_clustering,telescope_filter,telescope_alignment, telescope_update_gear,
+        telescope_conversion,telescope_clustering,telescope_filter,telescope_alignment, \
+                telescope_update_gear,telescope_fitter,
         telescope_full_reco,
         # Join both 
         merger, hitmaker,prealignment,
