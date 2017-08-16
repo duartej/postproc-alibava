@@ -112,7 +112,15 @@ class marlin_step(object):
         The substitutible arguments of the template steering file
     argument_values: dict(str,GenericType)
         The map between the argument template name and the concrete
-        value used
+        value useda
+    auxiliary_files: list(str)
+        Files needed to be copied from the get_template_path() to
+        the current working directory
+    DUT: FIXME DOC
+    parser_instance: FIXME DOC
+    devices: list(str)
+        The list of devices (telescope or DUT) which this step 
+        can be applied
     """
     def __init__(self,step_name):
         """
@@ -141,6 +149,8 @@ class marlin_step(object):
         # instance used to obtained
         self.DUT = None
         self.parser_instance=None
+        # The device to be applied this step
+        self.devices = []
 
     @property
     def steering_file_content(self):
@@ -482,6 +492,7 @@ class pedestal_conversion(marlin_step):
     def __init__(self):
         import os
         super(pedestal_conversion,self).__init__('pedestal_conversion')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME',\
@@ -499,6 +510,7 @@ class pedestal_preevaluation(marlin_step):
     def __init__(self):
         import os
         super(pedestal_preevaluation,self).__init__('pedestal_preevaluation')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'02-ped_preevaluation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', \
@@ -512,6 +524,7 @@ class cmmd_calculation(marlin_step):
     def __init__(self):
         import os
         super(cmmd_calculation,self).__init__('cmmd_calculation')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ped_cmmd_calculation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
@@ -526,6 +539,7 @@ class pedestal_evaluation(marlin_step):
     def __init__(self):
         import os
         super(pedestal_evaluation,self).__init__('pedestal_evaluation')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'04-ped_evaluation.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_OUTPUT_FILENAME',\
@@ -543,6 +557,7 @@ class calibration_conversion(pedestal_conversion):
     def __init__(self):
         import os
         super(calibration_conversion,self).__init__()
+        self.devices = ['DUT']
         # Change the step name
         self.step_name='calibration_conversion'
         self.steering_file = self.steering_file.replace('pedestal_conversion',self.step_name)
@@ -561,6 +576,7 @@ class calibration_extraction(marlin_step):
     def __init__(self):
         import os
         super(calibration_extraction,self).__init__('calibration_extraction')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'02-cal_extraction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'CALIBRATION_OUTPUT_FILENAME',\
@@ -574,6 +590,7 @@ class rs_conversion(marlin_step):
     def __init__(self):
         import os
         super(rs_conversion,self).__init__('rs_conversion')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'01-ab_converter_rs.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'ALIBAVA_INPUT_FILENAME', \
@@ -591,6 +608,7 @@ class signal_reconstruction(marlin_step):
     def __init__(self):
         import os
         super(signal_reconstruction,self).__init__('signal_reconstruction')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'02-signal_reconstruction.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
@@ -611,6 +629,7 @@ class alibava_clustering(marlin_step):
     def __init__(self):
         import os
         super(alibava_clustering,self).__init__('alibava_clustering')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
@@ -625,6 +644,7 @@ class cluster_histograms(marlin_step):
     def __init__(self):
         import os
         super(cluster_histograms,self).__init__('cluster_histograms')
+        self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
@@ -642,6 +662,7 @@ class alibava_full_reco(marlin_step):
     def __init__(self):
         import os
         super(alibava_full_reco,self).__init__('alibava_full_reco')
+        self.devices = ['DUT']
         
         # -- Dummy 
         self.required_arguments = () 
@@ -800,6 +821,7 @@ class telescope_conversion(marlin_step):
         import os
         import shutil
         super(telescope_conversion,self).__init__('telescope_conversion')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'01-telescope_converter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
@@ -819,6 +841,7 @@ class telescope_clustering(marlin_step):
         import os
         import shutil
         super(telescope_clustering,self).__init__('telescope_clustering')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'02-telescope_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
@@ -839,6 +862,7 @@ class telescope_filter(marlin_step):
         import os
         import shutil
         super(telescope_filter,self).__init__('telescope_filter')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'03-telescope_filter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
@@ -859,6 +883,7 @@ class telescope_alignment(marlin_step):
         import os
         import shutil
         super(telescope_alignment,self).__init__('telescope_alignment')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'04-telescope_alignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
@@ -992,6 +1017,7 @@ class telescope_update_gear(marlin_step):
         import os
         import shutil
         super(telescope_update_gear,self).__init__('telescope_update_gear')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'041-telescope_update_gear.xml')
         self.required_arguments = ('GEAR_FILE','ALIGN_CTE_LIST',\
@@ -1093,6 +1119,7 @@ class telescope_fitter(marlin_step):
         import os
         import shutil
         super(telescope_fitter,self).__init__('telescope_fitter')
+        self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
@@ -1115,6 +1142,7 @@ class telescope_full_reco(marlin_step):
     def __init__(self):
         import os
         super(telescope_full_reco,self).__init__('telescope_full_reco')
+        self.devices = ['Telescope']
         
         # -- Dummy 
         self.required_arguments = () 
@@ -1266,6 +1294,7 @@ class merger(marlin_step):
         import os
         import shutil
         super(merger,self).__init__('merger')
+        self.devices = ['Telescope','DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'10-merger.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME',\
@@ -1285,6 +1314,7 @@ class hitmaker(marlin_step):
         import os
         import shutil
         super(hitmaker,self).__init__('hitmaker')
+        self.devices = ['Telescope','DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'11-hitmaker.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
@@ -1299,6 +1329,7 @@ class prealignment(marlin_step):
         import os
         import shutil
         super(prealignment,self).__init__('prealignment')
+        self.devices = ['Telescope','DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'12-prealignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
@@ -1346,6 +1377,7 @@ class simple_coordinate_finder_DUT(marlin_step):
         import os
         import shutil
         super(simple_coordinate_finder_DUT,self).__init__('simple_coordinate_finder_DUT')
+        self.devices = ['Telescope','DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'121-simple_coordinate_finder_DUT.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
