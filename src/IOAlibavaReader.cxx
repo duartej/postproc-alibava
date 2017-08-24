@@ -180,7 +180,7 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
     // /////////////////////////////////
 	
     // Alibava stores a pedestal and noise set in the run header. 
-    float tmp_double = -11
+    double tmp_double = -11;
     std::vector<float> headerPedestal;
     // first pedestal
     for(int ichan=0; ichan<ALIBAVA::NOOFCHIPS*ALIBAVA::NOOFCHANNELS; ++ichan) 
