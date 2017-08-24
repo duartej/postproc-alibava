@@ -180,23 +180,20 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
     // /////////////////////////////////
 	
     // Alibava stores a pedestal and noise set in the run header. 
-    // These values are not used in te rest of the analysis, so it is 
-    // optional to store it. By default it will not be stored, but it you
-    // want you can set _storeHeaderPedestalNoise variable to true.
-    float tmp_float=-11;
+    float tmp_double = -11
     std::vector<float> headerPedestal;
     // first pedestal
     for(int ichan=0; ichan<ALIBAVA::NOOFCHIPS*ALIBAVA::NOOFCHANNELS; ++ichan) 
     {
-        infile.read(reinterpret_cast<char*> (&tmp_float), sizeof(double));
-        headerPedestal.push_back(tmp_float);
+        infile.read(reinterpret_cast<char*>(&tmp_double), sizeof(double));
+        headerPedestal.push_back(static_cast<float>(tmp_double));
     }	
     // now noise
     std::vector<float> headerNoise;
     for(int ichan=0; ichan<ALIBAVA::NOOFCHIPS*ALIBAVA::NOOFCHANNELS; ichan++) 
     {
-        infile.read(reinterpret_cast<char*>(&tmp_float), sizeof(double));
-        headerNoise.push_back(tmp_float);
+        infile.read(reinterpret_cast<char*>(&tmp_double), sizeof(double));
+        headerNoise.push_back(static_cast<float>(tmp_double));
     }
     ////////////////////
     // Process Header //
@@ -206,11 +203,8 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
     runHeader->version= version;
     runHeader->data_type =type;
     runHeader->date_time = std::string(ctime(reinterpret_cast<time_t*>(&date)));
-    if(opt.storeHeaderPedestalNoise) 
-    {
-        runHeader->header_pedestal = headerPedestal;
-        runHeader->header_noise = headerNoise;
-    }
+    runHeader->header_pedestal = headerPedestal;
+    runHeader->header_noise = headerNoise;
     runHeader->run_number = opt.runNumber;
     
     // Store the run header
