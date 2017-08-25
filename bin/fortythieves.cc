@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
 
     // process the file
     const int events = IOAlibavaReader::read_data(opt,&iomanager);
-    std::cout << "Processed " << events;
+    std::cout << "Processed " << events << std::endl;
     int status = 0; 
     if(events < 0)
     {
@@ -197,8 +197,8 @@ int main(int argc, char* argv[])
         iomanager.set_calibration_plot(iomanager_cal);
         // close the calibration file
         iomanager_cal.close();
-        // Fill the diagnostic plots for the calibration
-        iomanager.diagnostic_plots(cal_map);
+        //XXX Fill the diagnostic plots for the calibration
+        // iomanager.diagnostic_plots(cal_map);
         // And update the beam file with the calibration vector
         // included in the runHeader postproc 
         iomanager.update(cal_map);
