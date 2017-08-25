@@ -3,7 +3,7 @@ from glob import glob
 
 
 setup(name='alibavaSkifftools',
-        version='v${postproc-alibava_VERSION_MAJOR}.${postproc-alibava_VERSION_MENOR}',
+        version='v${postproc-alibava_VERSION_MAJOR}.${postproc-alibava_VERSION_MINOR}',
         description='Configure the Alibava Marlin processors',
         author='Jordi Duarte-Campderros',
         author_email='Jordi.Duarte.Campderros@cern.ch',
