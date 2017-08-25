@@ -148,6 +148,8 @@ int main(int argc, char* argv[])
     IOManager iomanager(opt.outputFilename);
     iomanager.book_tree_header();
     iomanager.book_tree();
+    // Monitor
+    iomanager.book_monitor_plots();
 
     // process the file
     const int events = IOAlibavaReader::read_data(opt,&iomanager);
@@ -159,6 +161,8 @@ int main(int argc, char* argv[])
         // wrong
         status = events;
     }
+    // process the diagnostic plots
+    iomanager.diagnostic_plots();
     iomanager.close();
     
     // process calibration file
@@ -174,6 +178,7 @@ int main(int argc, char* argv[])
         IOManager iomanager_cal(calfile);
         iomanager_cal.book_tree_header();
         iomanager_cal.book_tree();
+        iomanager_cal.book_monitor_plots();
         // process the pedestal file
         // change the name of the input file
         input_options opt_cal(opt);
@@ -184,11 +189,14 @@ int main(int argc, char* argv[])
             status += events_cal;
         }
         // calibrating
+        // XXX: Create an unique postproc
         AlibavaPostProcessor postproc;
         std::cout << " - Calibrating" << std::endl;
         CalibrateBeetleMap cal_map = postproc.calibrate(iomanager_cal);
         // close the calibration file
         iomanager_cal.close();
+        // Fill the diagnostic plots for the calibration
+        iomanager.diagnostic_plots(cal_map);
         // And update the beam file with the calibration vector
         // included in the runHeader postproc 
         iomanager.update(cal_map);
@@ -217,6 +225,7 @@ int main(int argc, char* argv[])
         }
     
         // calculate pedestals and common noise: { bettle: { channels ,,, } }
+        // XXX: Create an unique postproc
         AlibavaPostProcessor postproc;
         std::cout << " - Calculating <pedestals>" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
@@ -243,10 +252,13 @@ int main(int argc, char* argv[])
         }*/
         // close the pedestal noise file
         iomanager_ped.close();
+        // Fill the diagnostic plots for the pedestal and noise
+        iomanager.diagnostic_plots(pednoise_cmmd);
         // And update the beam file with the pedestals and common noise values
         // included in the runHeader postproc 
         iomanager.update(pednoise_cmmd);
     }
+    std::cout << std::endl;
 
     return status;
 }

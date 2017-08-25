@@ -19,10 +19,12 @@
 // forward declarations
 class TFile;
 class TTree;
+class TObject;
 
 class AlibavaRunHeader;
 class AlibavaEvent;
 class CalibrationParameters;
+class AlibavaDiagnosis;
 
 using PedestalNoiseBeetleMap = std::map<int,std::pair<std::vector<float>,std::vector<float>> >;
 using CalibrateBeetleMap = std::map<int,std::vector<int>>;
@@ -41,9 +43,23 @@ class IOManager
 
         void book_tree_header();
         void book_tree();
+        void book_monitor_plots();
         
         void fill_header(const AlibavaRunHeader * aheader) const;
         void fill_event(const AlibavaEvent * anAlibavaEvent);
+
+        // Diagnostic plots filling 
+        // - using only beam data
+        void diagnostic_plots();
+        // - using beam and calibration data
+        void diagnostic_plots(const CalibrateBeetleMap & calib_m);
+        // - using beam and pedestal data
+        void diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m);
+        // - histograms getter
+        //template<typename ROOTTYPE> 
+        //    ROOTTYPE* get_diagnostic_plot(const std::string & plotname, const int & chip);
+        // - book histograms on runtime
+        void book_monitor_plot(const std::string & name, const TObject * theplot, const int & chip);
         
         // Update the runheader tree with the electron per ADC conversion
         void update(const CalibrateBeetleMap & calib_m);
@@ -80,6 +96,11 @@ class IOManager
         CalibrationParameters * _cal_parameters;
         AlibavaRunHeader * _runheader;
         AlibavaEvent * _events;
+
+        // The monitor/diagnostic plots
+        std::map<int,AlibavaDiagnosis*> _monitor_plots;
+        //AlibavaDiagnosis * _monitor_chip1;
+        //AlibavaDiagnosis * _monitor_chip2;
         
         // store the friends
         void aux_store_friends(TTree * tree);

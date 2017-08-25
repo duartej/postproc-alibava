@@ -1,0 +1,188 @@
+// ***********************************************
+// 
+// Monitoring and diagnosis tool for the Alibava
+// data-taking and (post-)processing 
+//
+// ***********************************************
+// Author: Jordi Duarte-Campderros (IFCA-CERN), 
+// jorge.duarte.campderros@cern.ch.
+// 
+// ***********************************************
+#include "AlibavaDiagnosis.h"
+
+// The alibava run and event headers
+//#include "AuxiliaryStructures.h"
+#include "ALIBAVA.h"
+
+// ROOT 
+#include "TFile.h"
+#include "TCanvas.h"
+#include "TH3F.h"
+#include "TH2F.h"
+#include "TH1F.h"
+#include "TProfile.h"
+
+#include "TROOT.h"
+
+// System headers
+//#include <fstream>
+//#include <map>
+//#include <algorithm>
+//#include <numeric>
+//#include <stdexcept>
+//#include <utility>
+
+AlibavaDiagnosis::AlibavaDiagnosis(const int & chipnumber):
+    _chip_number(chipnumber),
+    _canvas(nullptr)
+    //new TCanvas(std::string("Monitor plots Beetle "+std::to_string(chipnumber)).c_str()))
+{
+}
+
+AlibavaDiagnosis::~AlibavaDiagnosis()
+{
+    //if(_canvas != nullptr)
+    //{
+    //    delete _canvas;
+    //    _canvas=nullptr;
+    //}
+    for(auto & h: _histos)
+    {
+        if(h.second != nullptr)
+        {
+            delete h.second;
+            h.second = nullptr;
+        }
+    }
+}
+
+void AlibavaDiagnosis::book_plots()
+{
+    // The monitoring plot initialization
+    // ----------------------------------
+    // Note that most of the histograms are defined here
+    // with a dummy number of bins and/or axis ranges, 
+    // they are going to be fixed dynamically
+
+    // 1. Calibration (needs a calibration plot) XXX-- Check memory requirements
+    //_histos["calibration"] = new TH3F(std::string("Calibration chip-"+std::to_string(_chip_number)).c_str(),
+    //        ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
+    //        500,-32e3,32e3,
+    //       600,0,600);
+    const std::string suffix_name("chip-"+std::to_string(_chip_number));
+    _histos["calibration"] = new TH3F(std::string("histo_Calibration_"+suffix_name).c_str(),
+            std::string("Calibration curves "+suffix_name+";Channel number;Injected pulse [e] x10^{3};Signal average [ADC]").c_str(),
+            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
+            1,0,1,
+            1,0,1);
+    // 2. Pedestal/Noise (needs pedestal)
+    _histos["pedestal"] = new TH2F(std::string("histo_Pedestals_"+suffix_name).c_str(),
+            std::string("Pedestals "+suffix_name+";Channel number; Pedestal [ADC]").c_str(),
+            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
+            1,0,1);
+    _histos["noise"] = new TH2F(std::string("histo_Noise_"+suffix_name).c_str(),
+            std::string("Noise "+suffix_name+";Channel number; Noise [ADC]").c_str(),
+            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
+            1,0,1);
+    // 3. Temperature
+    _histos["temperature"] = new TH2F(std::string("histo_Temperature_"+suffix_name).c_str(),
+            std::string("Temperature per event "+suffix_name+";Event number; Noise [ADC]").c_str(),
+            1,0,1,
+            1,0,1);
+    // 4. TDC
+    _histos["tdc"] = new TH2F(std::string("histo_TDC_"+suffix_name).c_str(),
+            std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str(),
+            1,0,1,
+            1,0,1);
+    // 5. Signal (needs pedestal)
+    _histos["signal"] = new TH1F(std::string("histo_Signal_"+suffix_name).c_str(),
+            std::string("Signal "+suffix_name+";Signal [ADC]; Entries").c_str(),
+            1,0,1);
+    // 6. Hits   (needs pedestal)
+    _histos["hits"] = new TH1F(std::string("histo_Hits_"+suffix_name).c_str(),
+            std::string("Signal "+suffix_name+";Channel number; Entries").c_str(),
+            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1);
+    // 7. Time profile (needs pedestal)
+    _histos["timeprofile"] = new TProfile(std::string("histo_TimeProfile_"+suffix_name).c_str(),
+            std::string("Time profile "+suffix_name+";Time [ns]; Signal average [ADC]").c_str(),
+            50,0,100);
+
+    // Should it be assigned to no-where or belong to any file?
+    // --> for all the histos, then AddDirectory(0)a
+    for(auto & h: _histos)
+    {
+        dynamic_cast<TH1*>(h.second)->SetDirectory(0);
+    }
+}
+
+void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * theplot)
+{
+    // Consistency check
+    if(_histos.find(name) == _histos.end())
+    {
+        std::cerr << "[AlibavaDiagnosis::book_plot] The plot object '"
+            << name << "' already exists or it is already booked a different object "
+            << " with the same name" << std::endl;
+        // Throw exception?
+        return;
+    }
+
+    // Get the object and clone it without appending it in the gDirectory of TROOT
+    const std::string suffix_name("chip-"+std::to_string(this->_chip_number));
+    _histos[name] = theplot->Clone(std::string("externalbook_histo_"+name+"_"+suffix_name).c_str());
+    dynamic_cast<TH1*>(_histos[name])->SetDirectory(0);
+}
+
+template<class ROOTTYPE> 
+    ROOTTYPE* AlibavaDiagnosis::get_diagnostic_plot(const std::string & plotname)
+{
+    if(_histos.find(plotname) == _histos.end())
+    {
+        std::cerr << "[AlibavaDiagnosis::get_diagnostic_plot ERROR] Invalid plotname"
+            << " [" << plotname << "] " << std::endl;
+        return nullptr;
+    }
+    return static_cast<ROOTTYPE*>(_histos[plotname]);
+}
+
+// Declaration of the used types
+template TH3F* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
+
+//AliabavaDiagnosis::fill_
+//
+
+void AlibavaDiagnosis::deliver_plots()
+{
+    // Plot all the monitoring plots in a canvas and 
+    // store that canvas in the file
+    // ----------------------------------------------
+    // Define the canvas
+    const int wsize = 650;
+    const int hsize = 850;
+    TCanvas * canvas = new TCanvas(std::string("monitor_canvas_"+std::to_string(_chip_number)).c_str(),
+            std::string("Monitor plots Beetle "+std::to_string(_chip_number)).c_str(),
+            wsize,hsize);
+    // and its layout: colummns, row, separation betwwen columns and rows
+    canvas->Divide(2,4,0.01,0.01);
+    // And plot (first define the order of plotting (except those pads
+    // with more than 1 histo per pad)
+    const std::map<int,std::string> plotorder = 
+    { 
+        {1,"calibration"},
+        {3,"signal"},
+        {4,"hits"},
+        {5,"timeprofile"},
+        {6,"temperature"},
+        {7,"tdc"}
+    };
+    // Define the pads and fill them
+    for(const auto & padplot: plotorder)
+    {
+        auto pad1 = canvas->cd(padplot.first);
+        _histos[padplot.second]->Draw();
+    }
+    // Not sure if we need the file here...
+    canvas->Write();
+    delete canvas;
+    canvas = nullptr;
+}

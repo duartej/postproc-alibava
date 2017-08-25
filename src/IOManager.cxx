@@ -10,6 +10,7 @@
 #include "IOManager.h"
 
 // The alibava run and event headers
+#include "AlibavaDiagnosis.h"
 #include "AuxiliaryStructures.h"
 #include "ALIBAVA.h"
 
@@ -107,9 +108,11 @@ IOManager::IOManager(const std::string & rootfilename):
     _eventsProcessed(0),
     _cal_parameters(nullptr),
     _runheader(nullptr), 
-    _events(nullptr) 
+    _events(nullptr)
 { 
-    _file = new TFile(_rootfilename.c_str(),"RECREATE"); 
+    _file = new TFile(_rootfilename.c_str(),"RECREATE");
+
+    _monitor_plots = { {1,new AlibavaDiagnosis(1)}, {2,new AlibavaDiagnosis(2)} };
 }
 
 IOManager::~IOManager()
@@ -133,6 +136,16 @@ IOManager::~IOManager()
         delete _events;
         _events = nullptr;
     }
+    /*if(_monitor_chip1 != nullptr)
+    {
+        delete _monitor_chip1;
+        _monitor_chip1 = nullptr;
+    }
+    if(_monitor_chip2 != nullptr)
+    {
+        delete _monitor_chip2;
+        _monitor_chip2 = nullptr;
+    }*/
 }
 
 void IOManager::set_calibration_parameters(const std::vector<int> & calparam_v)
@@ -183,6 +196,15 @@ void IOManager::book_tree()
     _tree_events->Branch("data_beetle2",&(_events->beetle2_data));
 }
 
+void IOManager::book_monitor_plots()
+{
+    // Initialize the monitor instances
+    for(const auto & mon: _monitor_plots)
+    {
+        mon.second->book_plots();
+    }
+}
+
 
 void IOManager::fill_header(const AlibavaRunHeader * aheader) const
 {
@@ -210,6 +232,19 @@ void IOManager::aux_store_friends(TTree * tree)
 
 void IOManager::close()
 {
+    // --> The monitor plots, create and store the plots
+    //     and deallocate memory afterwards
+    for(auto & mon: _monitor_plots)
+    {
+        if(mon.second != nullptr)
+        {
+            // Create and store the 
+            mon.second->deliver_plots();
+            delete mon.second;
+            mon.second = nullptr;
+        }
+    }
+
     if( _tree_header != nullptr )
     {
         _tree_header->Write("", TTree::kOverwrite);
@@ -478,3 +513,50 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
 }
 
 
+void IOManager::diagnostic_plots()
+{
+    return ;
+}
+void IOManager::diagnostic_plots(const CalibrateBeetleMap & cal_m)
+{
+    return ;
+}
+
+void IOManager::diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
+{
+    return;
+}
+
+void IOManager::book_monitor_plot(const std::string & plotname, const TObject * theplot, const int & chip)
+{
+    if(_monitor_plots.find(chip) == _monitor_plots.end())
+    {
+        std::cerr << "[IOManager::get_diagnostic_plot ERROR] Invalid chip"
+            << " number [" << chip << "] " << std::endl;
+        // Exception??
+        return;
+    }
+    // Booking it in the proper monitor
+    _monitor_plots[chip]->book_plot(plotname,theplot);
+}
+/*template<typename ROOTTYPE> 
+    ROOTTYPE* IOManager::get_diagnostic_plot(const std::string & plotname, const int & chip)
+{
+    if( chip == 1)
+    {
+        return this->_monitor_chip1->get_diagnostic_plot<ROOTTYPE>(plotname);
+    }
+    else if(chip == 2)
+    {
+        return this->_monitor_chip2->get_diagnostic_plot<ROOTTYPE>(plotname);
+    }
+    else
+    {
+        std::cerr << "[IOManager::get_diagnostic_plot ERROR] Invalid chip"
+            << " number [" << chip << "] " << std::endl;
+        return nullptr;
+    }
+}
+
+//Declaration of the used types
+template TH3F* IOManager::get_diagnostic_plot(const std::string&,const int &);*/

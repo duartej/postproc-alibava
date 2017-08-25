@@ -1,5 +1,5 @@
 # Some useful libraries
-add_library(IOManagersAlibava SHARED IOManager.cxx IOAlibavaReader.cxx AlibavaPostProcessor.cxx)
+add_library(IOManagersAlibava SHARED IOManager.cxx IOAlibavaReader.cxx AlibavaPostProcessor.cxx AlibavaDiagnosis.cxx)
 
 # Make sure the compiler can find include files for the library
 # when other libraries or executables link to IOManager
