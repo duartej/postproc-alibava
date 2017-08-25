@@ -178,7 +178,7 @@ int main(int argc, char* argv[])
         IOManager iomanager_cal(calfile);
         iomanager_cal.book_tree_header();
         iomanager_cal.book_tree();
-        iomanager_cal.book_monitor_plots();
+        // --> Not needed, just need the calibration iomanager_cal.book_monitor_plots();
         // process the pedestal file
         // change the name of the input file
         input_options opt_cal(opt);

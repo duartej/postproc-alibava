@@ -23,7 +23,6 @@
 
 // forward declarations
 // the canvas
-class TCanvas;
 class TObject;
 
 
@@ -37,7 +36,7 @@ class AlibavaDiagnosis
         // Initialization of the histograms
         void book_plots();
         
-        // Initialization of external plot objects  which are cloned here
+        // Initialization of external plot objects, the object is cloned here
         void book_plot(const std::string & name, const TObject * plotobject);
 
         // Store the defined plots to a canvas
@@ -50,8 +49,6 @@ class AlibavaDiagnosis
     private:
         int _chip_number;
         // The map of plots
-        // The canvas to be stored
-        TCanvas * _canvas;
         std::map<std::string,TObject*> _histos; 
 };
 

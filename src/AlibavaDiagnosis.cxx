@@ -33,19 +33,12 @@
 //#include <utility>
 
 AlibavaDiagnosis::AlibavaDiagnosis(const int & chipnumber):
-    _chip_number(chipnumber),
-    _canvas(nullptr)
-    //new TCanvas(std::string("Monitor plots Beetle "+std::to_string(chipnumber)).c_str()))
+    _chip_number(chipnumber)
 {
 }
 
 AlibavaDiagnosis::~AlibavaDiagnosis()
 {
-    //if(_canvas != nullptr)
-    //{
-    //    delete _canvas;
-    //    _canvas=nullptr;
-    //}
     for(auto & h: _histos)
     {
         if(h.second != nullptr)
@@ -106,6 +99,15 @@ void AlibavaDiagnosis::book_plots()
     _histos["timeprofile"] = new TProfile(std::string("histo_TimeProfile_"+suffix_name).c_str(),
             std::string("Time profile "+suffix_name+";Time [ns]; Signal average [ADC]").c_str(),
             50,0,100);
+    // 8. Noise per event (needs pedestal)
+    _histos["noiseevent"] = new TH2F(std::string("histo_NoiseEvent_"+suffix_name).c_str(),
+            std::string("Noise per event "+suffix_name+";Event number [ns]; Noise [ADC]").c_str(),
+            1,0,1,
+            1,0,1);
+    _histos["commonnoiseevent"] = new TH2F(std::string("histo_CommonNoiseEvent_"+suffix_name).c_str(),
+            std::string("Common Noise per event "+suffix_name+";Event number [ns]; Common Noise [ADC]").c_str(),
+            1,0,1,
+            1,0,1);
 
     // Should it be assigned to no-where or belong to any file?
     // --> for all the histos, then AddDirectory(0)a
@@ -118,7 +120,7 @@ void AlibavaDiagnosis::book_plots()
 void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * theplot)
 {
     // Consistency check
-    if(_histos.find(name) == _histos.end())
+    if(_histos.find(name) != _histos.end())
     {
         std::cerr << "[AlibavaDiagnosis::book_plot] The plot object '"
             << name << "' already exists or it is already booked a different object "
@@ -153,9 +155,23 @@ template TH3F* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
 
 void AlibavaDiagnosis::deliver_plots()
 {
+    // Store all external booked plots if any
+    // XXX: a directory can be used to create a more ordered structure
+    // in that case it is needed either a TFile argument or a gDirectory...
+    for(auto & h: _histos)
+    {
+        if(h.second != nullptr && std::string(h.second->GetName()).find("externalbook") == 0)
+        {
+        std::cout << "HOLA> " << h.second->GetName() << std::endl;
+            h.second->Write();
+        }
+    }
+    // TO BE REMOVED
+
     // Plot all the monitoring plots in a canvas and 
     // store that canvas in the file
     // ----------------------------------------------
+    // XXX FIXME: Define the Style
     // Define the canvas
     const int wsize = 650;
     const int hsize = 850;
@@ -178,11 +194,43 @@ void AlibavaDiagnosis::deliver_plots()
     // Define the pads and fill them
     for(const auto & padplot: plotorder)
     {
-        auto pad1 = canvas->cd(padplot.first);
+        canvas->cd(padplot.first);
+        // Check if the plot is present
+        if(_histos[padplot.second] == nullptr)
+        {
+            // This behaviour should be also allowed (see calibration or pedestal
+            // processing cases)
+            /*std::cerr << "[AlibavaDiagnosis::deliver_plots] The plot objects "
+            << " were not booked! Book them first by using 'AlibavaDiagnosis::book_plots()'" 
+            << " No Diagnosis plots are created.\n" << std::endl;*/
+            // Just return without storing, and deallocate memory before
+            delete canvas;
+            canvas = nullptr;
+            return;
+        }
         _histos[padplot.second]->Draw();
     }
-    // Not sure if we need the file here...
+    // And now the composite pads
+    // --------------------------
+    // PAD 2: Pedestals - Noise
+    auto pad_comp = canvas->cd(2);
+    pad_comp->Divide(2,1,0.001,0.001);
+    pad_comp->cd(1);
+    _histos["pedestal"]->Draw();
+    pad_comp->cd(2);
+    _histos["noise"]->Draw();
+    // PAD 8: Noise per Event 
+    auto pad_comp8 = canvas->cd(8);
+    pad_comp8->Divide(2,1,0.001,0.001);
+    pad_comp8->cd(1);
+    _histos["noiseevent"]->Draw();
+    pad_comp8->cd(2);
+    _histos["commonnoiseevent"]->Draw();
+    // Save it to the TFile present in the gDirectory 
+    // (managed by the client of this class: IOManager)
     canvas->Write();
+    // and deallocate memory 
     delete canvas;
     canvas = nullptr;
+    // Note that the pads are already deleted by the canvas
 }
