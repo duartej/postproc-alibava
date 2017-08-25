@@ -148,10 +148,63 @@ template<class ROOTTYPE>
 }
 
 // Declaration of the used types
-template TH3F* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
+template TH3F*     AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
+template TProfile* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
 
-//AliabavaDiagnosis::fill_
-//
+const std::vector<TObject*> AlibavaDiagnosis::get_calibration_plots() const
+{
+    // Get the calibration plots booked externally
+    // XXX FIXME - the name should be defined as a global (in the ALIBAVA.h probably)
+    std::vector<TObject*> theobjects;
+    std::string calname("calibration_profile_");
+    for(int ichannel = 0; ichannel < ALIBAVA::NOOFCHANNELS; ++ichannel)
+    {
+        // -- first check whether they are here or not
+        const std::string name(calname+std::to_string(ichannel));
+        if(_histos.find(name) == _histos.end())
+        {
+            std::cerr << "[AlibavaDiagnosis::get_calibration_plots] The plot object '"
+                << name << "' was not booked! Inconsistent use of this method...'" << std::endl;
+            // XXX throw exception ?
+            continue;
+        }
+        theobjects.push_back(_histos.at(name));
+    }
+    return theobjects;
+}
+
+void AlibavaDiagnosis::set_calibration_plot(const std::vector<TObject*> & curves)
+{
+    // First check at least there is something
+    if(curves.size() == 0)
+    {
+        std::cerr << "[AlibavaDiagnosis::set_calibration_plots] No calibration plots "
+            << "present in the argument. Incoherent use of this class... '" << std::endl;
+        return;
+    }
+std::cout << "AQUI" << std::endl;
+    // Get the info from the objects in order to re-bin the histogram
+    TProfile * auxobj = static_cast<TProfile*>(curves[0]);
+    const int bins_y = auxobj->GetNbinsX();
+    const float ymin = auxobj->GetXaxis()->GetBinLowEdge(1);
+    const float ymax = auxobj->GetXaxis()->GetBinUpEdge(bins_y);
+std::cout << "AQUI-2" << std::endl;
+std::cout << "AQUI" << _histos["calibration"] << std::endl;
+
+    static_cast<TH3F*>(_histos["calibration"])->GetYaxis()->Set(bins_y,ymin,ymax);
+    static_cast<TH3F*>(_histos["calibration"])->GetZaxis()->Set(100,200,700);
+std::cout << "AQUI-3" << std::endl;
+    // And fill the histogram (remember was fill in channel order
+    for(unsigned int i=0; i < curves.size(); ++i)
+    {
+        const int ich = static_cast<int>(i);
+        const TProfile* prf = static_cast<TProfile*>(curves[i]);
+        for(int ibin=1; ibin < prf->GetNbinsX()+1; ++ibin)
+        {
+            static_cast<TH3F*>(_histos["calibration"])->SetBinContent(ich,prf->GetBinCenter(ibin),prf->GetBinContent(ibin));
+        }
+    }
+}
 
 void AlibavaDiagnosis::deliver_plots()
 {
@@ -162,7 +215,6 @@ void AlibavaDiagnosis::deliver_plots()
     {
         if(h.second != nullptr && std::string(h.second->GetName()).find("externalbook") == 0)
         {
-        std::cout << "HOLA> " << h.second->GetName() << std::endl;
             h.second->Write();
         }
     }

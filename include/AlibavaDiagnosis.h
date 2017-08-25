@@ -39,6 +39,12 @@ class AlibavaDiagnosis
         // Initialization of external plot objects, the object is cloned here
         void book_plot(const std::string & name, const TObject * plotobject);
 
+        // Get the objects needed to create the 3dim calibration plot (note
+        // this function make sense only in the calibration file
+        const std::vector<TObject*> get_calibration_plots() const;
+        // Set 3dim calibration plot 
+        void set_calibration_plot(const std::vector<TObject*> & curves);
+
         // Store the defined plots to a canvas
         void deliver_plots();
 

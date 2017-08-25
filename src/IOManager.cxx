@@ -117,6 +117,30 @@ IOManager::IOManager(const std::string & rootfilename):
 
 IOManager::~IOManager()
 {
+    // XXX: 
+    // --> The monitor plots, create and store the plots
+    //     and deallocate memory afterwards
+    //  XXX
+    // Check the file is closed, otherwise don't do anything
+    if( _file != nullptr )
+    {
+        std::cerr << "[IOManager::update WARNING] Trying to update"
+            << " an still open file. Please close it first. " << std::endl;
+        return;
+    }
+
+    _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+    for(auto & mon: _monitor_plots)
+    {
+        if(mon.second != nullptr)
+        {
+            // Create and store the 
+            mon.second->deliver_plots();
+            delete mon.second;
+            mon.second = nullptr;
+        }
+    }
+
     // In principle it should be closed, but
     // just in case (if it was closed, nothing will do inside)
     this->close();
@@ -234,6 +258,8 @@ void IOManager::close()
 {
     // --> The monitor plots, create and store the plots
     //     and deallocate memory afterwards
+    //     XXX: Only do it at destruction
+    /*
     for(auto & mon: _monitor_plots)
     {
         if(mon.second != nullptr)
@@ -243,7 +269,7 @@ void IOManager::close()
             delete mon.second;
             mon.second = nullptr;
         }
-    }
+    }*/
 
     if( _tree_header != nullptr )
     {
@@ -539,6 +565,21 @@ void IOManager::book_monitor_plot(const std::string & plotname, const TObject * 
     // Booking it in the proper monitor
     _monitor_plots[chip]->book_plot(plotname,theplot);
 }
+
+const std::vector<TObject*> IOManager::get_calibration_objects(const int & chipnumber) const
+{
+    return _monitor_plots.at(chipnumber)->get_calibration_plots();
+}
+
+void IOManager::set_calibration_plot(const IOManager & cal_manager)
+{
+    for(auto & chipmon: _monitor_plots)
+    {
+        // Choose the right monitor manager and send the plots
+        chipmon.second->set_calibration_plot(cal_manager.get_calibration_objects(chipmon.first));
+    }
+}
+
 /*template<typename ROOTTYPE> 
     ROOTTYPE* IOManager::get_diagnostic_plot(const std::string & plotname, const int & chip)
 {

@@ -58,8 +58,13 @@ class IOManager
         // - histograms getter
         //template<typename ROOTTYPE> 
         //    ROOTTYPE* get_diagnostic_plot(const std::string & plotname, const int & chip);
-        // - book histograms on runtime
+        // - book histograms on runtime, created and fill externally
         void book_monitor_plot(const std::string & name, const TObject * theplot, const int & chip);
+        // - set the 3dimensional histogram for the calibration curves
+        //   using the information on the calibration manager
+        void set_calibration_plot(const IOManager & calibration_manager);
+        // - get all the objects needed to get the 3dim calibration curves
+        const std::vector<TObject*> get_calibration_objects(const int & chipnumber) const;
         
         // Update the runheader tree with the electron per ADC conversion
         void update(const CalibrateBeetleMap & calib_m);

@@ -193,6 +193,8 @@ int main(int argc, char* argv[])
         AlibavaPostProcessor postproc;
         std::cout << " - Calibrating" << std::endl;
         CalibrateBeetleMap cal_map = postproc.calibrate(iomanager_cal);
+        // Extract the summary plot for calibration and set it in the main manager
+        iomanager.set_calibration_plot(iomanager_cal);
         // close the calibration file
         iomanager_cal.close();
         // Fill the diagnostic plots for the calibration

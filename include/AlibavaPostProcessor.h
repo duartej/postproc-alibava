@@ -17,6 +17,9 @@
 #include <map>
 #include <vector>
 
+// forward declarations
+class TH3F;
+
 
 class AlibavaPostProcessor
 {
@@ -25,7 +28,7 @@ class AlibavaPostProcessor
         ~AlibavaPostProcessor() { ; }
 
         // Obtain the equivalent electrons per ADC counts
-        CalibrateBeetleMap calibrate(const IOManager & gauge);
+        CalibrateBeetleMap calibrate(IOManager & gauge);
 
         // Fit a gaussian per channel, the mean is the <pedestal> and the 
         // sigma the <noise> (note that to evaluate the common noise you 

@@ -68,7 +68,7 @@ AlibavaPostProcessor::AlibavaPostProcessor():
 
 
 // Alternative algorithm using the calibration_charge from the Events tree
-CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
+CalibrateBeetleMap AlibavaPostProcessor::calibrate(IOManager & gauge)
 {
     std::string data_b1_brname("data_beetle1");
     std::string data_b2_brname("data_beetle2");
@@ -186,10 +186,21 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(const IOManager & gauge)
             }
         }
     }
+    // Persistify the calibration curves (note the chip number must start with 1)
+    for(const auto & hdictperchip: histos)
+    {
+        const int chipnumber = hdictperchip.first+1;
+        for(const auto & hperchannel: hdictperchip.second)
+        {
+            const int ichannel = hperchannel.first;
+            gauge.book_monitor_plot("calibration_profile_"+std::to_string(ichannel),hperchannel.second,chipnumber);
+        }
+    }
+    // And fill the calibration monitor 3d histogram based on 
     // Deallocating memory
     delete cc;
     cc = nullptr;
-    // ROOT stuff
+    // Deallocate memory from ROOT stuff
     auxmem::deallocate_memory<TProfile>(histos);
     auxmem::deallocate_memory<TF1>(cal_curve);
     // vector and maps
