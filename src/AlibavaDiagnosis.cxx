@@ -17,7 +17,7 @@
 // ROOT 
 #include "TFile.h"
 #include "TCanvas.h"
-#include "TH3F.h"
+#include "TGraph.h"
 #include "TH2F.h"
 #include "TH1F.h"
 #include "TProfile.h"
@@ -56,6 +56,8 @@ void AlibavaDiagnosis::book_plots()
     // Note that most of the histograms are defined here
     // with a dummy number of bins and/or axis ranges, 
     // they are going to be fixed dynamically afterwards
+    
+    TH1::AddDirectory(0);
 
     // 1. Calibration (needs a calibration plot)
     const std::string suffix_name("chip-"+std::to_string(_chip_number));
@@ -73,15 +75,19 @@ void AlibavaDiagnosis::book_plots()
             ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
             1,0,1);
     // 3. Temperature
-    _histos["temperature"] = new TH2F(std::string("histo_Temperature_"+suffix_name).c_str(),
-            std::string("Temperature per event "+suffix_name+";Event number; Noise [ADC]").c_str(),
-            1,0,1,
-            1,0,1);
+    _histos["temperature"] = new TGraph();
+    static_cast<TGraph*>(_histos["temperature"])->SetName(std::string("histo_Temperature_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["temperature"])->SetTitle(std::string("Temperature per event "+suffix_name+";Event number; Temperature [^{o}C]").c_str());
+
     // 4. TDC
-    _histos["tdc"] = new TH2F(std::string("histo_TDC_"+suffix_name).c_str(),
-            std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str(),
-            1,0,1,
-            1,0,1);
+    //_histos["tdc"] = new TH2F(std::string("histo_TDC_"+suffix_name).c_str(),
+    //        std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str(),
+    //        1,0,1,
+    //        1,0,1);
+    _histos["tdc"] = new TGraph();
+    static_cast<TGraph*>(_histos["tdc"])->SetName(std::string("histo_TDC_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["tdc"])->SetTitle(std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str());
+
     // 5. Signal (needs pedestal)
     _histos["signal"] = new TH1F(std::string("histo_Signal_"+suffix_name).c_str(),
             std::string("Signal "+suffix_name+";Signal [ADC]; Entries").c_str(),
@@ -95,21 +101,29 @@ void AlibavaDiagnosis::book_plots()
             std::string("Time profile "+suffix_name+";Time [ns]; Signal average [ADC]").c_str(),
             50,0,100);
     // 8. Noise per event (needs pedestal)
-    _histos["noiseevent"] = new TH2F(std::string("histo_NoiseEvent_"+suffix_name).c_str(),
-            std::string("Noise per event "+suffix_name+";Event number [ns]; Noise [ADC]").c_str(),
-            1,0,1,
-            1,0,1);
-    _histos["commonnoiseevent"] = new TH2F(std::string("histo_CommonNoiseEvent_"+suffix_name).c_str(),
-            std::string("Common Noise per event "+suffix_name+";Event number [ns]; Common Noise [ADC]").c_str(),
-            1,0,1,
-            1,0,1);
+    //_histos["noiseevent"] = new TH2F(std::string("histo_NoiseEvent_"+suffix_name).c_str(),
+    //        std::string("Noise per event "+suffix_name+";Event number [ns]; Noise [ADC]").c_str(),
+    //        1,0,1,
+    //        1,0,1);
+    _histos["noiseevent"] = new TGraph();
+    static_cast<TGraph*>(_histos["noiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["noiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
+    
+    //_histos["commonnoiseevent"] = new TH2F(std::string("histo_CommonNoiseEvent_"+suffix_name).c_str(),
+    //        std::string("Common Noise per event "+suffix_name+";Event number [ns]; Common Noise [ADC]").c_str(),
+    //        1,0,1,
+    //        1,0,1);
+    _histos["commonnoiseevent"] = new TGraph();
+    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
 
+    TH1::AddDirectory(1);
     // Should it be assigned to no-where or belong to any file?
     // --> for all the histos, then AddDirectory(0)a
-    for(auto & h: _histos)
+    /*for(auto & h: _histos)
     {
         dynamic_cast<TH1*>(h.second)->SetDirectory(0);
-    }
+    }*/
 }
 
 void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * theplot)
@@ -129,6 +143,29 @@ void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * thepl
     _histos[name] = theplot->Clone(std::string("externalbook_histo_"+name+"_"+suffix_name).c_str());
     dynamic_cast<TH1*>(_histos[name])->SetDirectory(0);
 }
+
+template<class T1, class T2>
+    void AlibavaDiagnosis::update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y)
+{
+    // Consistency check
+    if(_histos.find(plotname) == _histos.end())
+    {
+        std::cerr << "[AlibavaDiagnosis::update_diagnostic_plot] The plot object '"
+            << plotname << "' does not exist" << std::endl;
+        // Throw exception?
+        return;
+    }
+    
+    // all the graphs
+    if(plotname == "temperature" || plotname == "tdc")
+    {
+        TGraph * thegraph = static_cast<TGraph*>(_histos[plotname]);
+        thegraph->SetPoint(thegraph->GetN(),x,y);
+    }
+}
+// Declaration of the used types
+template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const int&);
+template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const float&);
 
 template<class ROOTTYPE> 
     ROOTTYPE* AlibavaDiagnosis::get_diagnostic_plot(const std::string & plotname)
@@ -203,6 +240,11 @@ void AlibavaDiagnosis::set_calibration_plot(const std::vector<TObject*> & curves
             thehisto->SetBinContent(bin,prf->GetBinContent(ibin));
         }
     }
+}
+        
+void AlibavaDiagnosis::set_diagnostic_plots(const std::pair<std::vector<float>,std::vector<float> > & pednoise)
+{
+    ;
 }
 
 void AlibavaDiagnosis::deliver_plots()

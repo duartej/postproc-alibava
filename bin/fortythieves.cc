@@ -161,8 +161,9 @@ int main(int argc, char* argv[])
         // wrong
         status = events;
     }
-    // process the diagnostic plots
-    iomanager.diagnostic_plots();
+    // process the diagnostic plots (if there is no pedestal file, otherwise,
+    // the wait until the pedestal file is present to process all)
+    //iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
     iomanager.close();
     
     // process calibration file
@@ -197,8 +198,6 @@ int main(int argc, char* argv[])
         iomanager.set_calibration_plot(iomanager_cal);
         // close the calibration file
         iomanager_cal.close();
-        //XXX Fill the diagnostic plots for the calibration
-        // iomanager.diagnostic_plots(cal_map);
         // And update the beam file with the calibration vector
         // included in the runHeader postproc 
         iomanager.update(cal_map);
@@ -255,7 +254,7 @@ int main(int argc, char* argv[])
         // close the pedestal noise file
         iomanager_ped.close();
         // Fill the diagnostic plots for the pedestal and noise
-        iomanager.diagnostic_plots(pednoise_cmmd);
+        iomanager.set_diagnostic_plots(pednoise_cmmd);
         // And update the beam file with the pedestals and common noise values
         // included in the runHeader postproc 
         iomanager.update(pednoise_cmmd);

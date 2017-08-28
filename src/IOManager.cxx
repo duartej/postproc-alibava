@@ -24,6 +24,8 @@
 #include <fstream>
 #include <iomanip>
 #include <functional>
+#include <cmath>
+#include <algorithm>
 
 // Some auxiliary functions ----------------------------
 std::string trim_right(const std::string & s)
@@ -106,6 +108,7 @@ IOManager::IOManager(const std::string & rootfilename):
     _tree_header(nullptr),
     _tree_events(nullptr),
     _eventsProcessed(0),
+    _monitor_plots_booked(false),
     _cal_parameters(nullptr),
     _runheader(nullptr), 
     _events(nullptr)
@@ -223,6 +226,7 @@ void IOManager::book_tree()
 void IOManager::book_monitor_plots()
 {
     // Initialize the monitor instances
+    _monitor_plots_booked=true;
     for(const auto & mon: _monitor_plots)
     {
         mon.second->book_plots();
@@ -539,31 +543,51 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
 }
 
 
-void IOManager::diagnostic_plots()
-{
-    return ;
-}
-void IOManager::diagnostic_plots(const CalibrateBeetleMap & cal_m)
-{
-    return ;
-}
-
-void IOManager::diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
-{
-    return;
-}
-
 void IOManager::book_monitor_plot(const std::string & plotname, const TObject * theplot, const int & chip)
 {
     if(_monitor_plots.find(chip) == _monitor_plots.end())
     {
-        std::cerr << "[IOManager::get_diagnostic_plot ERROR] Invalid chip"
+        std::cerr << "[IOManager::book_monitor_plot ERROR] Invalid chip"
             << " number [" << chip << "] " << std::endl;
         // Exception??
         return;
     }
     // Booking it in the proper monitor
     _monitor_plots[chip]->book_plot(plotname,theplot);
+}
+
+void IOManager::update_diagnostic_plot(const int & chip, const std::string & plotname, const int & x, const float & y)
+{
+    // Do nothing if the plots wasn't booked
+    if(!_monitor_plots_booked)
+    {
+        return;
+    }
+
+    if(_monitor_plots.find(chip) == _monitor_plots.end())
+    {
+        std::cerr << "[IOManager::book_monitor_plot ERROR] Invalid chip"
+            << " number [" << chip << "] " << std::endl;
+        // Exception??
+        return;
+    }
+    // the monitor class take care of it
+    _monitor_plots[chip]->update_diagnostic_plot(plotname,x,y);
+}
+
+void IOManager::update_diagnostic_plot(const std::string & plotname, const int & x, const float & y)
+{
+    // Do nothing if the plots wasn't booked
+    if(!_monitor_plots_booked)
+    {
+        return;
+    }
+
+    // Plot independent of the chip number
+    for(auto & mon: _monitor_plots)
+    {
+        mon.second->update_diagnostic_plot(plotname,x,y);
+    }
 }
 
 const std::vector<TObject*> IOManager::get_calibration_objects(const int & chipnumber) const
@@ -579,6 +603,98 @@ void IOManager::set_calibration_plot(const IOManager & cal_manager)
         chipmon.second->set_calibration_plot(cal_manager.get_calibration_objects(chipmon.first));
     }
 }
+
+void IOManager::set_diagnostic_plots(bool is_pedestal_file_present)
+{
+    // Don't do nothing now, wait untile the pedestal file is present
+    // and the plots will be filled with the overloaded version of this
+    // method
+    if(is_pedestal_file_present)
+    {
+        return;
+    }
+
+    // Get the pedestal and noise from the header
+    PedestalNoiseBeetleMap pednoise_from_header = this->get_pednoise_from_header();
+    // And obtain the plots those values
+    this->set_diagnostic_plots(pednoise_from_header);
+}
+
+void IOManager::set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
+{
+    for(auto & chipmon: _monitor_plots)
+    {
+        // Choose the right monitor manager and send the plots
+        chipmon.second->set_diagnostic_plots(pednoise_m.at(chipmon.first));
+    }
+}
+
+PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def,const float & noise_def)
+{
+    bool file_was_closed = false;
+    // Check the file is closed to close it afterwards
+    if( _file == nullptr )
+    {
+        file_was_closed = true;
+        _file = new TFile(_rootfilename.c_str()); 
+        _tree_header = dynamic_cast<TTree*>(_file->Get("runHeader"));
+    }
+    if( _tree_header == nullptr )
+    {
+        // Something weird happened
+        // -- return or throw exception
+    }
+    
+    // Getting the noise and pedestal for all the chips
+    std::vector<float>* pedestal = nullptr;
+    std::vector<float>* noise = nullptr;
+    _tree_header->SetBranchAddress("header_pedestal",&pedestal);
+    _tree_header->SetBranchAddress("header_noise",&noise);
+
+    // Fill the vectors (remember runHeader has just one entry)
+    _tree_header->GetEntry(0);
+    
+    // And fill the Map if there are not zero values, otherwise
+    // use default values
+    bool at_least_one_nonull = false;
+    PedestalNoiseBeetleMap pnmap;
+    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
+        {
+            // Remember pedestal and noise vector contains all the elements
+            // of all the chips, so it is needed to convert the element number into chip and channel
+            const unsigned int el = static_cast<unsigned int>(chip*ALIBAVA::NOOFCHIPS+ichan);
+            pnmap[chip].first.push_back((*pedestal)[el]);
+            pnmap[chip].second.push_back((*noise)[el]);
+            if(!at_least_one_nonull && fabs((*pedestal)[el]) > 1.0)
+            {
+                at_least_one_nonull=true;
+            }
+        }
+    }
+
+    // If the header is corrupted, fill the default values
+    // (corrupted: assuming all values to zero!! XXX: CHECK THAT)
+    if(!at_least_one_nonull)
+    {
+        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+        {
+            std::fill(pnmap[chip].first.begin(),pnmap[chip].first.end(),ped_def);
+            std::fill(pnmap[chip].second.begin(),pnmap[chip].second.end(),noise_def);
+        }
+    }
+
+    // Let the fil to be in the original status
+    if(file_was_closed)
+    {
+        // Note that close will take care of closing the appropiate     
+        // trees as well (events, runHeader)
+        this->close();
+    }
+    return pnmap;
+}
+
 
 /*template<typename ROOTTYPE> 
     ROOTTYPE* IOManager::get_diagnostic_plot(const std::string & plotname, const int & chip)
@@ -600,4 +716,5 @@ void IOManager::set_calibration_plot(const IOManager & cal_manager)
 }
 
 //Declaration of the used types
-template TH3F* IOManager::get_diagnostic_plot(const std::string&,const int &);*/
+template TProfile* IOManager::get_diagnostic_plot(const std::string&,const int &);
+template TGraph* IOManager::get_diagnostic_plot(const std::string&,const int &);*/

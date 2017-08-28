@@ -248,6 +248,8 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
         gausfunc[chip] = fchip;
     }
 
+    // XXX: HERE IT SHOULD BE FILLED the Event histogram/TGraph
+
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();
     for(int k = 0; k < nentries; ++k)
