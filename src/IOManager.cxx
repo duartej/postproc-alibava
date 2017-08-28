@@ -117,34 +117,34 @@ IOManager::IOManager(const std::string & rootfilename):
 
 IOManager::~IOManager()
 {
-    // XXX: 
-    // --> The monitor plots, create and store the plots
-    //     and deallocate memory afterwards
-    //  XXX
+    // Store the monitor plots classes, for that, just open
+    // the file first.
     // Check the file is closed, otherwise don't do anything
     if( _file != nullptr )
     {
         std::cerr << "[IOManager::update WARNING] Trying to update"
             << " an still open file. Please close it first. " << std::endl;
-        return;
+        std::cerr << "[IOManager::update WARNING] The monitor plots"
+            << " are not going to be saved! " << std::endl;
     }
-
-    _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
-    for(auto & mon: _monitor_plots)
+    else
     {
-        if(mon.second != nullptr)
+        _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+        for(auto & mon: _monitor_plots)
         {
-            // Create and store the 
-            mon.second->deliver_plots();
-            delete mon.second;
-            mon.second = nullptr;
+            if(mon.second != nullptr)
+            {
+                // Create and store the 
+                mon.second->deliver_plots();
+                delete mon.second;
+                mon.second = nullptr;
+            }
         }
     }
-
-    // In principle it should be closed, but
-    // just in case (if it was closed, nothing will do inside)
+    // Closing the file
     this->close();
-
+    
+    // And deallocate the other members
     if(_cal_parameters != nullptr)
     {
         delete _cal_parameters;

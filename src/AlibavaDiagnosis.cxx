@@ -55,18 +55,13 @@ void AlibavaDiagnosis::book_plots()
     // ----------------------------------
     // Note that most of the histograms are defined here
     // with a dummy number of bins and/or axis ranges, 
-    // they are going to be fixed dynamically
+    // they are going to be fixed dynamically afterwards
 
-    // 1. Calibration (needs a calibration plot) XXX-- Check memory requirements
-    //_histos["calibration"] = new TH3F(std::string("Calibration chip-"+std::to_string(_chip_number)).c_str(),
-    //        ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
-    //        500,-32e3,32e3,
-    //       600,0,600);
+    // 1. Calibration (needs a calibration plot)
     const std::string suffix_name("chip-"+std::to_string(_chip_number));
-    _histos["calibration"] = new TH3F(std::string("histo_Calibration_"+suffix_name).c_str(),
+    _histos["calibration"] = new TH2F(std::string("histo_Calibration_"+suffix_name).c_str(),
             std::string("Calibration curves "+suffix_name+";Channel number;Injected pulse [e] x10^{3};Signal average [ADC]").c_str(),
             ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
-            1,0,1,
             1,0,1);
     // 2. Pedestal/Noise (needs pedestal)
     _histos["pedestal"] = new TH2F(std::string("histo_Pedestals_"+suffix_name).c_str(),
@@ -148,7 +143,7 @@ template<class ROOTTYPE>
 }
 
 // Declaration of the used types
-template TH3F*     AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
+template TH2F*     AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
 template TProfile* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
 
 const std::vector<TObject*> AlibavaDiagnosis::get_calibration_plots() const
@@ -182,26 +177,30 @@ void AlibavaDiagnosis::set_calibration_plot(const std::vector<TObject*> & curves
             << "present in the argument. Incoherent use of this class... '" << std::endl;
         return;
     }
-std::cout << "AQUI" << std::endl;
     // Get the info from the objects in order to re-bin the histogram
     TProfile * auxobj = static_cast<TProfile*>(curves[0]);
     const int bins_y = auxobj->GetNbinsX();
     const float ymin = auxobj->GetXaxis()->GetBinLowEdge(1);
     const float ymax = auxobj->GetXaxis()->GetBinUpEdge(bins_y);
-std::cout << "AQUI-2" << std::endl;
-std::cout << "AQUI" << _histos["calibration"] << std::endl;
-
-    static_cast<TH3F*>(_histos["calibration"])->GetYaxis()->Set(bins_y,ymin,ymax);
-    static_cast<TH3F*>(_histos["calibration"])->GetZaxis()->Set(100,200,700);
-std::cout << "AQUI-3" << std::endl;
-    // And fill the histogram (remember was fill in channel order
+    
+    // a handler to work with the histogram
+    TH2F * thehisto = static_cast<TH2F*>(_histos["calibration"]);
+    
+    // Rebin the histogram depending the profiles bins
+    thehisto->SetBins(thehisto->GetNbinsX(),thehisto->GetXaxis()->GetBinLowEdge(1),thehisto->GetXaxis()->GetBinUpEdge(thehisto->GetNbinsX()),
+            bins_y,ymin,ymax);
+    // And fill the histogram (remember was it fill in channel order)
     for(unsigned int i=0; i < curves.size(); ++i)
     {
+        // The vector elements orden corresponds to the channel number
         const int ich = static_cast<int>(i);
         const TProfile* prf = static_cast<TProfile*>(curves[i]);
+        // for each channel, let's obtain the injected charge (x-profile) with
+        // its measured ADC counts (y-profile)
         for(int ibin=1; ibin < prf->GetNbinsX()+1; ++ibin)
         {
-            static_cast<TH3F*>(_histos["calibration"])->SetBinContent(ich,prf->GetBinCenter(ibin),prf->GetBinContent(ibin));
+            const int bin = thehisto->FindBin(ich,prf->GetBinCenter(ibin));
+            thehisto->SetBinContent(bin,prf->GetBinContent(ibin));
         }
     }
 }
@@ -218,7 +217,6 @@ void AlibavaDiagnosis::deliver_plots()
             h.second->Write();
         }
     }
-    // TO BE REMOVED
 
     // Plot all the monitoring plots in a canvas and 
     // store that canvas in the file
@@ -234,33 +232,31 @@ void AlibavaDiagnosis::deliver_plots()
     canvas->Divide(2,4,0.01,0.01);
     // And plot (first define the order of plotting (except those pads
     // with more than 1 histo per pad)
-    const std::map<int,std::string> plotorder = 
+    // Note that the map is defining the pad where the histogram should go
+    // and the Draw option to be used
+    const std::map<int,std::pair<std::string,std::string>> plotorder = 
     { 
-        {1,"calibration"},
-        {3,"signal"},
-        {4,"hits"},
-        {5,"timeprofile"},
-        {6,"temperature"},
-        {7,"tdc"}
+        {1,{"calibration","SURF3Z"}},
+        {3,{"signal",""}},
+        {4,{"hits",""}},
+        {5,{"timeprofile",""}},
+        {6,{"temperature",""}},
+        {7,{"tdc",""}}
     };
     // Define the pads and fill them
     for(const auto & padplot: plotorder)
     {
         canvas->cd(padplot.first);
         // Check if the plot is present
-        if(_histos[padplot.second] == nullptr)
+        if(_histos[padplot.second.first] == nullptr)
         {
-            // This behaviour should be also allowed (see calibration or pedestal
+            // This behaviour is also allowed (see calibration or pedestal
             // processing cases)
-            /*std::cerr << "[AlibavaDiagnosis::deliver_plots] The plot objects "
-            << " were not booked! Book them first by using 'AlibavaDiagnosis::book_plots()'" 
-            << " No Diagnosis plots are created.\n" << std::endl;*/
-            // Just return without storing, and deallocate memory before
             delete canvas;
             canvas = nullptr;
             return;
         }
-        _histos[padplot.second]->Draw();
+        _histos[padplot.second.first]->Draw(padplot.second.second.c_str());
     }
     // And now the composite pads
     // --------------------------
