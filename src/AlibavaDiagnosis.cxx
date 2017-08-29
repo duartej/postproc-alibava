@@ -66,14 +66,13 @@ void AlibavaDiagnosis::book_plots()
             ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
             1,0,1);
     // 2. Pedestal/Noise (needs pedestal)
-    _histos["pedestal"] = new TH2F(std::string("histo_Pedestals_"+suffix_name).c_str(),
-            std::string("Pedestals "+suffix_name+";Channel number; Pedestal [ADC]").c_str(),
-            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
-            1,0,1);
-    _histos["noise"] = new TH2F(std::string("histo_Noise_"+suffix_name).c_str(),
-            std::string("Noise "+suffix_name+";Channel number; Noise [ADC]").c_str(),
-            ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1,
-            1,0,1);
+    _histos["pedestal"] = new TGraph();
+    static_cast<TGraph*>(_histos["pedestal"])->SetName(std::string("histo_Pedestals_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["pedestal"])->SetTitle(std::string("Pedestals "+suffix_name+";Channel number; Pedestal [ADC]").c_str());
+    _histos["noise"] = new TGraph();
+    static_cast<TGraph*>(_histos["noise"])->SetName(std::string("histo_Noise_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["noise"])->SetTitle(std::string("Noise "+suffix_name+";Channel number; Noise [ADC]").c_str());
+    
     // 3. Temperature
     _histos["temperature"] = new TGraph();
     static_cast<TGraph*>(_histos["temperature"])->SetName(std::string("histo_Temperature_"+suffix_name).c_str());
@@ -147,6 +146,8 @@ template<class T1, class T2>
     // all the graphs
     if(plotname == "temperature" 
             || plotname == "tdc"
+            || plotname == "pedestal"
+            || plotname == "noise"
             || plotname == "noiseevent"
             || plotname == "commonnoiseevent" )
     {
@@ -235,7 +236,15 @@ void AlibavaDiagnosis::set_calibration_plot(const std::vector<TObject*> & curves
         
 void AlibavaDiagnosis::set_diagnostic_plots(const std::pair<std::vector<float>,std::vector<float> > & pednoise)
 {
-    ;
+    // The plot for the pedestal and noise
+    // loop over all channels (remember the elements of the vectors are placed in the
+    // same order than the channels
+    for(unsigned int ich_raw = 0; ich_raw < pednoise.first.size(); ++ich_raw)
+    {
+        const int ich = static_cast<int>(ich_raw);
+        this->update_diagnostic_plot<int,float>("pedestal",ich,(pednoise.first)[ich_raw]);
+        this->update_diagnostic_plot<int,float>("noise",ich,(pednoise.second)[ich_raw]);
+    }
 }
 
 void AlibavaDiagnosis::deliver_plots()

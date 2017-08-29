@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
     }
     // process the diagnostic plots (if there is no pedestal file, otherwise,
     // the wait until the pedestal file is present to process all)
-    //iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
+    iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
     iomanager.close();
     
     // process calibration file

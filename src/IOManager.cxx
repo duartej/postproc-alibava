@@ -623,7 +623,10 @@ void IOManager::set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
     for(auto & chipmon: _monitor_plots)
     {
         // Choose the right monitor manager and send the plots
-        chipmon.second->set_diagnostic_plots(pednoise_m.at(chipmon.first));
+        // Note: the _monitor_plots are defined using CHIP=1,2
+        //       whilie the PedestalNoiseBeetleMap, CHIP=0,1
+        // XXX FIXME: This should be harmonized
+        chipmon.second->set_diagnostic_plots(pednoise_m.at(chipmon.first-1));
     }
 }
 
