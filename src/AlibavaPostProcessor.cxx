@@ -411,33 +411,9 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
 
 std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::vector<float> & nullsignal)
 {
-    /*if(!this->_pedestal_subtracted)
-    {
-        throw std::logic_error("\033[1;31mAlibavaPostProcessor ERROR\033[1;m "\
-                "Invalid call to calculate_common_noise, the function must "\
-                "be called after AlibavabaPostProcessor::subtract_pedestal");
-    }
-    
-    // Speed up access, just using the branches we want:
-    const std::vector<std::string> data_names = { "data_beetle1", "data_beetle2"};
-    pedestal.set_events_tree_access(data_names);
-    
-    // Helper map (Note that the branches should exist in the postproc event
-    // created with the pedestal subtraction function)
-    std::map<int,std::vector<float>*> thedata = { {0,nullptr}, {1,nullptr} };
-    pedestal.set_events_tree_branch_address("postproc_data_beetle1",&(thedata[0]));
-    pedestal.set_events_tree_branch_address("postproc_data_beetle2",&(thedata[1]));*/
-
     // The criteria to discard signal ADC entries
     const float _NoiseDeviation = 2.5;
 
-    // 1. Obtain the mean and the standard deviation for the signal ADCs 
-    // //    (pedestal substracted) (i.e. the common noise)
-    float mean_signal  = this->get_mean(nullsignal);
-    float stddev_signal= this->get_std_dev(nullsignal,mean_signal);
-    // 2. Use the mean and standard deviation to exclude real
-    //    signal presence. Criteria: anything above 2.5 sigmas from the mean
-    //    is considered signal
     // Map to keep only non-signal ADCs 
     // ichannel: ADC
     std::map<int,float> non_signal_map;
@@ -448,17 +424,27 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
     {
         non_signal_map.emplace(i,nullsignal[i]);
     }
-    unsigned int last_vec_size = nullsignal.size();
-    // FIXME:: NEVER ENTERING HERE -> TO BE CHANGED TO a do-while
-    while( non_signal_map.size() != last_vec_size )
+    
+    // 1. Obtain the mean and the standard deviation for the signal ADCs 
+    //    (pedestal substracted) (i.e. the common noise)
+    float mean_signal  = this->get_mean(nullsignal);
+    float stddev_signal= this->get_std_dev(nullsignal,mean_signal);
+    
+    unsigned int last_vec_size = non_signal_map.size();
+    do 
     {
+        // after the check form the while statament, update the last 
+        // vector size 
+        last_vec_size = non_signal_map.size();
+        // 2. Use the mean and standard deviation to exclude real
+        //    signal presence. Criteria: anything above 2.5 sigmas from the mean
+        //    is considered signal
         for(auto it = non_signal_map.cbegin(); it != non_signal_map.cend(); /* no increment*/)
         {
             // Remove the signal channels 
             if( std::abs(it->second-mean_signal)/stddev_signal > _NoiseDeviation )
             {
-                non_signal_map.erase(it);
-                //masked_channels.push_back(it->first);
+                non_signal_map.erase(it++);
             }
             else
             {
@@ -470,8 +456,8 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
         mean_signal  = this->get_mean(non_signal_map);
         stddev_signal= this->get_std_dev(non_signal_map,mean_signal);
         // and the new vector size
-        last_vec_size = non_signal_map.size();
-    }
+    } while( non_signal_map.size() != last_vec_size );
+    
     // fill the vector with all the same element
     return std::make_pair(mean_signal,stddev_signal);    
 }
