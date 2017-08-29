@@ -80,10 +80,6 @@ void AlibavaDiagnosis::book_plots()
     static_cast<TGraph*>(_histos["temperature"])->SetTitle(std::string("Temperature per event "+suffix_name+";Event number; Temperature [^{o}C]").c_str());
 
     // 4. TDC
-    //_histos["tdc"] = new TH2F(std::string("histo_TDC_"+suffix_name).c_str(),
-    //        std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str(),
-    //        1,0,1,
-    //        1,0,1);
     _histos["tdc"] = new TGraph();
     static_cast<TGraph*>(_histos["tdc"])->SetName(std::string("histo_TDC_"+suffix_name).c_str());
     static_cast<TGraph*>(_histos["tdc"])->SetTitle(std::string("TDC per event "+suffix_name+";Event number; Time [ns]").c_str());
@@ -101,18 +97,10 @@ void AlibavaDiagnosis::book_plots()
             std::string("Time profile "+suffix_name+";Time [ns]; Signal average [ADC]").c_str(),
             50,0,100);
     // 8. Noise per event (needs pedestal)
-    //_histos["noiseevent"] = new TH2F(std::string("histo_NoiseEvent_"+suffix_name).c_str(),
-    //        std::string("Noise per event "+suffix_name+";Event number [ns]; Noise [ADC]").c_str(),
-    //        1,0,1,
-    //        1,0,1);
     _histos["noiseevent"] = new TGraph();
     static_cast<TGraph*>(_histos["noiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
     static_cast<TGraph*>(_histos["noiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
     
-    //_histos["commonnoiseevent"] = new TH2F(std::string("histo_CommonNoiseEvent_"+suffix_name).c_str(),
-    //        std::string("Common Noise per event "+suffix_name+";Event number [ns]; Common Noise [ADC]").c_str(),
-    //        1,0,1,
-    //        1,0,1);
     _histos["commonnoiseevent"] = new TGraph();
     static_cast<TGraph*>(_histos["commonnoiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
     static_cast<TGraph*>(_histos["commonnoiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
@@ -157,7 +145,10 @@ template<class T1, class T2>
     }
     
     // all the graphs
-    if(plotname == "temperature" || plotname == "tdc")
+    if(plotname == "temperature" 
+            || plotname == "tdc"
+            || plotname == "noiseevent"
+            || plotname == "commonnoiseevent" )
     {
         TGraph * thegraph = static_cast<TGraph*>(_histos[plotname]);
         thegraph->SetPoint(thegraph->GetN(),x,y);

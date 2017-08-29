@@ -60,9 +60,11 @@ class IOManager
         // - book histograms on runtime, created and fill externally
         void book_monitor_plot(const std::string & name, const TObject * theplot, const int & chip);
         // - Fill the predefined monitor histograms 
-        void update_diagnostic_plot(const int & chip, const std::string & plotname, const int & x, const float & y);
+        template <class T1,class T2>
+            void update_diagnostic_plot(const int & chip, const std::string & plotname, const T1 & x, const T2 & y);
         // - Fill the predefined monitor histograms (chip-independent version)
-        void update_diagnostic_plot(const std::string & plotname, const int & x, const float & y);
+        template <class T1,class T2>
+            void update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y);
         // - set the 3dimensional histogram for the calibration curves
         //   using the information on the calibration manager
         void set_calibration_plot(const IOManager & calibration_manager);

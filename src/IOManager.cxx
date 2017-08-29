@@ -163,16 +163,6 @@ IOManager::~IOManager()
         delete _events;
         _events = nullptr;
     }
-    /*if(_monitor_chip1 != nullptr)
-    {
-        delete _monitor_chip1;
-        _monitor_chip1 = nullptr;
-    }
-    if(_monitor_chip2 != nullptr)
-    {
-        delete _monitor_chip2;
-        _monitor_chip2 = nullptr;
-    }*/
 }
 
 void IOManager::set_calibration_parameters(const std::vector<int> & calparam_v)
@@ -556,9 +546,10 @@ void IOManager::book_monitor_plot(const std::string & plotname, const TObject * 
     _monitor_plots[chip]->book_plot(plotname,theplot);
 }
 
-void IOManager::update_diagnostic_plot(const int & chip, const std::string & plotname, const int & x, const float & y)
+template <class T1,class T2>
+    void IOManager::update_diagnostic_plot(const int & chip, const std::string & plotname, const T1 & x, const T2 & y)
 {
-    // Do nothing if the plots wasn't booked
+    // Do nothing if the plots weren't booked
     if(!_monitor_plots_booked)
     {
         return;
@@ -572,12 +563,16 @@ void IOManager::update_diagnostic_plot(const int & chip, const std::string & plo
         return;
     }
     // the monitor class take care of it
-    _monitor_plots[chip]->update_diagnostic_plot(plotname,x,y);
+    _monitor_plots[chip]->update_diagnostic_plot<T1,T2>(plotname,x,y);
 }
+// Template specialization
+template void IOManager::update_diagnostic_plot(const int&,const std::string&,const int&,const float&);
 
-void IOManager::update_diagnostic_plot(const std::string & plotname, const int & x, const float & y)
+
+template <class T1,class T2>
+    void IOManager::update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y)
 {
-    // Do nothing if the plots wasn't booked
+    // Do nothing if the plots weren't booked
     if(!_monitor_plots_booked)
     {
         return;
@@ -586,9 +581,12 @@ void IOManager::update_diagnostic_plot(const std::string & plotname, const int &
     // Plot independent of the chip number
     for(auto & mon: _monitor_plots)
     {
-        mon.second->update_diagnostic_plot(plotname,x,y);
+        mon.second->update_diagnostic_plot<T1,T2>(plotname,x,y);
     }
 }
+// Template specialization
+template void IOManager::update_diagnostic_plot(const std::string&,const int&,const float&);
+
 
 const std::vector<TObject*> IOManager::get_calibration_objects(const int & chipnumber) const
 {
