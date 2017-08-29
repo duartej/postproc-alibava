@@ -253,11 +253,11 @@ int main(int argc, char* argv[])
         }*/
         // close the pedestal noise file
         iomanager_ped.close();
-        // Fill the diagnostic plots for the pedestal and noise
-        iomanager.set_diagnostic_plots(pednoise_cmmd);
         // And update the beam file with the pedestals and common noise values
         // included in the runHeader postproc 
         iomanager.update(pednoise_cmmd);
+        // and Fill the diagnostic plots for the pedestal and noise
+        iomanager.set_diagnostic_plots(pednoise_cmmd);
     }
     std::cout << std::endl;
 

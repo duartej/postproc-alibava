@@ -125,9 +125,9 @@ IOManager::~IOManager()
     // Check the file is closed, otherwise don't do anything
     if( _file != nullptr )
     {
-        std::cerr << "[IOManager::update WARNING] Trying to update"
+        std::cerr << "[IOManager::~IOManager WARNING] Trying to update"
             << " an still open file. Please close it first. " << std::endl;
-        std::cerr << "[IOManager::update WARNING] The monitor plots"
+        std::cerr << "[IOManager::~IOManager WARNING] The monitor plots"
             << " are not going to be saved! " << std::endl;
     }
     else
@@ -476,7 +476,9 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     // Activate the needed branches
     std::map<int,std::vector<float>* > original_data = { {0, nullptr}, { 1, nullptr} };
     std::map<int,std::string> chip_dataname_map = { {0,"data_beetle1"}, {1,"data_beetle2"} };
+    
     set_events_tree_access( {chip_dataname_map[0], chip_dataname_map[1]} );
+
     // attach the vector to the branches 
     for(auto & i_v: original_data)
     {
@@ -510,7 +512,13 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
                 // XXX: Remember the _monitor_plots are defined using CHIP=1,2
                 //      while here CHIP=0,1
                 // XXX FIXME: This should be harmonized
-                this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",data[chip_rawdata.first]->back(),-1.0);
+                /*this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",data[chip_rawdata.first]->back(),-1.0);
+                // First approach: a hit defined as 3 times the noise
+                if(std::fabs(data[chip_rawdata.first]->back()) > 3.0*(*noise[chip_rawdata.first])[ichan])
+                {
+                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
+                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,data[chip_rawdata.first]->back());
+                }*/
             }
         }
         tevt->Fill();
@@ -625,6 +633,8 @@ void IOManager::set_diagnostic_plots(bool is_pedestal_file_present)
 
 void IOManager::set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
 {
+    // Fill the signal, hits and time profile plots
+    this->fill_remaining_monitor_plots(pednoise_m);
     for(auto & chipmon: _monitor_plots)
     {
         // Obtain some extra data needed: the signal (free of pedestal and noise)
@@ -695,7 +705,7 @@ PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def
         }
     }
 
-    // Let the fil to be in the original status
+    // Let the file to be in the original status
     if(file_was_closed)
     {
         // Note that close will take care of closing the appropiate     
@@ -703,6 +713,95 @@ PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def
         this->close();
     }
     return pnmap;
+}
+
+void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m)
+{
+    bool file_was_closed = false;
+    // Check the file is closed to close it afterwards
+    if( _file == nullptr )
+    {
+        file_was_closed = true;
+        _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+        this->resurrect_events_tree();
+    }
+
+    std::map<int,std::string> chip_dataname_map = { {0,"data_beetle1"}, {1,"data_beetle2"} };
+    // Check if the postproc events is already present
+    TTree *postproc_t = dynamic_cast<TTree*>(_file->Get("postproc_Events"));
+    bool use_current_pednoise_map = false;
+    if( postproc_t == nullptr )
+    {
+        // Not postproc available, the signal must be constructed by subtracting
+        // the pedestal and noise
+        use_current_pednoise_map = true;
+
+    }
+    else
+    {
+        this->get_events_tree()->AddFriend(postproc_t);
+        // Update the name of the data (already pedestal and noise-free)
+        chip_dataname_map[0] = "postproc_data_beetle1";
+        chip_dataname_map[1] = "postproc_data_beetle2";
+    }
+    // Activate the needed branches
+    std::map<int,std::vector<float>* > original_data = { {0, nullptr}, { 1, nullptr} };
+    set_events_tree_access( {chip_dataname_map[0], chip_dataname_map[1], "eventTime"} );
+    
+    // And the event time
+    float eventTime = -1.0;
+    set_events_tree_branch_address("eventTime",&eventTime);
+
+    // attach the vector to the branches 
+    for(auto & i_v: original_data)
+    {
+        set_events_tree_branch_address(chip_dataname_map[i_v.first],&i_v.second);
+    }
+    
+    // Go back to the previous position, move up 1 line
+    std::cout << std::endl;
+    std::cout << "\033[1AFilling monitoring plots [000%]"<< std::flush;
+    const int nentries= this->get_events_number_entries();
+    float point = float(nentries)/100.0;
+    // the event loop
+    for(int k=0; k < this->get_events_number_entries(); ++k)
+    {
+        std::cout << "\rFilling monitoring plots [" << std::setfill('0') << std::setw(3) 
+            << std::round(float(k)/point) << "%]" << std::flush;
+        this->get_events_entry(k);
+        // And update using the pedestal and noise corrections
+        for(const auto & chip_rawdata: original_data)
+        {
+            // Subtract noise and pedestals to the raw-data
+            for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
+            {
+                float signal = (*chip_rawdata.second)[ichan];
+                if(use_current_pednoise_map)
+                {
+                    signal -= ((pednoise_m.at(chip_rawdata.first).first)[ichan]+(pednoise_m.at(chip_rawdata.first).second)[ichan]);
+                }
+                // XXX: Remember the _monitor_plots are defined using CHIP=1,2
+                //      while here CHIP=0,1
+                // XXX FIXME: This should be harmonized
+                this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",signal,-1.0);
+                // First approach: a hit defined as 5 times the noise 
+                if(std::fabs(signal) > 5.0*(pednoise_m.at(chip_rawdata.first).second)[ichan])
+                {
+                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
+                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal*-1.0);
+                }
+            }
+        }
+    }
+    // Everything back to the original state
+    this->reset_events_tree();
+    
+    if(file_was_closed)
+    {
+        // Note that close will take care of closing the appropiate     
+        // trees as well (events, runHeader)
+        this->close();
+    }
 }
 
 

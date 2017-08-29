@@ -70,10 +70,6 @@ class IOManager
         void set_calibration_plot(const IOManager & calibration_manager);
         // - get all the objects needed to get the 3dim calibration curves
         const std::vector<TObject*> get_calibration_objects(const int & chipnumber) const;
-        // - get the pedestal and noise vectors (per beetle) by using the header
-        //   note if the header is corrupted, it will use a default values
-        //   XXX -- PRIVATE?
-        //PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
         
         // Update the runheader tree with the electron per ADC conversion
         void update(const CalibrateBeetleMap & calib_m);
@@ -119,7 +115,9 @@ class IOManager
         // - get the pedestal and noise vectors (per beetle) by using the header
         //   note if the header is corrupted, it will use a default values
         PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
-        // - get the map of signal free 
+        // - fill the signal, hits and time profile plots by looping again
+        //   the main event tree
+        void fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m);
         
         // store the friends
         void aux_store_friends(TTree * tree);

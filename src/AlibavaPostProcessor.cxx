@@ -248,7 +248,8 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
         gausfunc[chip] = fchip;
     }
 
-    // XXX: HERE IT SHOULD BE FILLED the Event histogram/TGraph
+    // XXX: HERE IT SHOULD BE FILLED the Event histogram/TGraph --> PROBLEM
+    //      THE CLIENT IS THE PEDESTAL Manager!!
 
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();

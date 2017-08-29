@@ -154,9 +154,13 @@ template<class T1, class T2>
         TGraph * thegraph = static_cast<TGraph*>(_histos[plotname]);
         thegraph->SetPoint(thegraph->GetN(),x,y);
     }
-    else if( plotname == "signal")
+    else if( plotname == "signal" || plotname == "hits")
     {
         static_cast<TH1F*>(_histos[plotname])->Fill(x);
+    }
+    else if( plotname == "timeprofile")
+    {
+        static_cast<TProfile*>(_histos[plotname])->Fill(x,y);
     }
 }
 // Declaration of the used types
@@ -266,6 +270,7 @@ void AlibavaDiagnosis::set_diagnostic_plots(const std::pair<std::vector<float>,s
 
     // processed plots: signal, hits, time profile
     // -- Get the signal (noise free)
+    // -- Note the tree
 }
 
 void AlibavaDiagnosis::deliver_plots()
