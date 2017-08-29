@@ -86,10 +86,10 @@ void AlibavaDiagnosis::book_plots()
     // 5. Signal (needs pedestal)
     _histos["signal"] = new TH1F(std::string("histo_Signal_"+suffix_name).c_str(),
             std::string("Signal "+suffix_name+";Signal [ADC]; Entries").c_str(),
-            1,0,1);
+            1200,-600,600);
     // 6. Hits   (needs pedestal)
     _histos["hits"] = new TH1F(std::string("histo_Hits_"+suffix_name).c_str(),
-            std::string("Signal "+suffix_name+";Channel number; Entries").c_str(),
+            std::string("Hits "+suffix_name+";Channel number; Entries").c_str(),
             ALIBAVA::NOOFCHANNELS,0,ALIBAVA::NOOFCHANNELS-1);
     // 7. Time profile (needs pedestal)
     _histos["timeprofile"] = new TProfile(std::string("histo_TimeProfile_"+suffix_name).c_str(),
@@ -154,10 +154,15 @@ template<class T1, class T2>
         TGraph * thegraph = static_cast<TGraph*>(_histos[plotname]);
         thegraph->SetPoint(thegraph->GetN(),x,y);
     }
+    else if( plotname == "signal")
+    {
+        static_cast<TH1F*>(_histos[plotname])->Fill(x);
+    }
 }
 // Declaration of the used types
 template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const int&);
 template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const float&);
+template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const float&,const float&);
 
 template<class ROOTTYPE> 
     ROOTTYPE* AlibavaDiagnosis::get_diagnostic_plot(const std::string & plotname)
@@ -245,6 +250,22 @@ void AlibavaDiagnosis::set_diagnostic_plots(const std::pair<std::vector<float>,s
         this->update_diagnostic_plot<int,float>("pedestal",ich,(pednoise.first)[ich_raw]);
         this->update_diagnostic_plot<int,float>("noise",ich,(pednoise.second)[ich_raw]);
     }
+
+    // - The auxiliary noise per event plots if any
+    //if(the plots are present)
+    //{
+        // get the plots and do the update_diagnostic_plot
+        // -- after that remove them from the list of _histos
+        // (otherwise, they are going to be stored in the file)
+    //}
+    //else
+    //{
+    //  create a title in the histo/graph saying that there is no
+    //  data to create the plot
+    //}
+
+    // processed plots: signal, hits, time profile
+    // -- Get the signal (noise free)
 }
 
 void AlibavaDiagnosis::deliver_plots()

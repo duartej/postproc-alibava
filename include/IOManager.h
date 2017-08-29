@@ -73,7 +73,7 @@ class IOManager
         // - get the pedestal and noise vectors (per beetle) by using the header
         //   note if the header is corrupted, it will use a default values
         //   XXX -- PRIVATE?
-        PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
+        //PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
         
         // Update the runheader tree with the electron per ADC conversion
         void update(const CalibrateBeetleMap & calib_m);
@@ -115,8 +115,11 @@ class IOManager
 
         // The monitor/diagnostic plots
         std::map<int,AlibavaDiagnosis*> _monitor_plots;
-        //AlibavaDiagnosis * _monitor_chip1;
-        //AlibavaDiagnosis * _monitor_chip2;
+        // Related methods
+        // - get the pedestal and noise vectors (per beetle) by using the header
+        //   note if the header is corrupted, it will use a default values
+        PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
+        // - get the map of signal free 
         
         // store the friends
         void aux_store_friends(TTree * tree);

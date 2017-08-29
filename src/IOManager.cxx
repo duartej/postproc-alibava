@@ -506,6 +506,11 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
                 data[chip_rawdata.first]->push_back( (*chip_rawdata.second)[ichan]-
                         (*pedestal[chip_rawdata.first])[ichan]-(*noise[chip_rawdata.first])[ichan] );
                 fill_calibrated_branches(chip_rawdata.first,ichan);
+                // and the monitor plots (FIXME: probably fix the dummy last argument)
+                // XXX: Remember the _monitor_plots are defined using CHIP=1,2
+                //      while here CHIP=0,1
+                // XXX FIXME: This should be harmonized
+                this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",data[chip_rawdata.first]->back(),-1.0);
             }
         }
         tevt->Fill();
@@ -557,7 +562,7 @@ template <class T1,class T2>
 
     if(_monitor_plots.find(chip) == _monitor_plots.end())
     {
-        std::cerr << "[IOManager::book_monitor_plot ERROR] Invalid chip"
+        std::cerr << "[IOManager::update_diagnostic_plot ERROR] Invalid chip"
             << " number [" << chip << "] " << std::endl;
         // Exception??
         return;
@@ -567,7 +572,7 @@ template <class T1,class T2>
 }
 // Template specialization
 template void IOManager::update_diagnostic_plot(const int&,const std::string&,const int&,const float&);
-
+template void IOManager::update_diagnostic_plot(const int&,const std::string&,const float&,const float&);
 
 template <class T1,class T2>
     void IOManager::update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y)
@@ -622,6 +627,10 @@ void IOManager::set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
 {
     for(auto & chipmon: _monitor_plots)
     {
+        // Obtain some extra data needed: the signal (free of pedestal and noise)
+        // and the event time
+        //std::vector<std::vector<float>*> signal = this->get_signal(pednoise_m);
+        //std::vector<float> eventTime = this->get_event_time();
         // Choose the right monitor manager and send the plots
         // Note: the _monitor_plots are defined using CHIP=1,2
         //       whilie the PedestalNoiseBeetleMap, CHIP=0,1
