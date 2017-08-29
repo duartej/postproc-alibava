@@ -34,8 +34,10 @@ class AlibavaPostProcessor
         // sigma the <noise> (note that to evaluate the common noise you 
         // need to provide a null signal (or pedestal subtracted) gaussians
         PedestalNoiseBeetleMap calculate_pedestal_noise(const IOManager & pedestal);
-        // Get the pedestals with the common noise subtracted
-        void get_pedestal_noise_free(const IOManager & pedestal, const PedestalNoiseBeetleMap & mean_ped);
+        // Get the pedestals with the common noise subtracted (if modify_file_active is 
+        // set to true, a new branch will be created using the beam data subtracted
+        // the pedestals and noise)
+        void get_pedestal_noise_free(const IOManager & pedestal, const PedestalNoiseBeetleMap & mean_ped, bool modify_file_active=true);
 
         // Auxiliary functions: (XXX to be gathered in a pool)
         // The mean of a list

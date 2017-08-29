@@ -323,7 +323,7 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
 
 
 void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, 
-      const PedestalNoiseBeetleMap & mean_ped_map)
+      const PedestalNoiseBeetleMap & mean_ped_map, bool activate_file_modification)
 {
     // Speed up access, just using the branches we want:
     const std::vector<std::string> data_names = { "data_beetle1", "data_beetle2"};
@@ -334,13 +334,17 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
     pedestal.set_events_tree_branch_address("data_beetle1",&(thedata[0]));
     pedestal.set_events_tree_branch_address("data_beetle2",&(thedata[1]));
 
-    // The new tree
-    TTree * t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
-    // Create the new branches
+    // The new tree 
+    TTree * t = nullptr;
     // Helper map 
     std::map<int,std::vector<float>*> postproc_thedata = { {0,nullptr}, {1,nullptr} };
-    t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
-    t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
+    if(activate_file_modification)
+    {
+        t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
+        // Create the new branches
+        t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
+        t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
+    }
     
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();
@@ -377,18 +381,27 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
                 postproc_thedata[chip]->push_back((*(thedata[chip]))[ichan]-cmmd_cerr.first);
             }
         }
-        t->Fill();
+        if(activate_file_modification)
+        {        
+            t->Fill();
+        }
     }
-    // To store it with it (don't deallocate it yet, it will be done
-    // afterwards)
-    pedestal.get_events_tree()->AddFriend(this->_postproc_treename.c_str());
+    if(activate_file_modification)
+    {
+        // To store it with it (don't deallocate it yet, it will be done
+        // afterwards)
+        pedestal.get_events_tree()->AddFriend(this->_postproc_treename.c_str());
+    }
     
     // RE-activate all branches (and reset their object addresses)
     pedestal.reset_events_tree();
 
-    // Let the instance know the pedestal was subtracted, therefore
-    // the postprocEvents tree exits
-    this->_pedestal_subtracted = true;
+    if(activate_file_modification)
+    {
+        // Let the instance know the pedestal was subtracted, therefore
+        // the postprocEvents tree exits
+        this->_pedestal_subtracted = true;
+    }
 
     // deallocate memory
     auxmem::deallocate_memory(thedata);
