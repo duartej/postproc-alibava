@@ -323,8 +323,7 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
 }
 
 
-void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, 
-      const PedestalNoiseBeetleMap & mean_ped_map, bool activate_file_modification)
+void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, const PedestalNoiseBeetleMap & mean_ped_map)
 {
     // Speed up access, just using the branches we want:
     const std::vector<std::string> data_names = { "data_beetle1", "data_beetle2"};
@@ -335,17 +334,13 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
     pedestal.set_events_tree_branch_address("data_beetle1",&(thedata[0]));
     pedestal.set_events_tree_branch_address("data_beetle2",&(thedata[1]));
 
-    // The new tree 
-    TTree * t = nullptr;
     // Helper map 
     std::map<int,std::vector<float>*> postproc_thedata = { {0,nullptr}, {1,nullptr} };
-    if(activate_file_modification)
-    {
-        t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
-        // Create the new branches
-        t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
-        t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
-    }
+    // The new tree 
+    TTree * t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
+    // Create the new branches
+    t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
+    t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
     
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();
@@ -382,27 +377,18 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal,
                 postproc_thedata[chip]->push_back((*(thedata[chip]))[ichan]-cmmd_cerr.first);
             }
         }
-        if(activate_file_modification)
-        {        
-            t->Fill();
-        }
+        t->Fill();
     }
-    if(activate_file_modification)
-    {
-        // To store it with it (don't deallocate it yet, it will be done
-        // afterwards)
-        pedestal.get_events_tree()->AddFriend(this->_postproc_treename.c_str());
-    }
+    // To store it with it (don't deallocate it yet, it will be done
+    // afterwards)
+    pedestal.get_events_tree()->AddFriend(this->_postproc_treename.c_str());
     
     // RE-activate all branches (and reset their object addresses)
     pedestal.reset_events_tree();
 
-    if(activate_file_modification)
-    {
-        // Let the instance know the pedestal was subtracted, therefore
-        // the postprocEvents tree exits
-        this->_pedestal_subtracted = true;
-    }
+    // Let the instance know the pedestal was subtracted, therefore
+    // the postprocEvents tree exits
+    this->_pedestal_subtracted = true;
 
     // deallocate memory
     auxmem::deallocate_memory(thedata);
@@ -427,8 +413,8 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
     
     // 1. Obtain the mean and the standard deviation for the signal ADCs 
     //    (pedestal substracted) (i.e. the common noise)
-    float mean_signal  = this->get_mean(nullsignal);
-    float stddev_signal= this->get_std_dev(nullsignal,mean_signal);
+    float mean_signal  = get_mean(nullsignal);
+    float stddev_signal= get_std_dev(nullsignal,mean_signal);
     
     unsigned int last_vec_size = non_signal_map.size();
     do 
@@ -453,8 +439,8 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
             }
         }
         // 3. Recalculate the mean with the excluded signal channels
-        mean_signal  = this->get_mean(non_signal_map);
-        stddev_signal= this->get_std_dev(non_signal_map,mean_signal);
+        mean_signal  = get_mean(non_signal_map);
+        stddev_signal= get_std_dev(non_signal_map,mean_signal);
         // and the new vector size
     } while( non_signal_map.size() != last_vec_size );
     
@@ -475,7 +461,7 @@ std::vector<float> AlibavaPostProcessor::convert_map_in_vector(const std::map<in
 
 float AlibavaPostProcessor::get_mean(const std::map<int,float> & m)
 {
-    return this->get_mean(this->convert_map_in_vector(m));
+    return get_mean(convert_map_in_vector(m));
 }
 
 float AlibavaPostProcessor::get_mean(const std::vector<float> & v)
@@ -489,7 +475,7 @@ float AlibavaPostProcessor::get_mean(const std::vector<float> & v)
 
 float AlibavaPostProcessor::get_std_dev(const std::map<int,float> & m,const float & mean)
 {
-    return this->get_std_dev(this->convert_map_in_vector(m),mean);
+    return get_std_dev(convert_map_in_vector(m),mean);
 }
 
 float AlibavaPostProcessor::get_std_dev(const std::vector<float> & v,const float & mean)

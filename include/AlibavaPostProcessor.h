@@ -37,28 +37,28 @@ class AlibavaPostProcessor
         // Get the pedestals with the common noise subtracted (if modify_file_active is 
         // set to true, a new branch will be created using the beam data subtracted
         // the pedestals and noise)
-        void get_pedestal_noise_free(const IOManager & pedestal, const PedestalNoiseBeetleMap & mean_ped, bool modify_file_active=true);
+        void get_pedestal_noise_free(const IOManager & pedestal, const PedestalNoiseBeetleMap & mean_ped);
 
-        // Auxiliary functions: (XXX to be gathered in a pool)
+        // Auxiliary functions: static methods useful along the package
         // The mean of a list
-        float get_mean(const std::vector<float> & v);
+        static float get_mean(const std::vector<float> & v);
         // Overloaded method for a map
-        float get_mean(const std::map<int,float> & m);
+        static float get_mean(const std::map<int,float> & m);
         // The standard deviation
-        float get_std_dev(const std::vector<float> & v, const float & mean);
+        static float get_std_dev(const std::vector<float> & v, const float & mean);
         // Overload function for a map
-        float get_std_dev(const std::map<int,float> & v, const float & mean);
+        static float get_std_dev(const std::map<int,float> & v, const float & mean);
+        
+        // Evaluate the common noise of a set of signals
+        static std::pair<float,float> calculate_common_noise(const std::vector<float> & signal);
 
     private:
         bool _pedestal_subtracted;
         std::string _postproc_treename;
 
-        // Evaluate the common noise, it must be called previously the subtract_pedestal
-        // class
-        std::pair<float,float> calculate_common_noise(const std::vector<float> & nullsignal);
         // Function to convert a map mimicking a vector list into a 
         // pure vector
-        std::vector<float> convert_map_in_vector(const std::map<int,float> & m);
+        static std::vector<float> convert_map_in_vector(const std::map<int,float> & m);
 };
 
 #endif
