@@ -667,6 +667,56 @@ PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def
 }
 
 
+void IOManager::fill_diagnostic_plots()
+{
+    bool file_was_closed = false;
+    // Check the file is closed to close it afterwards
+    if( _file == nullptr )
+    {
+        file_was_closed = true;
+        _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
+        this->resurrect_events_tree();
+    }
+    // Check if the pedefile was processed, if yes it should exist 
+    // the postproc_Events tree
+    TTree *event_tree = dynamic_cast<TTree*>(_file->Get("postproc_Events"));
+    TTree * header_tree = nullptr;
+    bool use_current_pednoise_map = false;
+    if( event_tree == nullptr )
+    {
+        // Not postproc available, ressurrect the event tree
+        // and assign as the event tree
+        event_tree   = _tree_events;
+        header_tree = _tree_header;
+    }
+    else
+    {
+        // Then it must exist the postproc header as well
+        header_tree = dynamic_cast<TTree*>(_file->Get("postproc_runHeader"));
+        // Add it as friend the regular Event tree as well
+        event_tree->AddFriend(_tree_events);
+    }
+    // Add it as friend in order to perform whatever manipulations
+    // needed to do
+    event_tree->AddFriend(header_tree);
+
+    // Call the plotters
+    for(auto & chipmon: _monitor_plots)
+    {
+        chipmon.second->fill_diagnostic_plots(event_tree,header_tree);
+    }
+
+    // Everything back to the original state
+    this->reset_events_tree();
+    
+    if(file_was_closed)
+    {
+        // Note that close will take care of closing the appropiate     
+        // trees as well (events, runHeader)
+        this->close();
+    }
+}
+
 //XXX --> TO BE REMOVED THIS!! 
 void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m)
 {
@@ -758,13 +808,13 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
                     sg_pedestal_free[ch] -= (pednoise_m.at(chip_rawdata.first).first)[ch];
                 }
                 cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(sg_pedestal_free);
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_and_noise.first);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonmode",k,cmmd_and_noise.first);
                 //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,cmmd_and_noise.second);
             }
             else
             {
                 // Get it from the tree
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_map[chip_rawdata.first]);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonmode",k,cmmd_map[chip_rawdata.first]);
                 //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,noise_map[chip_rawdata.first]);
             }
             // Subtract noise and pedestals to the raw-data

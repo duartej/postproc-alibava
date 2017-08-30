@@ -43,20 +43,15 @@ class IOManager
 
         void book_tree_header();
         void book_tree();
-        void book_monitor_plots();
         
         void fill_header(const AlibavaRunHeader * aheader) const;
         void fill_event(const AlibavaEvent * anAlibavaEvent);
-
-        // Diagnostic plots filling functions. A set of predefined 
-        // histograms are filled by using the next functions
-        // - using only beam data, 
-        void set_diagnostic_plots(bool is_pedestal_file_present);
-        // - using beam and pedestal data
-        void set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m);
-        // - histograms getter
-        //template<typename ROOTTYPE> 
-        //    ROOTTYPE* get_diagnostic_plot(const std::string & plotname, const int & chip);
+    
+        // Book the generic predefined monitor plots (see AlibavaDiagnosis
+        // class for a description)
+        void book_monitor_plots();
+        // Fill the predefined monitor plots
+        void fill_diagnostic_plots();
         // - book histograms on runtime, created and fill externally
         void book_monitor_plot(const std::string & name, const TObject * theplot, const int & chip);
         // - set the 3dimensional histogram for the calibration curves
@@ -64,7 +59,7 @@ class IOManager
         void set_calibration_plot(const IOManager & calibration_manager);
         // - get all the objects needed to get the 3dim calibration curves
         const std::vector<TObject*> get_calibration_objects(const int & chipnumber) const;
-        
+
         // Update the runheader tree with the electron per ADC conversion
         void update(const CalibrateBeetleMap & calib_m);
 

@@ -260,7 +260,9 @@ int main(int argc, char* argv[])
         // and Fill the diagnostic plots for the pedestal and noise
         //iomanager.set_diagnostic_plots(pednoise_cmmd);
     }
-    std::cout << std::endl;
+    std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
+        << "Filling diagnosic plots" << std::endl;
+    iomanager.fill_diagnostic_plots();
 
     return status;
 }

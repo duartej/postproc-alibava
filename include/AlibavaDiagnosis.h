@@ -51,7 +51,7 @@ class AlibavaDiagnosis
         void set_calibration_plot(const std::vector<TObject*> & curves);
 
         // Fill all the diagnostic plots
-        void fill_diagnostic_plots(const TTree * & event_tree, const TTree * & header_tree);
+        void fill_diagnostic_plots(TTree * event_tree, TTree * header_tree);
 
         // Store the defined plots to a canvas
         void deliver_plots();
@@ -60,6 +60,17 @@ class AlibavaDiagnosis
         int _chip_number;
         // The map of plots
         std::map<std::string,TObject*> _histos; 
+
+        // An auxiliary method to get the branches needed for each plot
+        // depending whether the pedestal file was processed or not
+        std::map<std::string,std::pair<std::vector<std::string>,std::string> > get_needed_branches(bool was_pedefile_proc);
+        // the draw options
+        inline std::map<std::string,std::string> get_draw_option()
+        {
+            return { {"temperature","L"} ,{"tdc","L"}, {"pedestal","L"},
+                {"noise","L"},{"commonmode","L"},{"noiseevent","L"},
+                {"signal",""},{"hits",""},{"timeprofile","prof"}    };
+        }
 };
 
 #endif

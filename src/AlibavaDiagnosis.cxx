@@ -23,7 +23,6 @@
 #include "TProfile.h"
 #include "TTree.h"
 
-
 // System headers
 //#include <fstream>
 //#include <map>
@@ -31,6 +30,32 @@
 //#include <numeric>
 //#include <stdexcept>
 //#include <utility>
+
+// FIXME Promote to a generic place (it is used also by IOManager)
+namespace auxtree
+{
+    void set_tree_access(TTree * tree,const std::vector<std::string> & branch_list) 
+    {
+        // XXX: No mechanism to check the validity of the branches (id they exist)
+        // Speed up access, just using the branches we want
+        tree->SetBranchStatus("*",0);
+        for(const auto & branch: branch_list)
+        {
+            // Be sure the string contains anything
+            if(branch.empty())
+            {
+                continue;
+            }
+            tree->SetBranchStatus(branch.c_str(),1);
+        }
+    }
+    
+    void reset_tree(TTree * tree) 
+    {
+        tree->ResetBranchAddresses();
+        tree->SetBranchStatus("*",1);
+    }
+}
 
 AlibavaDiagnosis::AlibavaDiagnosis(const int & chipnumber):
     _chip_number(chipnumber)
@@ -49,8 +74,77 @@ AlibavaDiagnosis::~AlibavaDiagnosis()
     }
 }
 
+std::map<std::string,std::pair<std::vector<std::string>,std::string> > AlibavaDiagnosis::get_needed_branches(bool was_pedfile_processed)
+{
+    // Note the definition of the placeholder "@" in order to be substituted for the chip number
+    //
+    // Initialize with the independent (of the pedestal file processsing) branches
+    // Plotname: { {x-branchname,y-branchname}, cutstring }
+    std::map<std::string,std::pair<std::vector<std::string>,std::string> > branches_map = 
+    {
+        {"temperature",{{"Entry$","temperature"},""}},
+        {"tdc",{{"Entry$","eventTime"},""}}
+    };
+
+    const std::string chipnum = std::to_string(_chip_number);
+
+    if(was_pedfile_processed)
+    {
+        branches_map["pedestal"]   = {{"Iteration$","pedestal_cmmd_beetle"+chipnum},""};
+        branches_map["noise"]      = {{"Iteration$","noise_cmmd_beetle"+chipnum},""};
+        branches_map["commonmode"] = {{"Entry$","postproc_cmmd_beetle"+chipnum},""};
+        branches_map["noiseevent"] = {{"Entry$","postproc_cmmd_noise_beetle"+chipnum},""};
+        branches_map["signal"]     = {{"postproc_data_beetle"+chipnum},""};
+        branches_map["hits"]       = {{"Iteration$"},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+        branches_map["timeprofile"]= {{"eventTime","postproc_data_beetle"+chipnum},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+    }
+    else
+    {
+        // WAIT!!
+        branches_map["pedestal"]   = {{"Iteration$","header_pedestal"},""};
+        branches_map["noise"]      = {{"Iteration$","header_noise"},""};
+        branches_map["commonmode"] = {{""},""};
+        branches_map["noiseevent"] = {{""},""};
+        branches_map["signal"]     = {{"data_beetle"+chipnum},""};
+        branches_map["hits"]       = {{"Iteration$"},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+        branches_map["timeprofile"]= {{"eventTime","postproc_data_beetle"+chipnum},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+    }
+
+    return branches_map;
+}
+
+/*std::map<std::string,std::pair<std::vector<std::string>,std::string> > AlibavaDiagnosis::get_needed_branches(bool was_pedfile_processed)
+{
+    // Note the definition of the placeholder "@" in order to be substituted for the chip number
+    //
+    // Initialize with the independent (of the pedestal file processsing) branches
+    // Plotname: { {x-branchname,y-branchname}, cutstring }
+    std::map<std::string,std::pair<std::vector<std::string>,std::string> > branches_map = 
+    {
+        {"temperature",{{"Entry$","temperature"},""}},
+        {"tdc",{{"Entry$","eventTime"},""}}
+    };
+
+    const std::string chipnum = std::to_string(_chip_number);
+
+    if(was_pedfile_processed)
+    {
+        branches_map["pedestal"]   = {{"Iteration$","pedestal_cmmd_beetle"+chipnum},""};
+        branches_map["noise"]      = {{"Iteration$","noise_cmmd_beetle"+chipnum},""};
+        branches_map["commonmode"] = {{"Entry$","postproc_cmmd_beetle"+chipnum},""};
+        branches_map["noiseevent"] = {{"Entry$","postproc_cmmd_noise_beetle"+chipnum},""};
+        branches_map["signal"]     = {{"postproc_cmmd_beetle"+chipnum},""};
+        branches_map["hits"]       = {{"Iteration$"},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+        branches_map["timeprofile"]= {{"eventTime","postproc_data_beetle"+chipnum},"abs(postproc_cmmd_beetle"+chipnum+") > 5.0*noise_cmmd_beetle"+chipnum};
+    }
+
+    return branches_map;
+}*/
+
+
 void AlibavaDiagnosis::book_plots()
 {
+
     // The monitoring plot initialization
     // ----------------------------------
     // Note that most of the histograms are defined here
@@ -100,9 +194,9 @@ void AlibavaDiagnosis::book_plots()
     static_cast<TGraph*>(_histos["noiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
     static_cast<TGraph*>(_histos["noiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
     
-    _histos["commonnoiseevent"] = new TGraph();
-    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
-    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetTitle(std::string("Common mode"+suffix_name+";Event number; Noise [ADC]").c_str());
+    _histos["commonmode"] = new TGraph();
+    static_cast<TGraph*>(_histos["commonmode"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
+    static_cast<TGraph*>(_histos["commonmode"])->SetTitle(std::string("Common mode"+suffix_name+";Event number; Noise [ADC]").c_str());
 
     TH1::AddDirectory(1);
     // Should it be assigned to no-where or belong to any file?
@@ -135,8 +229,168 @@ void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * thepl
     }
 }
 
-void AlibavaDiagnosis::fill_diagnostic_plots(const TTree * & event_tree, const TTree * & header_tree)
+void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_tree)
 {
+    // Check if the pedestal file was processed
+    bool was_pedfile_proc = false;
+    if(std::string(event_tree->GetName()).find("postproc_") == 0)
+    {
+        was_pedfile_proc = true;
+    }
+
+    // A. Process it (needed anyway if there is no pedestal)
+    // B. Using Draw methods
+    
+    // -- Get the list of branches needed for each plot 
+    auto br_map = this->get_needed_branches(was_pedfile_proc);
+    // -- Attach the trees in order to access them consistently
+    event_tree->AddFriend(header_tree);
+
+    
+    // 1A. Process it
+    // -- Activate only those branches which are going to be used
+    std::vector<std::string> branch_names;
+    for(auto & plotname_auxpair: br_map)
+    {
+        auto varvector= plotname_auxpair.second.first;
+        for(auto & brname: varvector)
+        {
+            if(brname != "Iteration$" && brname != "Entry$")
+            {
+                branch_names.push_back(brname);
+            }
+        }
+    }
+    auxtree::set_tree_access(event_tree,branch_names);
+
+    // Attach the objects to access them
+    std::map<std::string,float> float_obj = { {"eventTime",-9999.9}, {"temperature",-9999.9} };
+    std::map<std::string,std::vector<float>* > vfloat_obj;
+    // -- Note that those that are not float, are vector<float*>
+    for(auto & brname: branch_names)
+    {
+        if(float_obj.find(brname) != float_obj.end())
+        {
+            continue;
+        }
+        // Also these branches are floats, update the map as well
+        if(brname.find("postproc_cmmd_beetle") == 0 
+                || brname.find("postproc_cmmd_noise_beetle") == 0)
+        {
+            float_obj[brname] = -9999.9;
+            continue;
+        }
+        // Otherwise, it is a vector of floats
+        vfloat_obj[brname] = nullptr;
+    }
+    // Now attach the floats to the tree
+    for(auto & name_f: float_obj)
+    {
+        event_tree->SetBranchAddress(name_f.first.c_str(),&(name_f.second));
+    }
+    // And attach the vectors (avoid to do it in the previous loop
+    // in order to keep controlled the memory re-allocation
+    for(auto & name_vect: vfloat_obj)
+    {
+        event_tree->SetBranchAddress(name_vect.first.c_str(),&(name_vect.second));
+    }
+    // Some useful variables: the name of the branch containing the 
+    // pedestal and noise
+    const std::string pedestal_branch =(br_map["pedestal"].first)[1];
+    const std::string noise_branch =(br_map["noise"].first)[1];
+    // the data (pedestal,noise subtracted or not)
+    const std::string signal_branch = (br_map["noise"].first)[0];
+    
+    // Go back to the previous position, move up 2 line, and set 
+    // the 80 column
+    std::cout << std::endl;
+    std::cout << "\033[2A\033[45C[000%]" << std::flush;
+    const int nentries= event_tree->GetEntries();
+    float point = float(nentries)/(100.0);
+    // the event loop
+    for(int k=0; k < nentries; ++k)
+    {
+        std::cout << "\r\033[45C[" << std::setfill('0') << std::setw(3) 
+            << std::round(float(k)/point) << "%]" << std::flush;
+
+        event_tree->GetEntry(k);
+        // Calculate pedestal and noise (just using first entry as they belong 
+        // to the runHeader tree)
+        if(k == 0)
+        {
+            for(int ich = 0; ich < ALIBAVA::NOOFCHANNELS; ++ich)
+            {
+                static_cast<TGraph*>(_histos["pedestal"])->SetPoint(ich,ich,(*vfloat_obj[pedestal_branch])[ich]);
+                static_cast<TGraph*>(_histos["noise"])->SetPoint(ich,ich,(*vfloat_obj[noise_branch])[ich]);
+            }
+        }
+        // HERE OR up
+        std::vector<float>* sg_pedestal_free = vfloat_obj[signal_branch];
+        std::pair<float,float> cmmd_and_noise;
+        if(was_pedfile_proc)
+        {
+            for(int ich = 0; ich < ALIBAVA::NOOFCHANNELS; ++ich)
+            {
+                (*sg_pedestal_free)[ich] -= (*vfloat_obj[pedestal_branch])[ich];
+            }
+        }
+
+        // Now filling the histograms
+        // Per event plots
+        // -- temperature and tdc
+        static_cast<TGraph*>(_histos["temperature"])->SetPoint(k,k,float_obj["temperature"]);
+        static_cast<TGraph*>(_histos["tdc"])->SetPoint(k,k,float_obj["eventTime"]);
+        // -- per channel plots
+        //for(int ich = 0; ich < ALIBAVA::NOOFCHANNELS; ++ich)
+        //{
+        //}
+    }
+    std::cout << std::endl;
+
+    auxtree::reset_tree(event_tree);
+    //
+    // 1B. Draw methods
+    /*auto drawopts = get_draw_option();
+    for(auto & plotname_auxpair: br_map)
+    {
+        auto plotname = plotname_auxpair.first;
+        auto varvector= plotname_auxpair.second.first;
+        auto cutstring= plotname_auxpair.second.second;
+        // Prepare the var-expression
+        std::string varexpression;
+        for(auto & var: varvector)
+        {
+            varexpression.append(var+":");
+        }
+        // Remove the last ':'
+        varexpression.erase(varexpression.end()-1);
+        // Plotting using the draw method
+        event_tree->Draw(varexpression.c_str(),cutstring.c_str(),drawopts[plotname].c_str());
+        // Filling
+        if(std::string(_histos[plotname]->ClassName()).find("TGraph") == 0)
+        {
+            TGraph * thgr = dynamic_cast<TGraph*>(_histos[plotname]);
+            auto vx = event_tree->GetV1();
+            auto vy = event_tree->GetV2();
+            for(unsigned int i=0; i < event_tree->GetSelectedRows() ; ++i)
+            {
+                thgr->SetPoint(i,vx[i],vy[i]);
+            }
+        }
+        else if(std::string(_histos[plotname]->ClassName()).find("TH1F") == 0)
+        {
+            TH1F * th1 = dynamic_cast<TH1F*>(_histos[plotname]);
+            if(th1 == nullptr)
+            {
+                continue;
+            }
+            auto v1 = event_tree->GetV1();
+            for(unsigned int i=0; i < event_tree->GetSelectedRows(); ++i)
+            {       
+                th1->Fill(v1[i]);
+            }
+        }
+    }*/
 }
 
 const std::vector<TObject*> AlibavaDiagnosis::get_calibration_plots() const
@@ -267,7 +521,7 @@ void AlibavaDiagnosis::deliver_plots()
     pad_comp8->cd(1);
     _histos["noiseevent"]->Draw();
     pad_comp8->cd(2);
-    _histos["commonnoiseevent"]->Draw();
+    _histos["commonmode"]->Draw();
     // Save it to the TFile present in the gDirectory 
     // (managed by the client of this class: IOManager)
     canvas->Write();
