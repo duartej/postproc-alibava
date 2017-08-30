@@ -12,6 +12,7 @@
 // The alibava run and event headers
 #include "AlibavaDiagnosis.h"
 #include "AuxiliaryStructures.h"
+#include "AlibavaPostProcessor.h"
 #include "ALIBAVA.h"
 
 // ROOT 
@@ -458,7 +459,14 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     std::map<int,std::vector<float>* > data = { {0, new std::vector<float>}, { 1, new std::vector<float>} }; 
     tevt->Branch("postproc_data_beetle1",&(data[0]));
     tevt->Branch("postproc_data_beetle2",&(data[1]));
+    std::map<int,float> common_mode = { {0,-9999.9}, { 1, -9999.9} }; 
+    tevt->Branch("postproc_common_mode_beetle1",&(common_mode[0]));
+    tevt->Branch("postproc_common_mode_beetle2",&(common_mode[1]));
+    std::map<int,float> noise_cmmd = { {0, -9999.0}, { 1, -9999.0} }; 
+    tevt->Branch("postproc_common_noise_beetle1",&(noise_cmmd[0]));
+    tevt->Branch("postproc_common_noise_beetle2",&(noise_cmmd[1]));
     // The calibrated if needed
+    //
     std::map<int,std::vector<float>* > out_cal = { {0,new std::vector<float>}, {1,new std::vector<float>} };
     // And define the setter to that collection (a dummy functoin if no cal)
     std::function<void(const int &, const int &)> fill_calibrated_branches = [&] (const int & /*chip*/, const int & /*istrip*/) { return; };
@@ -499,14 +507,28 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
         clear_and_reserve_channels(out_cal);
         
         this->get_events_entry(k);
+
+        std::vector<float> pedestal_free;
+        pedestal_free.reserve(ALIBAVA::NOOFCHANNELS);
         // And update using the pedestal and noise corrections
         for(const auto & chip_rawdata: original_data)
         {
+            pedestal_free.clear();
+            pedestal_free.reserve(ALIBAVA::NOOFCHANNELS);
+            // Get the common mode for that chip, it needs the pedestal-free
+            for(int ch = 0; ch < static_cast<int>(chip_rawdata.second->size()); ++ch)
+            {
+                pedestal_free.push_back( (*chip_rawdata.second)[ch]-(*pedestal[chip_rawdata.first])[ch] );
+            }
+            const auto cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(pedestal_free);
+            // And also store it
+            common_mode[chip_rawdata.first]=cmmd_and_noise.first;
+            noise_cmmd[chip_rawdata.first] =cmmd_and_noise.second;
             // Subtract noise and pedestals to the raw-data
             for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
             {
-                data[chip_rawdata.first]->push_back( (*chip_rawdata.second)[ichan]-
-                        (*pedestal[chip_rawdata.first])[ichan]-(*noise[chip_rawdata.first])[ichan] );
+                // Signal
+                data[chip_rawdata.first]->push_back( pedestal_free[ichan] - cmmd_and_noise.first );
                 fill_calibrated_branches(chip_rawdata.first,ichan);
                 // and the monitor plots (FIXME: probably fix the dummy last argument)
                 // XXX: Remember the _monitor_plots are defined using CHIP=1,2
