@@ -102,7 +102,7 @@ void AlibavaDiagnosis::book_plots()
     
     _histos["commonnoiseevent"] = new TGraph();
     static_cast<TGraph*>(_histos["commonnoiseevent"])->SetName(std::string("histo_NoiseEvent_"+suffix_name).c_str());
-    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetTitle(std::string("Noise per event "+suffix_name+";Event number; Noise [ADC]").c_str());
+    static_cast<TGraph*>(_histos["commonnoiseevent"])->SetTitle(std::string("Common mode"+suffix_name+";Event number; Noise [ADC]").c_str());
 
     TH1::AddDirectory(1);
     // Should it be assigned to no-where or belong to any file?
@@ -128,7 +128,11 @@ void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * thepl
     // Get the object and clone it without appending it in the gDirectory of TROOT
     const std::string suffix_name("chip-"+std::to_string(this->_chip_number));
     _histos[name] = theplot->Clone(std::string("externalbook_histo_"+name+"_"+suffix_name).c_str());
-    dynamic_cast<TH1*>(_histos[name])->SetDirectory(0);
+    // Only de-attach from current ROOT-directory if it was
+    if(std::string(_histos[name]->ClassName()).find("TGraph") != 0)
+    {
+        dynamic_cast<TH1*>(_histos[name])->SetDirectory(0);
+    }
 }
 
 template<class T1, class T2>

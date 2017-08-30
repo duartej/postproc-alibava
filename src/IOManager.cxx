@@ -311,6 +311,11 @@ void IOManager::set_events_tree_access(const std::vector<std::string> & branch_l
     this->_tree_events->SetBranchStatus("*",0);
     for(const auto & branch: branch_list)
     {
+        // Be sure the string contains anything
+        if(branch.empty())
+        {
+            continue;
+        }
         this->_tree_events->SetBranchStatus(branch.c_str(),1);
     }
 }
@@ -460,11 +465,11 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     tevt->Branch("postproc_data_beetle1",&(data[0]));
     tevt->Branch("postproc_data_beetle2",&(data[1]));
     std::map<int,float> common_mode = { {0,-9999.9}, { 1, -9999.9} }; 
-    tevt->Branch("postproc_common_mode_beetle1",&(common_mode[0]));
-    tevt->Branch("postproc_common_mode_beetle2",&(common_mode[1]));
+    tevt->Branch("postproc_cmmd_beetle1",&(common_mode[0]));
+    tevt->Branch("postproc_cmmd_beetle2",&(common_mode[1]));
     std::map<int,float> noise_cmmd = { {0, -9999.0}, { 1, -9999.0} }; 
-    tevt->Branch("postproc_common_noise_beetle1",&(noise_cmmd[0]));
-    tevt->Branch("postproc_common_noise_beetle2",&(noise_cmmd[1]));
+    tevt->Branch("postproc_cmmd_noise_beetle1",&(noise_cmmd[0]));
+    tevt->Branch("postproc_cmmd_noise_beetle2",&(noise_cmmd[1]));
     // The calibrated if needed
     //
     std::map<int,std::vector<float>* > out_cal = { {0,new std::vector<float>}, {1,new std::vector<float>} };
@@ -737,6 +742,8 @@ PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def
     return pnmap;
 }
 
+
+//XXX --> TO BE REMOVED THIS!! 
 void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m)
 {
     bool file_was_closed = false;
@@ -749,6 +756,8 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
     }
 
     std::map<int,std::string> chip_dataname_map = { {0,"data_beetle1"}, {1,"data_beetle2"} };
+    std::map<int,std::string> chip_cmmdname_map = { {0,"postproc_cmmd_beetle1"}, {1,"postproc_cmmd_beetle2"} };
+    std::map<int,std::string> chip_cmmdnoisename_map = { {0,"postproc_cmmd_noise_beetle1"}, {1,"postproc_cmmd_noise_beetle1"} };
     // Check if the postproc events is already present
     TTree *postproc_t = dynamic_cast<TTree*>(_file->Get("postproc_Events"));
     bool use_current_pednoise_map = false;
@@ -757,7 +766,6 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
         // Not postproc available, the signal must be constructed by subtracting
         // the pedestal and noise
         use_current_pednoise_map = true;
-
     }
     else
     {
@@ -768,7 +776,16 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
     }
     // Activate the needed branches
     std::map<int,std::vector<float>* > original_data = { {0, nullptr}, { 1, nullptr} };
-    set_events_tree_access( {chip_dataname_map[0], chip_dataname_map[1], "eventTime"} );
+    std::vector<std::string> branches_active( { chip_dataname_map[0], chip_dataname_map[1], "eventTime" } );
+    if(!use_current_pednoise_map)
+    {
+        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+        {
+            branches_active.push_back(chip_cmmdname_map[chip]);
+            branches_active.push_back(chip_cmmdnoisename_map[chip]);
+        }
+    }
+    set_events_tree_access(branches_active);
     
     // And the event time
     float eventTime = -1.0;
@@ -778,6 +795,17 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
     for(auto & i_v: original_data)
     {
         set_events_tree_branch_address(chip_dataname_map[i_v.first],&i_v.second);
+    }
+    // In case the common mode was already calculated
+    std::map<int,float> cmmd_map  = { {0,-9999.9}, {1,-9999.9} };
+    std::map<int,float> noise_map = { {0,-9999.9}, {1,-9999.9} };
+    if(!use_current_pednoise_map)
+    {
+        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+        {
+            set_events_tree_branch_address(chip_cmmdname_map[chip],&(cmmd_map[chip]));
+            set_events_tree_branch_address(chip_cmmdnoisename_map[chip],&(noise_map[chip]));
+        }
     }
     
     // Go back to the previous position, move up 1 line
@@ -790,17 +818,38 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
     {
         std::cout << "\rFilling monitoring plots [" << std::setfill('0') << std::setw(3) 
             << std::round(float(k)/point) << "%]" << std::flush;
+        // Get the data
+        clear_and_reserve_channels(original_data);
         this->get_events_entry(k);
         // And update using the pedestal and noise corrections
         for(const auto & chip_rawdata: original_data)
         {
+            std::vector<float> sg_pedestal_free( (*chip_rawdata.second) );
+            std::pair<float,float> cmmd_and_noise;
+            if(use_current_pednoise_map)
+            {
+                // Calculate the common mode and store it in the 
+                for(int ch = 0 ; ch < static_cast<int>(chip_rawdata.second->size()); ++ch)
+                {
+                    sg_pedestal_free[ch] -= (pednoise_m.at(chip_rawdata.first).first)[ch];
+                }
+                cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(sg_pedestal_free);
+                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_and_noise.first);
+                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,cmmd_and_noise.second);
+            }
+            else
+            {
+                // Get it from the tree
+                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_map[chip_rawdata.first]);
+                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,noise_map[chip_rawdata.first]);
+            }
             // Subtract noise and pedestals to the raw-data
             for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
             {
-                float signal = (*chip_rawdata.second)[ichan];
+                float signal = sg_pedestal_free[ichan];
                 if(use_current_pednoise_map)
                 {
-                    signal -= ((pednoise_m.at(chip_rawdata.first).first)[ichan]+(pednoise_m.at(chip_rawdata.first).second)[ichan]);
+                    signal -= cmmd_and_noise.first;
                 }
                 // XXX: Remember the _monitor_plots are defined using CHIP=1,2
                 //      while here CHIP=0,1
@@ -810,7 +859,7 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
                 if(std::fabs(signal) > 5.0*(pednoise_m.at(chip_rawdata.first).second)[ichan])
                 {
                     this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
-                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal*-1.0);
+                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal);
                 }
             }
         }
