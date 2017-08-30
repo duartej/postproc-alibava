@@ -373,9 +373,9 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
         }
 
         // Monitor plots
-        iomanager->update_diagnostic_plot<int,float>("temperature",eventCounter-1,anEvent->eventTemp);
+        //iomanager->update_diagnostic_plot<int,float>("temperature",eventCounter-1,anEvent->eventTemp);
         // Monitor plots
-        iomanager->update_diagnostic_plot<int,float>("tdc",eventCounter-1,anEvent->eventTime);
+        //iomanager->update_diagnostic_plot<int,float>("tdc",eventCounter-1,anEvent->eventTime);
 
         // Free memory
         delete anEvent;

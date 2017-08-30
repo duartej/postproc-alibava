@@ -21,8 +21,8 @@
 #include "TH2F.h"
 #include "TH1F.h"
 #include "TProfile.h"
+#include "TTree.h"
 
-#include "TROOT.h"
 
 // System headers
 //#include <fstream>
@@ -135,58 +135,9 @@ void AlibavaDiagnosis::book_plot(const std::string & name, const TObject * thepl
     }
 }
 
-template<class T1, class T2>
-    void AlibavaDiagnosis::update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y)
+void AlibavaDiagnosis::fill_diagnostic_plots(const TTree * & event_tree, const TTree * & header_tree)
 {
-    // Consistency check
-    if(_histos.find(plotname) == _histos.end())
-    {
-        std::cerr << "[AlibavaDiagnosis::update_diagnostic_plot] The plot object '"
-            << plotname << "' does not exist" << std::endl;
-        // Throw exception?
-        return;
-    }
-    
-    // all the graphs
-    if(plotname == "temperature" 
-            || plotname == "tdc"
-            || plotname == "pedestal"
-            || plotname == "noise"
-            || plotname == "noiseevent"
-            || plotname == "commonnoiseevent" )
-    {
-        TGraph * thegraph = static_cast<TGraph*>(_histos[plotname]);
-        thegraph->SetPoint(thegraph->GetN(),x,y);
-    }
-    else if( plotname == "signal" || plotname == "hits")
-    {
-        static_cast<TH1F*>(_histos[plotname])->Fill(x);
-    }
-    else if( plotname == "timeprofile")
-    {
-        static_cast<TProfile*>(_histos[plotname])->Fill(x,y);
-    }
 }
-// Declaration of the used types
-template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const int&);
-template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const int&,const float&);
-template void AlibavaDiagnosis::update_diagnostic_plot(const std::string&,const float&,const float&);
-
-template<class ROOTTYPE> 
-    ROOTTYPE* AlibavaDiagnosis::get_diagnostic_plot(const std::string & plotname)
-{
-    if(_histos.find(plotname) == _histos.end())
-    {
-        std::cerr << "[AlibavaDiagnosis::get_diagnostic_plot ERROR] Invalid plotname"
-            << " [" << plotname << "] " << std::endl;
-        return nullptr;
-    }
-    return static_cast<ROOTTYPE*>(_histos[plotname]);
-}
-
-// Declaration of the used types
-template TH2F*     AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
-template TProfile* AlibavaDiagnosis::get_diagnostic_plot(const std::string&);
 
 const std::vector<TObject*> AlibavaDiagnosis::get_calibration_plots() const
 {
@@ -247,35 +198,6 @@ void AlibavaDiagnosis::set_calibration_plot(const std::vector<TObject*> & curves
     }
 }
         
-void AlibavaDiagnosis::set_diagnostic_plots(const std::pair<std::vector<float>,std::vector<float> > & pednoise)
-{
-    // The plot for the pedestal and noise
-    // loop over all channels (remember the elements of the vectors are placed in the
-    // same order than the channels
-    for(unsigned int ich_raw = 0; ich_raw < pednoise.first.size(); ++ich_raw)
-    {
-        const int ich = static_cast<int>(ich_raw);
-        this->update_diagnostic_plot<int,float>("pedestal",ich,(pednoise.first)[ich_raw]);
-        this->update_diagnostic_plot<int,float>("noise",ich,(pednoise.second)[ich_raw]);
-    }
-
-    // - The auxiliary noise per event plots if any
-    //if(the plots are present)
-    //{
-        // get the plots and do the update_diagnostic_plot
-        // -- after that remove them from the list of _histos
-        // (otherwise, they are going to be stored in the file)
-    //}
-    //else
-    //{
-    //  create a title in the histo/graph saying that there is no
-    //  data to create the plot
-    //}
-
-    // processed plots: signal, hits, time profile
-    // -- Get the signal (noise free)
-    // -- Note the tree
-}
 
 void AlibavaDiagnosis::deliver_plots()
 {

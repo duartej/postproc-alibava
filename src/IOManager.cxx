@@ -586,48 +586,6 @@ void IOManager::book_monitor_plot(const std::string & plotname, const TObject * 
     _monitor_plots[chip]->book_plot(plotname,theplot);
 }
 
-template <class T1,class T2>
-    void IOManager::update_diagnostic_plot(const int & chip, const std::string & plotname, const T1 & x, const T2 & y)
-{
-    // Do nothing if the plots weren't booked
-    if(!_monitor_plots_booked)
-    {
-        return;
-    }
-
-    if(_monitor_plots.find(chip) == _monitor_plots.end())
-    {
-        std::cerr << "[IOManager::update_diagnostic_plot ERROR] Invalid chip"
-            << " number [" << chip << "] " << std::endl;
-        // Exception??
-        return;
-    }
-    // the monitor class take care of it
-    _monitor_plots[chip]->update_diagnostic_plot<T1,T2>(plotname,x,y);
-}
-// Template specialization
-template void IOManager::update_diagnostic_plot(const int&,const std::string&,const int&,const float&);
-template void IOManager::update_diagnostic_plot(const int&,const std::string&,const float&,const float&);
-
-template <class T1,class T2>
-    void IOManager::update_diagnostic_plot(const std::string & plotname, const T1 & x, const T2 & y)
-{
-    // Do nothing if the plots weren't booked
-    if(!_monitor_plots_booked)
-    {
-        return;
-    }
-
-    // Plot independent of the chip number
-    for(auto & mon: _monitor_plots)
-    {
-        mon.second->update_diagnostic_plot<T1,T2>(plotname,x,y);
-    }
-}
-// Template specialization
-template void IOManager::update_diagnostic_plot(const std::string&,const int&,const float&);
-
-
 const std::vector<TObject*> IOManager::get_calibration_objects(const int & chipnumber) const
 {
     return _monitor_plots.at(chipnumber)->get_calibration_plots();
@@ -639,40 +597,6 @@ void IOManager::set_calibration_plot(const IOManager & cal_manager)
     {
         // Choose the right monitor manager and send the plots
         chipmon.second->set_calibration_plot(cal_manager.get_calibration_objects(chipmon.first));
-    }
-}
-
-void IOManager::set_diagnostic_plots(bool is_pedestal_file_present)
-{
-    // Don't do nothing now, wait untile the pedestal file is present
-    // and the plots will be filled with the overloaded version of this
-    // method
-    if(is_pedestal_file_present)
-    {
-        return;
-    }
-
-    // Get the pedestal and noise from the header
-    PedestalNoiseBeetleMap pednoise_from_header = this->get_pednoise_from_header();
-    // And obtain the plots those values
-    this->set_diagnostic_plots(pednoise_from_header);
-}
-
-void IOManager::set_diagnostic_plots(const PedestalNoiseBeetleMap & pednoise_m)
-{
-    // Fill the signal, hits and time profile plots
-    this->fill_remaining_monitor_plots(pednoise_m);
-    for(auto & chipmon: _monitor_plots)
-    {
-        // Obtain some extra data needed: the signal (free of pedestal and noise)
-        // and the event time
-        //std::vector<std::vector<float>*> signal = this->get_signal(pednoise_m);
-        //std::vector<float> eventTime = this->get_event_time();
-        // Choose the right monitor manager and send the plots
-        // Note: the _monitor_plots are defined using CHIP=1,2
-        //       whilie the PedestalNoiseBeetleMap, CHIP=0,1
-        // XXX FIXME: This should be harmonized
-        chipmon.second->set_diagnostic_plots(pednoise_m.at(chipmon.first-1));
     }
 }
 
@@ -834,14 +758,14 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
                     sg_pedestal_free[ch] -= (pednoise_m.at(chip_rawdata.first).first)[ch];
                 }
                 cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(sg_pedestal_free);
-                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_and_noise.first);
-                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,cmmd_and_noise.second);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_and_noise.first);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,cmmd_and_noise.second);
             }
             else
             {
                 // Get it from the tree
-                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_map[chip_rawdata.first]);
-                this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,noise_map[chip_rawdata.first]);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonnoiseevent",k,cmmd_map[chip_rawdata.first]);
+                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,noise_map[chip_rawdata.first]);
             }
             // Subtract noise and pedestals to the raw-data
             for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
@@ -854,12 +778,12 @@ void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pedn
                 // XXX: Remember the _monitor_plots are defined using CHIP=1,2
                 //      while here CHIP=0,1
                 // XXX FIXME: This should be harmonized
-                this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",signal,-1.0);
+                //this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",signal,-1.0);
                 // First approach: a hit defined as 5 times the noise 
                 if(std::fabs(signal) > 5.0*(pednoise_m.at(chip_rawdata.first).second)[ichan])
                 {
-                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
-                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal);
+                    //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
+                    //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal);
                 }
             }
         }

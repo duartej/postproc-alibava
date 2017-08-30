@@ -163,7 +163,7 @@ int main(int argc, char* argv[])
     }
     // process the diagnostic plots (if there is no pedestal file, otherwise,
     // the wait until the pedestal file is present to process all)
-    iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
+    //iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
     iomanager.close();
     
     // process calibration file
@@ -231,10 +231,10 @@ int main(int argc, char* argv[])
         std::cout << " - Calculating <pedestals>" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
         
-        std::cout << " - Re-evaluating pedestals (noise extracted)" << std::endl;
+        std::cout << " - Re-evaluating pedestals (noise extracted) and common mode" << std::endl;
         postproc.get_pedestal_noise_free(iomanager_ped,pednoise_cmmdnot);
         
-        std::cout << " - Re-calculating pedestals and common noise" << std::endl;
+        std::cout << " - Re-calculating pedestals and noise per channel" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmd = postproc.calculate_pedestal_noise(iomanager_ped);
         /*for(auto & chip_m: pednoise_cmmdnot)
         {
@@ -255,9 +255,10 @@ int main(int argc, char* argv[])
         iomanager_ped.close();
         // And update the beam file with the pedestals and common noise values
         // included in the runHeader postproc 
+        std::cout << " - Updating the tree: create signal branches" << std::endl;
         iomanager.update(pednoise_cmmd);
         // and Fill the diagnostic plots for the pedestal and noise
-        iomanager.set_diagnostic_plots(pednoise_cmmd);
+        //iomanager.set_diagnostic_plots(pednoise_cmmd);
     }
     std::cout << std::endl;
 
