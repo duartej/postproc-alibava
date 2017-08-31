@@ -469,7 +469,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     // The calibrated if needed
     //
     std::map<int,std::vector<float>* > out_cal = { {0,new std::vector<float>}, {1,new std::vector<float>} };
-    // And define the setter to that collection (a dummy functoin if no cal)
+    // And define the setter to that collection (a dummy functor if no calibration file)
     std::function<void(const int &, const int &)> fill_calibrated_branches = [&] (const int & /*chip*/, const int & /*istrip*/) { return; };
     if(is_calibrated)
     {
@@ -531,17 +531,6 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
                 // Signal
                 data[chip_rawdata.first]->push_back( pedestal_free[ichan] - cmmd_and_noise.first );
                 fill_calibrated_branches(chip_rawdata.first,ichan);
-                // and the monitor plots (FIXME: probably fix the dummy last argument)
-                // XXX: Remember the _monitor_plots are defined using CHIP=1,2
-                //      while here CHIP=0,1
-                // XXX FIXME: This should be harmonized
-                /*this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",data[chip_rawdata.first]->back(),-1.0);
-                // First approach: a hit defined as 3 times the noise
-                if(std::fabs(data[chip_rawdata.first]->back()) > 3.0*(*noise[chip_rawdata.first])[ichan])
-                {
-                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
-                    this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,data[chip_rawdata.first]->back());
-                }*/
             }
         }
         tevt->Fill();
