@@ -61,9 +61,13 @@ class AlibavaDiagnosis
         // The map of plots
         std::map<std::string,TObject*> _histos; 
 
-        // An auxiliary method to get the branches needed for each plot
-        // depending whether the pedestal file was processed or not
-        std::map<std::string,std::pair<std::vector<std::string>,std::string> > get_needed_branches(bool was_pedefile_proc);
+        // Get the relation between the histogram name and the branched needed
+        // to fill it (note that the branch change depending the processing or
+        // not previously of the pedestal file
+        std::map<std::string,std::string> get_branch_names(bool was_pedfile_proc);
+        // Decide whether or not the current channel could be a seed cluster
+        bool is_seed_cluster(const float & signal, const float & noise, const float & SoverN = 5.0) const;
+
         // the draw options
         inline std::map<std::string,std::string> get_draw_option()
         {

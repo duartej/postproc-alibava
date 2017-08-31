@@ -100,18 +100,13 @@ class IOManager
 
         // The monitor/diagnostic plots
         std::map<int,AlibavaDiagnosis*> _monitor_plots;
-        // Related methods
-        // - get the pedestal and noise vectors (per beetle) by using the header
-        //   note if the header is corrupted, it will use a default values
-        PedestalNoiseBeetleMap get_pednoise_from_header(const float & ped_default = 512.0,const float & noise_default=3.0);
-        // - fill the signal, hits and time profile plots by looping again
-        //   the main event tree
-        void fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m);
         
         // store the friends
         void aux_store_friends(TTree * tree);
         // Resurrecting the events tree
         void resurrect_events_tree();
+        // Resurrecting the run header tree
+        void resurrect_header_tree();
 };
 
 #endif

@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
     IOManager iomanager(opt.outputFilename);
     iomanager.book_tree_header();
     iomanager.book_tree();
-    // Monitor
+    // Monitor plots, booking
     iomanager.book_monitor_plots();
 
     // process the file
@@ -161,9 +161,6 @@ int main(int argc, char* argv[])
         // wrong
         status = events;
     }
-    // process the diagnostic plots (if there is no pedestal file, otherwise,
-    // the wait until the pedestal file is present to process all)
-    //iomanager.set_diagnostic_plots(opt.storeHeaderPedestalNoise);
     iomanager.close();
     
     // process calibration file
@@ -179,7 +176,6 @@ int main(int argc, char* argv[])
         IOManager iomanager_cal(calfile);
         iomanager_cal.book_tree_header();
         iomanager_cal.book_tree();
-        // --> Not needed, just need the calibration iomanager_cal.book_monitor_plots();
         // process the pedestal file
         // change the name of the input file
         input_options opt_cal(opt);
@@ -236,32 +232,16 @@ int main(int argc, char* argv[])
         
         std::cout << " - Re-calculating pedestals and noise per channel" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmd = postproc.calculate_pedestal_noise(iomanager_ped);
-        /*for(auto & chip_m: pednoise_cmmdnot)
-        {
-            std::cout << "CHIP: " << chip_m.first << std::endl;
-            std::string up;
-            std::string down;
-            for(unsigned int i=0; i < chip_m.second.first.size(); ++i)
-            {
-                up += std::to_string(chip_m.second.first[i])+" ("+
-                        std::to_string(pednoise_cmmd[chip_m.first].first[i])+") " ;
-                down += std::to_string(chip_m.second.second[i])+" ("+
-                        std::to_string(pednoise_cmmd[chip_m.first].second[i])+") ";
-            }
-            std::cout << up << std::endl;
-            std::cout << down << std::endl;
-        }*/
         // close the pedestal noise file
         iomanager_ped.close();
         // And update the beam file with the pedestals and common noise values
         // included in the runHeader postproc 
         std::cout << " - Updating the tree: create signal branches" << std::endl;
         iomanager.update(pednoise_cmmd);
-        // and Fill the diagnostic plots for the pedestal and noise
-        //iomanager.set_diagnostic_plots(pednoise_cmmd);
     }
+    // process the diagnostic plots
     std::cout << "\033[1;34mfortythieves INFO\033[1;m: " 
-        << "Filling diagnosic plots" << std::endl;
+        << "Filling monitor plots CHIP" << std::endl;
     iomanager.fill_diagnostic_plots();
 
     return status;

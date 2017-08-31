@@ -251,21 +251,6 @@ void IOManager::aux_store_friends(TTree * tree)
 
 void IOManager::close()
 {
-    // --> The monitor plots, create and store the plots
-    //     and deallocate memory afterwards
-    //     XXX: Only do it at destruction
-    /*
-    for(auto & mon: _monitor_plots)
-    {
-        if(mon.second != nullptr)
-        {
-            // Create and store the 
-            mon.second->deliver_plots();
-            delete mon.second;
-            mon.second = nullptr;
-        }
-    }*/
-
     if( _tree_header != nullptr )
     {
         _tree_header->Write("", TTree::kOverwrite);
@@ -302,6 +287,17 @@ void IOManager::resurrect_events_tree()
         return;
     }
     this->_tree_events = static_cast<TTree*>(this->_file->Get("Events"));
+}
+
+void IOManager::resurrect_header_tree()
+{
+    if( this->_tree_header != nullptr )
+    {
+        std::cerr << "[IOManager::resurrect_header_tree WARNING] Trying to"
+            << " resurrect an still live TTree. Ignoring the order." << std::endl;
+        return;
+    }
+    this->_tree_header = static_cast<TTree*>(this->_file->Get("runHeader"));
 }
 
 void IOManager::set_events_tree_access(const std::vector<std::string> & branch_list) const
@@ -600,73 +596,6 @@ void IOManager::set_calibration_plot(const IOManager & cal_manager)
     }
 }
 
-PedestalNoiseBeetleMap IOManager::get_pednoise_from_header(const float & ped_def,const float & noise_def)
-{
-    bool file_was_closed = false;
-    // Check the file is closed to close it afterwards
-    if( _file == nullptr )
-    {
-        file_was_closed = true;
-        _file = new TFile(_rootfilename.c_str()); 
-        _tree_header = dynamic_cast<TTree*>(_file->Get("runHeader"));
-    }
-    if( _tree_header == nullptr )
-    {
-        // Something weird happened
-        // -- return or throw exception
-    }
-    
-    // Getting the noise and pedestal for all the chips
-    std::vector<float>* pedestal = nullptr;
-    std::vector<float>* noise = nullptr;
-    _tree_header->SetBranchAddress("header_pedestal",&pedestal);
-    _tree_header->SetBranchAddress("header_noise",&noise);
-
-    // Fill the vectors (remember runHeader has just one entry)
-    _tree_header->GetEntry(0);
-    
-    // And fill the Map if there are not zero values, otherwise
-    // use default values
-    bool at_least_one_nonull = false;
-    PedestalNoiseBeetleMap pnmap;
-    for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-    {
-        for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
-        {
-            // Remember pedestal and noise vector contains all the elements
-            // of all the chips, so it is needed to convert the element number into chip and channel
-            const unsigned int el = static_cast<unsigned int>(chip*ALIBAVA::NOOFCHIPS+ichan);
-            pnmap[chip].first.push_back((*pedestal)[el]);
-            pnmap[chip].second.push_back((*noise)[el]);
-            if(!at_least_one_nonull && fabs((*pedestal)[el]) > 1.0)
-            {
-                at_least_one_nonull=true;
-            }
-        }
-    }
-
-    // If the header is corrupted, fill the default values
-    // (corrupted: assuming all values to zero!! XXX: CHECK THAT)
-    if(!at_least_one_nonull)
-    {
-        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-        {
-            std::fill(pnmap[chip].first.begin(),pnmap[chip].first.end(),ped_def);
-            std::fill(pnmap[chip].second.begin(),pnmap[chip].second.end(),noise_def);
-        }
-    }
-
-    // Let the file to be in the original status
-    if(file_was_closed)
-    {
-        // Note that close will take care of closing the appropiate     
-        // trees as well (events, runHeader)
-        this->close();
-    }
-    return pnmap;
-}
-
-
 void IOManager::fill_diagnostic_plots()
 {
     bool file_was_closed = false;
@@ -676,12 +605,12 @@ void IOManager::fill_diagnostic_plots()
         file_was_closed = true;
         _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
         this->resurrect_events_tree();
+        this->resurrect_header_tree();
     }
     // Check if the pedefile was processed, if yes it should exist 
     // the postproc_Events tree
     TTree *event_tree = dynamic_cast<TTree*>(_file->Get("postproc_Events"));
     TTree * header_tree = nullptr;
-    bool use_current_pednoise_map = false;
     if( event_tree == nullptr )
     {
         // Not postproc available, ressurrect the event tree
@@ -716,159 +645,3 @@ void IOManager::fill_diagnostic_plots()
         this->close();
     }
 }
-
-//XXX --> TO BE REMOVED THIS!! 
-void IOManager::fill_remaining_monitor_plots(const PedestalNoiseBeetleMap & pednoise_m)
-{
-    bool file_was_closed = false;
-    // Check the file is closed to close it afterwards
-    if( _file == nullptr )
-    {
-        file_was_closed = true;
-        _file = new TFile(_rootfilename.c_str(),"UPDATE"); 
-        this->resurrect_events_tree();
-    }
-
-    std::map<int,std::string> chip_dataname_map = { {0,"data_beetle1"}, {1,"data_beetle2"} };
-    std::map<int,std::string> chip_cmmdname_map = { {0,"postproc_cmmd_beetle1"}, {1,"postproc_cmmd_beetle2"} };
-    std::map<int,std::string> chip_cmmdnoisename_map = { {0,"postproc_cmmd_noise_beetle1"}, {1,"postproc_cmmd_noise_beetle1"} };
-    // Check if the postproc events is already present
-    TTree *postproc_t = dynamic_cast<TTree*>(_file->Get("postproc_Events"));
-    bool use_current_pednoise_map = false;
-    if( postproc_t == nullptr )
-    {
-        // Not postproc available, the signal must be constructed by subtracting
-        // the pedestal and noise
-        use_current_pednoise_map = true;
-    }
-    else
-    {
-        this->get_events_tree()->AddFriend(postproc_t);
-        // Update the name of the data (already pedestal and noise-free)
-        chip_dataname_map[0] = "postproc_data_beetle1";
-        chip_dataname_map[1] = "postproc_data_beetle2";
-    }
-    // Activate the needed branches
-    std::map<int,std::vector<float>* > original_data = { {0, nullptr}, { 1, nullptr} };
-    std::vector<std::string> branches_active( { chip_dataname_map[0], chip_dataname_map[1], "eventTime" } );
-    if(!use_current_pednoise_map)
-    {
-        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-        {
-            branches_active.push_back(chip_cmmdname_map[chip]);
-            branches_active.push_back(chip_cmmdnoisename_map[chip]);
-        }
-    }
-    set_events_tree_access(branches_active);
-    
-    // And the event time
-    float eventTime = -1.0;
-    set_events_tree_branch_address("eventTime",&eventTime);
-
-    // attach the vector to the branches 
-    for(auto & i_v: original_data)
-    {
-        set_events_tree_branch_address(chip_dataname_map[i_v.first],&i_v.second);
-    }
-    // In case the common mode was already calculated
-    std::map<int,float> cmmd_map  = { {0,-9999.9}, {1,-9999.9} };
-    std::map<int,float> noise_map = { {0,-9999.9}, {1,-9999.9} };
-    if(!use_current_pednoise_map)
-    {
-        for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
-        {
-            set_events_tree_branch_address(chip_cmmdname_map[chip],&(cmmd_map[chip]));
-            set_events_tree_branch_address(chip_cmmdnoisename_map[chip],&(noise_map[chip]));
-        }
-    }
-    
-    // Go back to the previous position, move up 1 line
-    std::cout << std::endl;
-    std::cout << "\033[1AFilling monitoring plots [000%]"<< std::flush;
-    const int nentries= this->get_events_number_entries();
-    float point = float(nentries)/100.0;
-    // the event loop
-    for(int k=0; k < this->get_events_number_entries(); ++k)
-    {
-        std::cout << "\rFilling monitoring plots [" << std::setfill('0') << std::setw(3) 
-            << std::round(float(k)/point) << "%]" << std::flush;
-        // Get the data
-        clear_and_reserve_channels(original_data);
-        this->get_events_entry(k);
-        // And update using the pedestal and noise corrections
-        for(const auto & chip_rawdata: original_data)
-        {
-            std::vector<float> sg_pedestal_free( (*chip_rawdata.second) );
-            std::pair<float,float> cmmd_and_noise;
-            if(use_current_pednoise_map)
-            {
-                // Calculate the common mode and store it in the 
-                for(int ch = 0 ; ch < static_cast<int>(chip_rawdata.second->size()); ++ch)
-                {
-                    sg_pedestal_free[ch] -= (pednoise_m.at(chip_rawdata.first).first)[ch];
-                }
-                cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(sg_pedestal_free);
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonmode",k,cmmd_and_noise.first);
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,cmmd_and_noise.second);
-            }
-            else
-            {
-                // Get it from the tree
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"commonmode",k,cmmd_map[chip_rawdata.first]);
-                //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"noiseevent",k,noise_map[chip_rawdata.first]);
-            }
-            // Subtract noise and pedestals to the raw-data
-            for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
-            {
-                float signal = sg_pedestal_free[ichan];
-                if(use_current_pednoise_map)
-                {
-                    signal -= cmmd_and_noise.first;
-                }
-                // XXX: Remember the _monitor_plots are defined using CHIP=1,2
-                //      while here CHIP=0,1
-                // XXX FIXME: This should be harmonized
-                //this->update_diagnostic_plot<float,float>(chip_rawdata.first+1,"signal",signal,-1.0);
-                // First approach: a hit defined as 5 times the noise 
-                if(std::fabs(signal) > 5.0*(pednoise_m.at(chip_rawdata.first).second)[ichan])
-                {
-                    //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"hits",ichan,-1.0);
-                    //this->update_diagnostic_plot<int,float>(chip_rawdata.first+1,"timeprofile",eventTime,signal);
-                }
-            }
-        }
-    }
-    // Everything back to the original state
-    this->reset_events_tree();
-    
-    if(file_was_closed)
-    {
-        // Note that close will take care of closing the appropiate     
-        // trees as well (events, runHeader)
-        this->close();
-    }
-}
-
-
-/*template<typename ROOTTYPE> 
-    ROOTTYPE* IOManager::get_diagnostic_plot(const std::string & plotname, const int & chip)
-{
-    if( chip == 1)
-    {
-        return this->_monitor_chip1->get_diagnostic_plot<ROOTTYPE>(plotname);
-    }
-    else if(chip == 2)
-    {
-        return this->_monitor_chip2->get_diagnostic_plot<ROOTTYPE>(plotname);
-    }
-    else
-    {
-        std::cerr << "[IOManager::get_diagnostic_plot ERROR] Invalid chip"
-            << " number [" << chip << "] " << std::endl;
-        return nullptr;
-    }
-}
-
-//Declaration of the used types
-template TProfile* IOManager::get_diagnostic_plot(const std::string&,const int &);
-template TGraph* IOManager::get_diagnostic_plot(const std::string&,const int &);*/
