@@ -12,7 +12,6 @@
 
 // The alibava related classes
 #include "AlibavaPostProcessor.h"
-//#include "AuxiliaryStructures.h"
 #include "ALIBAVA.h"
 
 // ROOT 
@@ -352,6 +351,7 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
     }
     std::cout << std::endl;
 
+    auxtree::reset_tree(header_tree);
     auxtree::reset_tree(event_tree);
 }
 
