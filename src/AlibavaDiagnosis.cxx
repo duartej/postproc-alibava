@@ -434,7 +434,7 @@ void AlibavaDiagnosis::deliver_plots()
     // Define the canvas
     const int wsize = 650;
     const int hsize = 850;
-    TCanvas * canvas = new TCanvas(std::string("monitor_canvas_"+std::to_string(_chip_number)).c_str(),
+    TCanvas * canvas = new TCanvas(std::string("monitor_plots_beetle"+std::to_string(_chip_number)).c_str(),
             std::string("Monitor plots Beetle "+std::to_string(_chip_number)).c_str(),
             wsize,hsize);
     // and its layout: colummns, row, separation betwwen columns and rows
