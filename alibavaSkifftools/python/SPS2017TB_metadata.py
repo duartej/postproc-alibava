@@ -28,6 +28,10 @@ __all__ = [
 # the EOS path where to find the alibava data
 eospath="/eos/user/d/duarte/alibava_data"
 
+# Run numbers which can contain something
+run_numbers = range(275,284+1)+[286]+range(299,302+1)+range(304,315+1)+\
+        range(345,352+1)+range(362,372+1) 
+
 # A simple parser class for the filenames
 class filename_parser(object):
     """A simple parser for the file names. 
