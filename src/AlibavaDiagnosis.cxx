@@ -337,13 +337,16 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
             {
                 (*sg_pedestal_free)[ich] -= cmmd.first;
             }
-            // Store the signal (pedestal and common-free)
-            static_cast<TH1F*>(_histos["signal"])->Fill((*sg_pedestal_free)[ich]);
             
             // Evaluate if this channel is defining the seed of a cluster
             // (a rough estimation of the hits --see description in the method--)
             if(this->is_seed_cluster((*sg_pedestal_free)[ich],noise[ich]))
             {
+                // Store the signal (pedestal and common-free)
+                // WARNING: The stored signal is refered only to the seed channel,
+                //          therefore a cut in ~ |S| > 5 <Noise> will be present 
+                //          in the signal distribution
+                static_cast<TH1F*>(_histos["signal"])->Fill((*sg_pedestal_free)[ich]);
                 static_cast<TH1F*>(_histos["hits"])->Fill(ich);
                 static_cast<TProfile*>(_histos["timeprofile"])->Fill(float_obj["eventTime"],(*sg_pedestal_free)[ich]);
             }
