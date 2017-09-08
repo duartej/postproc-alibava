@@ -33,7 +33,7 @@ run_numbers = range(275,284+1)+[286]+range(299,302+1)+range(304,315+1)+\
         range(345,352+1)+range(362,372+1)+range(378,385+1)+\
         range(391,395+1)+range(399,410+1)
 # Remove some bad file not able to be processed
-for badrun in [ 286,311,312):
+for badrun in [ 286,311,312 ]:
     run_numbers.remove(badrun)
 
 # A simple parser class for the filenames
