@@ -1,0 +1,54 @@
+#!/bin/bash
+#
+# Simple script to prepare and send the alibava jobs to the
+# (CERN) cluster. This script hardcode the data path (CERN EOS 
+# path where the 2017 TB data is present).
+#
+# Note that this script should be run on a directory with 
+# enough available espace (EOS, v.g.)
+# 
+# J. Duarte-Campderros (CERN/IFCA, Sep. 2017)
+# jorge.duarte.campderros@cern.ch 
+#
+#
+
+
+ALIBAVA_DIR=/eos/user/d/duarte/alibavas_data
+
+# Use the open_sesame script to extract all potential jobs
+# The script will construct a structure of directories based in
+# the SensorName/run000XXX 
+
+for command_options in `open_sesame list_files $ALIBAVA_DIR --formatted`;
+do
+    current_sensor=`echo ${command_options}|cut -d@ -f2`
+    current_run="run000`echo ${command_options}|cut -d@ -f1`"
+    BEAM_FILE=`echo ${command_options}|cut -d@ -f3`
+    PED_FILE=`echo ${command_options}|cut -d@ -f4`
+    CAL_FILE=`echo ${command_options}|cut -d@ -f5`
+    current_opts="--alibava-input-filename ${BEAM_FILE} --pedestal-input-filename ${PED_FILE} --calibration-input-filename ${CAL_FILE}"
+    SENDINGPATH=${PWD}
+    mkdir ${current_sensor}/${current_run} -p; 
+    cd ${current_sensor}/${current_run};
+    # Create the bash script to be send to the cluster
+    cat <<-EOF >> ${current_sensor}_${current_run}.sh
+#!/bin/bash 
+
+# Automaticaly created by ${0} at [$(date)]'
+echo "Job being to be processed at \$(hostname)"
+echo "Current working directory: \$(pwd)"
+echo "==============================================================="
+echo "Preparing steering files for ALiBaVa: '${current_sensor}' at ${current_run}"
+open_sesame steering alibava_full_reco ${current_opts}
+# And now start processing 
+echo "Start processing: [\$(date)]"
+./alibava_full_reconstruction.sh
+echo "End processing  : [\$(date)]"
+cp LSF* *.slcio gear*.xml *.root  $PWD
+#"And copied relevant files.."
+EOF
+    # And now send the job to the cluster
+    echo clustermanager send -t blind -b ${current_sensor}_${current_run} -i dummy -n 1 -q 8nh
+    cd ${SENDINGPATH};
+done
+
