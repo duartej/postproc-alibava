@@ -677,7 +677,7 @@ class alibava_full_reco(marlin_step):
         self.devices = ['DUT']
         
         # -- Dummy 
-        self.required_arguments = () 
+        self.required_arguments = ()
 
         # The list of steps with their needed arguments
         self.step_chain = ( 
@@ -784,8 +784,15 @@ class alibava_full_reco(marlin_step):
         try:
             self._active_channels = kwd['ACTIVE_CHANNELS']
         except KeyError:
-            # use all if no explicitely put by the user
-            self._active_channels = '0:127'
+            # use the default active channels
+            from .SPS2017TB_metadata import active_channels,filename_parser,get_standard_sensor_name
+            sn = get_standard_sensor_name(filename_parser(self._beam_raw_file).sensor_name)
+            ac_list = active_channels[sn]
+            self._active_channels = ''
+            # Set the expected format 'ch1:ch2,ch3:ch4,...'
+            for i in xrange(0,len(ac_list),2):
+                self._active_channels += '{0}:{1},'.format(ac_list[i],ac_list[i+1])
+            self._active_channels = self._active_channels[:-1]
         
         # remove all the lcio files except the last one...
         toremove = set([])
