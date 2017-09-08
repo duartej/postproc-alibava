@@ -56,7 +56,7 @@ cp LSF* *.slcio gear*.xml *.root  $PWD
 #"And copied relevant files.."
 EOF
     # And now send the job to the cluster
-    echo clustermanager send -t blind -b ${current_sensor}_${current_run} -i dummy -n 1 -q ${QUEUE}
+    clustermanager send -t blind -b ${current_sensor}_${current_run} -i dummy -n 1 -q ${QUEUE}
     cd ${SENDINGPATH};
 done
 
