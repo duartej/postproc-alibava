@@ -283,6 +283,12 @@ standard_sensor_name_map = { 'LGAD7859W1H6': 'LGAD7859W1H6_0_b1',
         'N1-3_0_b1':'N1-3_0_b1', 'N1-7':'N1-7_7e15_b2','N1-8':'N1-8_1e16_b1'
         }
 
+# The list of active channels 
+active_channels = dict(map(lambda x: (x,[0,127]),sensor_names))
+# --- LGAD and iLGAD are not using all of them
+active_channels['iLGAD8533W1K05T_0_b2'] = [28,72]
+active_channels['LGAD7859W1H6_0_b1'] = [41,70]
+
 # -----------------------------------------------------------------------------
 # Some characteristics of the sensors
 def _binary_resolution(pitch):
@@ -309,8 +315,9 @@ class specs_sensor():
 mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
 ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
 lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
-ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,1.0)
+ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,polarity=1.0)
 ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3)
+
 # Maps the name of the sensor with the proper specs_sensor instance
 sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
         'iLGAD8533W1K05T_0_b2': ilgad,\
@@ -325,7 +332,7 @@ sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
 # as z=0 the first plane of the telescope.
 # Note that the name of the sensor contains the beetle number b1-b2
 active_sensors = {
-    314: [ ('LGAD7859W1H6_0_b1',0,-158.0), ('REF_0_b1',0,-106.0), ('M2-3_1e16_b2',1,218.0), ('N1-7_7e15_b2',1,339.0) ],
+    315: [ ('LGAD7859W1H6_0_b1',0,-158.0), ('REF_0_b1',0,-106.0), ('M2-3_1e16_b2',1,218.0), ('N1-7_7e15_b2',1,339.0) ],
     352: [ ('iLGAD8533W1K05T_0_b2',1,-158.0),('REF_0_b1',0,-106.0),('N1-8_1e16_b1',0,218.0) ],
     372: [ ('iLGAD8533W1K05T_0_b2',1,-158.0),('REF_0_b1',0,-106.0),('M2-3_1e16_b2',1,218.0),('N1-7_7e15_b2',1,339.0) ],
     385: [ ('REF_0_b1',0,-106.0),('M2-3_1e16_b2',1,218.0), ('M1-5_0_b2',1,278.0), ('M1-8_7e15_b2',1,339.0) ],
@@ -480,14 +487,14 @@ gear_dut_template="""<!--{0} - chip {1} -->
         <!-- WARNING, not sure about specs, first tentative values collected from several 
              sources. Resolution: (binary resolution, i.e. p/sqrt(12))-->
         <layer> 
-          <ladder         ID="5"
-                          positionX="0.00"        positionY="0.0"       positionZ="278.00"
+          <ladder         ID="{9}"
+                          positionX="0.00"        positionY="0.0"       positionZ="{8}"
                           rotationZY="0.00"       rotationZX="0.0"      rotationXY="0.0" 
                           sizeX="{2}"           sizeY="{3}"           thickness="{7}"
                           radLength="93.660734"
                           />
-          <sensitive      ID="5"
-                          positionX="0.00"        positionY="0.00"      positionZ="278.00" 
+          <sensitive      ID="{9}"
+                          positionX="0.00"        positionY="0.00"      positionZ="{8}" 
                           sizeX="{2}"             sizeY="{3}"           thickness="0.230"
                           npixelX="128"           npixelY="1" 
                           pitchX="{4}"           pitchY="{5}"        resolution="{6}" 
@@ -522,10 +529,10 @@ def get_standard_sensor_name(sensor_name):
 # Available info at https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=343850123
 # The setups are linked to a range of run numbers. The equivalent_run_number
 # is defined to be as the maximum run number of each range
-#  * run number <= 314    --> Setup-0
-#  * run number (314,352] --> Setup-1
+#  * run number <= 315    --> Setup-0
+#  * run number (315,352] --> Setup-1
 #  * ...
-setups = [ 314, 352, 372, 385, 410 ]
+setups = [ 315, 352, 372, 385, 410 ]
 def equivalent_run_number(run_number):
     """Helper function to obtain the equivalent run number given a run 
     number. Setups are linked to a range of run numbers. The equivalent
@@ -695,13 +702,17 @@ def get_gear_content(run_number,sensor_name=""):
         geoid = get_geo_id(equivalent_run_number(run_number))
         filler_gear = ("WITHOUT DUT","XXX","XXX",geoid,5,"","")
     else:
+        # Sensor id
+        sensorID = 5
+        if sensor_name.find("REF") == 0:
+            sensorID = 6
         # A DUT is defined, see gear_dut_template
         # Find which instance we need
         specs=sensor_name_spec_map[sensor_name]
         # Fill the need input of the template for the dut layer
         filler_dut = (sensor_name,get_beetle(sensor_name),\
                 specs.sizeX,specs.sizeY,specs.pitchX,specs.pitchY,specs.resolution,\
-                specs.thickness)
+                specs.thickness,get_z(run_number,sensor_name),sensorID)
         dut_layer = gear_dut_template.format(*filler_dut)
         # And for the Gear file
         geoid = get_geo_id(equivalent_run_number(run_number),sensor_name)
