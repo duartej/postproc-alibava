@@ -21,6 +21,18 @@ def get_template_path():
     import os
     return os.path.join(os.path.dirname(__file__),'steering_files')
 
+# The common name for the gear files 
+def get_gear_filename_common():
+    """The per default name of a gear file, centralized in order
+    to be common along the whole package
+
+    Return
+    ------
+    gear_filename: str
+        a generic filename for the gear files, without extension
+    """
+    return 'gear_file'
+
 # Available arguments present in the steering file templates.
 # These arguments are dynamically changed on run time
 _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AIDA processor',
@@ -285,7 +297,7 @@ class marlin_step(object):
         elif argument == 'GEAR_FILE':
             # First copy the file to the cwd
             #self.auxiliary_files.append('dummy_gear.xml')
-            return 'gear_file'
+            return get_gear_filename_common()
         elif argument == 'ALIBAVA_INPUT_FILENAME':
             pass
         elif argument == 'TELESCOPE_INPUT_FILENAME':
@@ -1124,10 +1136,42 @@ class telescope_fitter(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
                 'OUTPUT_FILENAME','GEAR_FILE')
+        # The new @GEAR_FILE@_aligned.xml is needed to be copied in the
+        # working directory --> NOT ACTUALLY As the file will be created after 
+        # the alignement process... 
+        # self.auxiliary_files.append('@GEAR_FILE@_aligned.xml')
     
     @staticmethod
     def get_description():
         return 'Track fitter using a Deterministic annealing filter (DAF)'  
+    
+    #def special_preprocessing(self,**kwd):
+    #    """Concrete implementation of the virtual function.
+    #    Just fix the name of the GEAR file in order to be able to
+    #    do the copy. The dictionary arguments is not modified, just
+    #    the auxiliary_files content @GEAR_FILE@
+
+    #    Parameters
+    #    ----------
+    #    kwd: dict
+    #        the dictionary of arguments, which must be defined
+    #        at _ARGUMENTS.
+
+    #    Return
+    #    ------
+    #    kwd: the dictionary
+    #    
+    #    """
+    #    gear_filename=''
+    #    if kwd.has_key('GEAR_FILE'):
+    #        gear_filename = kwd['GEAR_FILE']
+    #    else:
+    #        gear_filename = get_gear_filename_common()
+    #    # Do the thing
+    #    index = self.auxiliary_files.index('@GEAR_FILE@_aligned.xml')
+    #    self.auxiliary_files[index] = self.auxiliary_files[index].replace('@GEAR_FILE@',gear_filename)
+
+    #    return kwd
         
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class telescope_full_reco(marlin_step):
@@ -1162,7 +1206,8 @@ class telescope_full_reco(marlin_step):
                 (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
                 (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
                 (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
-                (telescope_update_gear(True),{'RUN_NUMBER': self.get_run_number},self.dummy)
+                (telescope_update_gear(True),{'RUN_NUMBER': self.get_run_number},self.dummy),
+                (telescope_fitter(),{'INPUT_FILENAMES': self.last_output_filename},self.update_output)
                 )
 
     # Some datamembers used in the step_chain are not going to be 

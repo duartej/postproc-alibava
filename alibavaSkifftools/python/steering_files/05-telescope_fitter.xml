@@ -65,10 +65,11 @@
              to accept the track or not. These planes are not used in track finder, and 
              not in the track fitter unless option 'useDutsInFit' is set.-->
         <parameter name="DutPlanes" type="IntVec"> 5 </parameter>
-        <!--Sigma of telescope resolution in the global X plane,-->
+        <!--Sigma of DUT resolution in the global X plane,-->
         <parameter name="DutResolutionX" type="float"> 72.2 </parameter>
-        <!--Sigma of telescope resolution in the global Y plane,-->
-        <parameter name="DutResolutionY" type="float"> 14.4 </parameter>
+        <!--Sigma of DUT resolution in the global Y plane
+             Note that it is assuming that the missing coordinate is Y-->
+        <parameter name="DutResolutionY" type="float"> 1000.0 </parameter>
         <!--Beam energy [GeV], used to calculate amount of scatter-->
         <parameter name="Ebeam" type="float"> 120.0 </parameter>
         <!--Track finding: The maximum allowed distance between to hits in the xy plane for inclusion in track candidate-->
