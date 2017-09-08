@@ -282,7 +282,7 @@ standard_sensor_name_map = { 'LGAD7859W1H6': 'LGAD7859W1H6_0_b1',
         'iLGAD8533W1K05T': 'iLGAD8533W1K05T_0_b2',
         'REF': 'REF_0_b1', 
         'M1-5':'M1-5_0_b2', 'M1-8': 'M1-8_7e15_b2', 'M2-3': 'M2-3_1e16_b2',
-        'N1-3_0_b1':'N1-3_0_b1', 'N1-7':'N1-7_7e15_b2','N1-8':'N1-8_1e16_b1'
+        'N1-3':'N1-3_0_b1', 'N1-7':'N1-7_7e15_b2','N1-8':'N1-8_1e16_b1'
         }
 
 # The list of active channels 
