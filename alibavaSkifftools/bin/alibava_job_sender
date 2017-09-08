@@ -19,8 +19,16 @@ ALIBAVA_DIR=/eos/user/d/duarte/alibavas_data
 # The script will construct a structure of directories based in
 # the SensorName/run000XXX 
 
+## Use alternatively the 8nh and the 1nh queues
+QUEUE="8nh"
 for command_options in `open_sesame list_files $ALIBAVA_DIR --formatted`;
 do
+    if [ "X${QUEUE}" == "X8nh" ];
+    then
+        QUEUE="1nh"
+    else
+        QUEUE="8nh"
+    fi
     current_sensor=`echo ${command_options}|cut -d@ -f2`
     current_run="run000`echo ${command_options}|cut -d@ -f1`"
     BEAM_FILE=`echo ${command_options}|cut -d@ -f3`
@@ -48,7 +56,7 @@ cp LSF* *.slcio gear*.xml *.root  $PWD
 #"And copied relevant files.."
 EOF
     # And now send the job to the cluster
-    echo clustermanager send -t blind -b ${current_sensor}_${current_run} -i dummy -n 1 -q 8nh
+    echo clustermanager send -t blind -b ${current_sensor}_${current_run} -i dummy -n 1 -q ${QUEUE}
     cd ${SENDINGPATH};
 done
 
