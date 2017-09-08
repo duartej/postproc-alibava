@@ -106,9 +106,10 @@ def list_raw_files(parent_folder,verbose,open_sesame_format,beam_file=None):
             print "\033[1;34mSENSOR:\033[1;m \033[1;20m{0}\033[1;m".format(sname)
         for af in flist:
             if open_sesame_format:
-                print '--alibavas-input-filename {0} '\
-                        '--pedestal-input-filename {1} --calibration-input-filename {2}'.\
-                        format(af.beam_instance.filename,af.pedestal_instance.filename,af.calibration_instance.filename)
+                print '{0}@{1}@--alibavas-input-filename {2} '\
+                        '--pedestal-input-filename {3} --calibration-input-filename {4}'.\
+                        format(af.beam_instance.run_number,tb2017.get_standard_sensor_name(af.beam_instance.sensor_name),\
+                            af.beam_instance.filename,af.pedestal_instance.filename,af.calibration_instance.filename)
             else:
                 print af
     if verbose:
@@ -317,9 +318,11 @@ if __name__ == '__main__':
             " to search down [Default: see SPS2017TB_metadata.eospath]")
     ld_parser.add_argument('--formatted',dest='op_format',action='store_true',\
             help="Activating this flag, the output will be formatted as: "\
-            "' --alibava-input-filename <beam_rawfile> --pedestal-input-filename <pedestal_rawfile>"\
+            "'RunNumber@SensorName@--alibava-input-filename <beam_rawfile> --pedestal-input-filename <pedestal_rawfile>"\
             " --calibration-input-filename <calibration_rawfile>'. This formatting can be used"\
-            " to feed the command 'open_sesame steering alibava_full_reco'")
+            " to feed the command 'open_sesame steering alibava_full_reco'."\
+            "Don'f forget to set the bash variable to \"IFS=$\'\\n\'\" in order to "\
+            "avoid the spaces between the options")
     ld_parser.add_argument('-b','--beam-filename',action='store',dest='beam_file',\
             help="The file name of the beam-type file to obtain the pedestal and calibration"\
             " files associated to it")
