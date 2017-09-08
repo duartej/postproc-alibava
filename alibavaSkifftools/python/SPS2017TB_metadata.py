@@ -14,10 +14,12 @@ __status__ = "Development"
 
 __all__ = [
         "eospath",
+        "run_numbers",
         "filename_parser",
         "associated_filenames",
         "sensor_names",
         "sensor_ids",
+        "active_channels",
         "equivalent_run_number",
         "get_active_sensor_list",
         "get_beetle",
