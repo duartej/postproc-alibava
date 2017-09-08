@@ -1207,7 +1207,9 @@ class telescope_full_reco(marlin_step):
                 (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
                 (telescope_alignment(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration},self.dummy),
                 (telescope_update_gear(True),{'RUN_NUMBER': self.get_run_number},self.dummy),
-                (telescope_fitter(),{'INPUT_FILENAMES': self.last_output_filename},self.update_output)
+                # Remove that, because the fitter does not store events, therefore the ALIBAVA merging 
+                # MUST be done before the fitter
+                # (telescope_fitter(),{'INPUT_FILENAMES': self.last_output_filename},self.update_output)
                 )
 
     # Some datamembers used in the step_chain are not going to be 
