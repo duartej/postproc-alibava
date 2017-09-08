@@ -1,0 +1,66 @@
+#!/bin/bash
+#
+# Simple script to prepare and send the telescope jobs to the
+# (CERN) cluster. This script hardcode the data path (CERN EOS 
+# path where the 2017 TB data is present).
+#
+# Note that a complete telescope_full_reconstruction job will 
+# be send it to each node, meaning that the jobs are going 
+# to be very slow (5-7 hours). However from the point of 
+# view of book-keeping and job-preparation/sending/... this 
+# approach is much convenient than split the jobs into sub-steps 
+#
+# AlsonNote that this script should be run on a directory with 
+# enough available espace (EOS, v.g.)
+# 
+# J. Duarte-Campderros (CERN/IFCA, Sep. 2017)
+# jorge.duarte.campderros@cern.ch 
+#
+#
+
+
+# Helper function to check if a given list contains
+# a given item: use as: contains aList anItem
+contains() 
+{
+    [[ $1 =~ (^|[[:space:]])$2($|[[:space:]]) ]] && echo "1" || echo "0"
+}
+
+TELESCOPE_DIR=/eos/user/g/ggomez/TestBeam2017/ACONITE
+
+# List of useful runs
+RUNLIST=`python -c "from alibavaSkifftools.SPS2017TB_metadata import run_numbers; print '{0}'.format(run_numbers).replace('[','').replace(']','').replace(',','')"`
+
+for inputfile in `ls $TELESCOPE_DIR`;
+do
+    current_dir=`echo $inputfile|cut -f1 -d.`
+    current_run=`echo ${current_dir}|sed 's/run000//g'`
+    # Check if the run is in the valid runs
+    returnval=`contains "$RUNLIST" ${current_run}`;
+    if [ $returnval -eq 1 ];
+    then
+        mkdir ${current_dir} -p; 
+        cd ${current_dir};
+        # Create the bash script to be send to the cluster
+        cat <<-EOF >> ${current_dir}_tel.sh
+#!/bin/bash 
+
+# Automaticaly created by ${0} at [$(date)]'
+echo "Job being to be processed at \$(hostname)"
+echo "Current working directory: \$(pwd)"
+echo "==============================================================="
+echo "Preparing steering files for telescope file: ${inputfile}"
+open_sesame steering telescope_full_reco --telescope-input-filename ${TELESCOPE_DIR}/${inputfile}
+# And now start processing 
+echo "Start processing: [\$(date)]"
+./telescope_full_reconstruction.sh
+echo "End processing  : [\$(date)]"
+cp LSF* *.slcio gear*.xml *.root  $PWD
+"And copied relevant files.."
+EOF
+        # And now send the job to the cluster
+        clustermanager send -t blind -b ${current_dir}_tel -i ${TELESCOPE_DIR}/$inputfile -n 1 -q 1nd
+        cd ..;
+    fi
+done
+

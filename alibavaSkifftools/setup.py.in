@@ -14,5 +14,6 @@ setup(name='alibavaSkifftools',
         # Additional steering files used as templates
         package_data = { 'alibavaSkifftools': ['steering_files/*.xml','steering_files/dummy_lcio.slcio'] },
         packages = ['alibavaSkifftools'],
-        scripts=['${CMAKE_CURRENT_SOURCE_DIR}/bin/open_sesame'],
+        scripts=['${CMAKE_CURRENT_SOURCE_DIR}/bin/open_sesame', 
+            '${CMAKE_CURRENT_SOURCE_DIR}/bin/telescope_job_sender'],
         )
