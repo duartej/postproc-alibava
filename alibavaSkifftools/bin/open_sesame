@@ -12,7 +12,7 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
-def list_raw_files(parent_folder,verbose,beam_file=None):
+def list_raw_files(parent_folder,verbose,open_sesame_format,beam_file=None):
     """Extract the list of alibava raw data files from a parent folder.
     The folder should contain subdirectories with the name
     of the involved sensors, and the file names follows a pre-defined
@@ -31,6 +31,9 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
     verbose: bool
         whether or not to dump out more information whenever a file has
         been not included
+    open_sesame_format: bool
+        whether or not the output will be sent with the expected options
+        needed to call the 'open_sesame steering alibava_full_reco' command
     beam_file: str | None
         if is not None, the name (basename) of a beam-type alibava RAW
         file
@@ -61,8 +64,8 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
                 _prv = tb2017.filename_parser(fname)
             except RuntimeError:
                 # The file-name format is not understood
-                if fname.find("RunN") == -1:
-                    print "Just ignoring '{0}'".format(fname) 
+                if fname.find("RunN") == -1 and not open_sesame_format:
+                    print "Just ignoring '{0}\n'".format(fname) 
                 continue
             if _prv.is_beam:
                 beam_files.append(_prv)
@@ -91,7 +94,7 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
                 tf_inst = filter(lambda x: os.path.basename(beam_file) in \
                         os.path.basename(x.beam_instance.filename),\
                         sensor_files[sensor])[0]
-                print "{0},{1}".format(tf_inst.pedestal_instance.filename,tf_inst.calibration_instance.filename)
+                print "{0},{1}\n".format(tf_inst.pedestal_instance.filename,tf_inst.calibration_instance.filename)
                 return
             continue
     if beam_file is not None:
@@ -99,9 +102,15 @@ def list_raw_files(parent_folder,verbose,beam_file=None):
         raise RuntimeError("Not found '{0}'".format(beam_file))
 
     for sname,flist in sensor_files.iteritems():
-        print "\033[1;34mSENSOR:\033[1;m \033[1;20m{0}\033[1;m".format(sname)
+        if not open_sesame_format:
+            print "\033[1;34mSENSOR:\033[1;m \033[1;20m{0}\033[1;m".format(sname)
         for af in flist:
-            print af
+            if open_sesame_format:
+                print '--alibavas-input-filename {0} '\
+                        '--pedestal-input-filename {1} --calibration-input-filename {2}'.\
+                        format(af.beam_instance.filename,af.pedestal_instance.filename,af.calibration_instance.filename)
+            else:
+                print af
     if verbose:
         print "\033[1;33mVERBOSE: Sensors and runs with incomplete/inconsistent files\033[1;m"
         for (finst,pedcallist) in failed:
@@ -306,6 +315,11 @@ if __name__ == '__main__':
     ld_parser = subparsers.add_parser("list_files",description=usage_ld)
     ld_parser.add_argument('parent_folder',help="The parent folder to start"\
             " to search down [Default: see SPS2017TB_metadata.eospath]")
+    ld_parser.add_argument('--formatted',dest='op_format',action='store_true',\
+            help="Activating this flag, the output will be formatted as: "\
+            "' --alibava-input-filename <beam_rawfile> --pedestal-input-filename <pedestal_rawfile>"\
+            " --calibration-input-filename <calibration_rawfile>'. This formatting can be used"\
+            " to feed the command 'open_sesame steering alibava_full_reco'")
     ld_parser.add_argument('-b','--beam-filename',action='store',dest='beam_file',\
             help="The file name of the beam-type file to obtain the pedestal and calibration"\
             " files associated to it")
@@ -407,7 +421,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.which == 'list_files':
-        list_raw_files(args.parent_folder,args.verbose,args.beam_file)
+        list_raw_files(args.parent_folder,args.verbose,args.op_format,args.beam_file)
     elif args.which == 'steering':
         valid_args = template_args.keys()
         # Get the list of arguments related with the steering file template
