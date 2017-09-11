@@ -39,6 +39,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'CURRENT_WORKING_DIR': 'Working directory',
         'RUN_NUMBER': 'The run number of the input file',
         'ALIBAVA_INPUT_FILENAME': 'The input file name (ALIBAVA RAW data or slcio for the merger)',
+        'ALIBAVA_REF_INPUT_FILENAME': 'The input file name for the reference ALIBAVA (the slcio for the merger)',
         'ACTIVE_CHIP': 'The beetle chip used, automaticaly defined given the run number and the sensor name',
         'ACTIVE_CHANNELS': 'The list of the active channels in ranges comma-separated (range edges are'\
                 ' included as actives), for instance, A:B,C:D ...',
@@ -457,7 +458,9 @@ class marlin_step(object):
             sensor_name = ssnm(self.parser_instance.sensor_name)
             self.DUT = get_beetle(sensor_name)
             # Obtain the proper GEAR file and create in the working dir
-            gear_content = get_gear_content(self.argument_values['RUN_NUMBER'],sensor_name)
+            # Also include the REFerence detector
+            gear_content = get_gear_content(self.argument_values['RUN_NUMBER'],\
+                    sensor_name=sensor_name,include_ref=True)
             geoid = get_geo_id(self.argument_values['RUN_NUMBER'],sensor_name)
             # XXX -- Be CAREFUL WITH this file name (to be centralized)
             gear_filename = 'gear_file'
@@ -1352,7 +1355,7 @@ class merger(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'10-merger.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME',\
-                'ALIBAVA_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
+                'ALIBAVA_INPUT_FILENAME', 'ALIBAVA_REF_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
         #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'

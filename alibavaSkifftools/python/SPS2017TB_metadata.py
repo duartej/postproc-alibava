@@ -678,7 +678,7 @@ def get_geo_id(run_number,sensor_name=""):
         return int("2{0}{1}".format(equivalent_run_number(run_number),sensor_ids[sensor_name]))
 
 
-def get_gear_content(run_number,sensor_name=""):
+def get_gear_content(run_number,sensor_name="",include_ref=False):
     """Get the gear file corresponding to a run number
 
     Parameters
@@ -718,6 +718,23 @@ def get_gear_content(run_number,sensor_name=""):
         dut_layer = gear_dut_template.format(*filler_dut)
         # And for the Gear file
         geoid = get_geo_id(equivalent_run_number(run_number),sensor_name)
-        filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
-                geoid,6,"Mimosa26.so",dut_layer)
+        #filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
+        #        geoid,6,"Mimosa26.so",dut_layer)
+        
+        # And if the REF should be include
+        if include_ref:
+            sensorID_ref = 6
+            specs_ref=sensor_name_spec_map['REF_0_b1']
+            filler_ref = ("REF_0_b1", get_beetle("REF_0_b1"),\
+                    specs_ref.sizeX,specs_ref.sizeY,specs_ref.pitchX,specs_ref.pitchY,specs_ref.resolution,\
+                    specs_ref.thickness,get_z(run_number,"REF_0_b1"),sensorID_ref)
+            ref_layer = gear_dut_template.format(*filler_ref)
+            # And for the Gear file
+            filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
+                    geoid,7,"Mimosa26.so Mimosa26.so",dut_layer+"\n"+ref_layer)
+        else:
+            filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
+                    geoid,6,"Mimosa26.so",dut_layer)
+
+
     return gear_content_template.format(*filler_gear)

@@ -14,6 +14,7 @@
    <execute>
       <processor name="AIDA"/>
       <processor name="MyAlibavaClusterCollectionMerger"/>
+      <processor name="PrintEventNumber"/>
       <processor name="Save"/>
    </execute>
 
@@ -24,7 +25,7 @@
       <parameter name="MaxRecordNumber" value="99999999"/>
       <parameter name="SkipNEvents" value="0"/>
       <parameter name="SupressCheck" value="false"/>
-      <parameter name="Verbosity" value="WARNING"/>
+      <parameter name="Verbosity" value="ERROR"/>
    </global>
 
    <processor name="AIDA" type="AIDAProcessor">
@@ -40,7 +41,6 @@
       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
       <!--parameter name="Verbosity" type="string" value=""/-->
   </processor>
-
  
   <processor name="MyAlibavaClusterCollectionMerger" type="AlibavaClusterCollectionMerger">
       <!--Merges alibava and telescope cluster collections-->
@@ -52,6 +52,8 @@
       <parameter name="TelescopeSparseClusterCollectionName" type="string" lcioInType="TrackerData"> original_zsdata </parameter>
       <!--This is the input file name that alibava cluster collections stored-->
       <parameter name="InputAlibavaFileName" type="string"> @ALIBAVA_INPUT_FILENAME@</parameter>
+      <!--This is the input file name that alibava Reference sensor cluster collections stored-->
+      <parameter name="InputAlibavaReferenceFileName" type="string"> @ALIBAVA_REF_INPUT_FILENAME@</parameter>
       <!--Name of the cluster pulse collection of alibava data-->
       <parameter name="AlibavaClusterPulseCollectionName" type="string" lcioInType="TrackerPulse"> clustercollection </parameter>
       <!--Name of the sparse cluster collection of alibava data-->
@@ -66,6 +68,15 @@
       <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
   </processor>
 
+  <processor name="PrintEventNumber" type="EUTelUtilityPrintEventNumber">
+       <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
+       <!--Print event number for every n-th event-->
+       <parameter name="EveryNEvents" type="int" value="2500"/>
+       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+       <parameter name="Verbosity" type="string" value="MESSAGE"/>
+       <!--print the event timestamp as read from LCIO-->
+       <!--parameter name="printTimestamp" type="bool" value="false"/-->
+  </processor>
 
   <processor name="Save" type="LCIOOutputProcessor">
       <!--Writes the current event to the specified LCIO outputfile. Needs to be the last ActiveProcessor.-->

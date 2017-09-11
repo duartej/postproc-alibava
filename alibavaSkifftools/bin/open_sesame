@@ -345,6 +345,8 @@ if __name__ == '__main__':
     #      and converting _ -> -, plus capital leters to "miniscula"
     st_parser.add_argument('--alibava-input-filename',dest="ALIBAVA_INPUT_FILENAME",action='store',\
             help=template_args['ALIBAVA_INPUT_FILENAME'])
+    st_parser.add_argument('--alibava-ref-input-filename',dest="ALIBAVA_REF_INPUT_FILENAME",action='store',\
+            help=template_args['ALIBAVA_REF_INPUT_FILENAME'])
     st_parser.add_argument('--telescope-input-filename',dest="TELESCOPE_INPUT_FILENAME",action='store',\
             help=template_args['TELESCOPE_INPUT_FILENAME'])
     st_parser.add_argument('--input-filename',dest="INPUT_FILENAMES",action='store',\
