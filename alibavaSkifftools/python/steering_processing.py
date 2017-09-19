@@ -1394,7 +1394,7 @@ class prealignment(marlin_step):
     
     @staticmethod
     def get_description():
-        return 'Pre-alignment using the distance of the hits to the first telescope plane '  
+        return 'DUT and REF pre-alignment using the distance of the hits to the first telescope plane '  
         
     def special_preprocessing(self,**kwd):
         """Concrete implementation of the virtual function.
