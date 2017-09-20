@@ -740,20 +740,20 @@ class cluster_histograms(marlin_step):
         
         user_polarity=None
         if kwd.has_key('SIGNAL_POLARITY'):
-            user_polarity=kwd['SIGNAL_POLARITY']
+            user_polarity=int(kwd['SIGNAL_POLARITY'])
         if not kwd.has_key("INPUT_FILENAMES"):
             raise RuntimeError('Argument "INPUT_FILENAMES" must be explicitely set')
         # Get the name of the sensor from the input filename
         fnp = filename_parser(kwd["INPUT_FILENAMES"])
         sensor_name = standard_sensor_name_map[fnp.sensor_name]
         # And get the polarity from the specification map
-        kwd['SIGNAL_POLARITY'] = sensor_name_spec_map[sensor_name].polarity
+        kwd['SIGNAL_POLARITY'] = int(sensor_name_spec_map[sensor_name].polarity)
         if user_polarity and (int(kwd["SIGNAL_POLARITY"]) != int(user_polarity)):
             print "\033[1;33mWARNING!\033[1;m Manually forced signal polarity"\
                     " to '{0}' and the database found a value '{1}' for the sensor"\
                     " '{2}'".format(user_polarity,kwd["SIGNAL_POLARITY"],sensor_name)
             # Assuming user knows what is doing
-            kwd["SIGNAL_POLARITY"]=user_polarity
+            kwd["SIGNAL_POLARITY"]=int(user_polarity)
             
         return kwd
     
