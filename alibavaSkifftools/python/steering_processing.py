@@ -639,85 +639,13 @@ class signal_reconstruction(marlin_step):
     @staticmethod
     def get_description():
         return 'Signal reconstruction: pedestal and common mode subtraction, plus common mode cut'
-
-class alibava_clustering(marlin_step):
-    def __init__(self):
-        import os
-        super(alibava_clustering,self).__init__('alibava_clustering')
-        self.devices = ['DUT']
-
-        self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME',\
-                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
     
-    @staticmethod
-    def get_description():
-        return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
+def _helper_special_preprocessing(**kwd):
+        """Function to be used by the 'alibava_clustering' and
+        'cluster_histogram' classes as they share the exactly 
+        same code· 
 
-    def special_preprocessing(self,**kwd):
-        """Concrete implementation of the virtual function.
-        Includes the signal polarity depending the sensor
-
-        Parameters
-        ----------
-        kwd: dict
-            the dictionary of arguments, which must be defined
-            at _ARGUMENTS. Must contain
-             - INPUT_FILENAMES
-
-        Return
-        ------
-        kwd: the updated dictionary
-        
-        Raises
-        ------
-        RuntimeError if the INPUT_FILENAMES argument is not introduced
-        """
-        from .SPS2017TB_metadata import filename_parser
-        from .SPS2017TB_metadata import sensor_name_spec_map
-        from .SPS2017TB_metadata import standard_sensor_name_map
-        
-        user_polarity=None
-        if kwd.has_key('SIGNAL_POLARITY'):
-            user_polarity=kwd['SIGNAL_POLARITY']
-        if not kwd.has_key("INPUT_FILENAMES"):
-            raise RuntimeError('Argument "INPUT_FILENAMES" must be explicitely set')
-        # Get the name of the sensor from the input filename
-        fnp = filename_parser(kwd["INPUT_FILENAMES"])
-        sensor_name = standard_sensor_name_map[fnp.sensor_name]
-        # And get the polarity from the specification map
-        kwd['SIGNAL_POLARITY'] = sensor_name_spec_map[sensor_name].polarity
-        if user_polarity and (int(kwd["SIGNAL_POLARITY"]) != int(user_polarity)):
-            print "\033[1;33mWARNING!\033[1;m Manually forced signal polarity"\
-                    " to '{0}' and the database found a value '{1}' for the sensor"\
-                    " '{2}'".format(user_polarity,kwd["SIGNAL_POLARITY"],sensor_name)
-            # Assuming user knows what is doing
-            kwd["SIGNAL_POLARITY"]=user_polarity
-            
-        return kwd
-
-
-class cluster_histograms(marlin_step):
-    def __init__(self):
-        import os
-        super(cluster_histograms,self).__init__('cluster_histograms')
-        self.devices = ['DUT']
-
-        self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
-        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS',\
-                'ENABLE_AUTOMASKING','CRITERIUM_AUTOMASKING','CURRENT_WORKING_DIR')
-        # Needed files
-        self.auxiliary_files.append('histoinfo_alibava.xml')
-    
-    @staticmethod
-    def get_description():
-        return 'Cluster plotter'
-    
-    def special_preprocessing(self,**kwd):
-        """Concrete implementation of the virtual function.
-        Includes the signal polarity depending the sensor
+        Includes the signal polarity depending the sensor.
 
         Parameters
         ----------
@@ -756,7 +684,91 @@ class cluster_histograms(marlin_step):
             kwd["SIGNAL_POLARITY"]=int(user_polarity)
             
         return kwd
+
+class alibava_clustering(marlin_step):
+    def __init__(self):
+        import os
+        super(alibava_clustering,self).__init__('alibava_clustering')
+        self.devices = ['DUT']
+
+        self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME',\
+                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
     
+    @staticmethod
+    def get_description():
+        return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
+
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Includes the signal polarity depending the sensor.
+        Note that this is just a wrapper of the real function
+
+        NOTE
+        ----
+        See implementation at `_helper_special_preprocessing`
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - INPUT_FILENAMES
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        RuntimeError if the INPUT_FILENAMES argument is not introduced
+        """
+        return _helper_special_preprocessing(**kwd)
+
+class cluster_histograms(marlin_step):
+    def __init__(self):
+        import os
+        super(cluster_histograms,self).__init__('cluster_histograms')
+        self.devices = ['DUT']
+
+        self.steering_file_template = os.path.join(get_template_path(),'04-cluster_histograms.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'CALIBRATION_INPUT_FILENAME','SIGNAL_POLARITY','GEAR_FILE','ACTIVE_CHANNELS',\
+                'ENABLE_AUTOMASKING','CRITERIUM_AUTOMASKING','CURRENT_WORKING_DIR')
+        # Needed files
+        self.auxiliary_files.append('histoinfo_alibava.xml')
+    
+    @staticmethod
+    def get_description():
+        return 'Cluster plotter'
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Includes the signal polarity depending the sensor
+        Note that this is just a wrapper of the real function
+
+        NOTE
+        ----
+        See implementation at `_helper_special_preprocessing`
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - INPUT_FILENAMES
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        RuntimeError if the INPUT_FILENAMES argument is not introduced
+        """
+        return _helper_special_preprocessing(**kwd)
+
 # Metaclass to deal with the full reconstruction for ALIBAVA
 class alibava_full_reco(marlin_step):
     def __init__(self):
