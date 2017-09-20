@@ -318,7 +318,7 @@ mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
 ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
 lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
 ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,polarity=1.0)
-ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3)
+ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3,polarity=1.0)
 
 # Maps the name of the sensor with the proper specs_sensor instance
 sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
