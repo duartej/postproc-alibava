@@ -341,9 +341,9 @@ class marlin_step(object):
         elif argument == 'MINCMMDERR':
             return 0.0
         elif argument == 'CMMDCUT_MIN':
-            return -10.0
+            return -100.0
         elif argument == 'CMMDCUT_MAX':
-            return 10.0
+            return 100.0
         elif argument == 'SNRCUT_SEED':
             return 5
         elif argument == 'SNRCUT_NGB':
