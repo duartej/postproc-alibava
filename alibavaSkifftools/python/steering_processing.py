@@ -724,6 +724,9 @@ class alibava_clustering(marlin_step):
         ------
         RuntimeError if the INPUT_FILENAMES argument is not introduced
         """
+        # Calling the base class method (to force the 
+        # active channels pre-processing)
+        kwd = super(alibava_clustering,self).special_preprocessing(**kwd)
         return _helper_special_preprocessing(**kwd)
 
 class cluster_histograms(marlin_step):
@@ -767,6 +770,9 @@ class cluster_histograms(marlin_step):
         ------
         RuntimeError if the INPUT_FILENAMES argument is not introduced
         """
+        # Calling the base class method (to force the 
+        # active channels pre-processing)
+        kwd = super(cluster_histograms,self).special_preprocessing(**kwd)
         return _helper_special_preprocessing(**kwd)
 
 # Metaclass to deal with the full reconstruction for ALIBAVA
@@ -883,6 +889,7 @@ class alibava_full_reco(marlin_step):
         # The active channels, if any
         try:
             self._active_channels = kwd['ACTIVE_CHANNELS']
+            print self._active_channels
         except KeyError:
             # use the default active channels
             from .SPS2017TB_metadata import active_channels,filename_parser,get_standard_sensor_name
