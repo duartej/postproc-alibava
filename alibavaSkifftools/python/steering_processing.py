@@ -73,6 +73,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MAX_FIRING_FREQ_PIXEL': 'The maximum allowed firing frequency to consider a pixel as hot',
         'PREALIGN_DUMP_GEAR': 'Whether to use or not a gear file to store the alignment constants, or use a LCIO file',
         'DUT_ID': 'The ID assigned to the DUT, corresponding to 5+chip_number',
+        'REF_ID': 'The ID assigned to the REF (7, per default)',
         'DUT_PLANES': 'The list of planes which need to find the missing coordinate',
         'MAX_RESIDUAL': 'The Maximum distance to determine if a hit is correlated [mm]',
         'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
@@ -365,6 +366,8 @@ class marlin_step(object):
             return 2
         elif argument == 'PREALIGN_DUMP_GEAR':    
             return 'false'
+        elif argument == 'REF_ID':    
+            return 7
                
         raise RuntimeError('Argument "{0}" must be explicitely set'.format(argument))
 
@@ -1466,7 +1469,8 @@ class merger(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'10-merger.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME',\
-                'ALIBAVA_INPUT_FILENAME', 'ALIBAVA_REF_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE')
+                'ALIBAVA_INPUT_FILENAME', 'ALIBAVA_REF_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
+                'DUT_ID','REF_ID')
         # Define a tuned default for the gear file, describes
         # telescope with no DUTs at all
         #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
@@ -1476,6 +1480,47 @@ class merger(marlin_step):
     @staticmethod
     def get_description():
         return 'Merge the alibava and telescope data'  
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Assign the DUT-ID (5+chip_number)
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - DUT_OD
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        RuntimeError
+            If DUT_ID or INPUT_FILENAME were not 
+            present
+
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        from .SPS2017TB_metadata import filename_parser
+        from .SPS2017TB_metadata import standard_sensor_name_map
+        from .SPS2017TB_metadata import get_beetle
+        
+        if not kwd.has_key("ALIBAVA_INPUT_FILENAME"):
+            raise RuntimeError('Argument "ALIBAVA_INPUT_FILENAME" must be explicitely set')
+        # Get the name of the sensor from the input filename: We are assuming that
+        # the name of the file follows the standard notation and is refering to the
+        # DUT (not the REF, althought they are already merged)
+        fnp = filename_parser(kwd["ALIBAVA_INPUT_FILENAME"])
+        sensor_name = standard_sensor_name_map[fnp.sensor_name]
+        # And obtain the chip number
+        kwd["DUT_ID"] = 5+get_beetle(sensor_name)
+
+        return kwd
 
 class hitmaker(marlin_step):
     def __init__(self):

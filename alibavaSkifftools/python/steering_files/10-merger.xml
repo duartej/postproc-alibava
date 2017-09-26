@@ -64,6 +64,10 @@
       <parameter name="OutputSparseClusterCollectionName" type="string" lcioOutType="TrackerData">original_zsdata </parameter>
       <!--AlibavaEventNumber - TelescopeEventNumber-->
       <parameter name="EventIDDifference" type="int"> 0</parameter>
+      <!--The sensor ID assigned to the DUT-->
+      <parameter name="DUTSensorID" type="int"> @DUT_ID@</parameter>
+      <!--The sensor ID assigned to the REF-->
+      <parameter name="REFSensorID" type="int"> @REF_ID@</parameter>
       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
       <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
   </processor>
