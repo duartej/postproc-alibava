@@ -711,7 +711,8 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
         # Sensor id
         sensorID = 5
         if sensor_name.find("REF") == 0:
-            sensorID = 6
+            # Covering the case of beetle2-> 5+1=6
+            sensorID = 7
         # A DUT is defined, see gear_dut_template
         # Find which instance we need
         specs=sensor_name_spec_map[sensor_name]
@@ -727,7 +728,7 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
         
         # And if the REF should be include
         if include_ref:
-            sensorID_ref = 6
+            sensorID_ref = 7
             specs_ref=sensor_name_spec_map['REF_0_b1']
             filler_ref = ("REF_0_b1", get_beetle("REF_0_b1"),\
                     specs_ref.sizeX,specs_ref.sizeY,specs_ref.pitchX,specs_ref.pitchY,specs_ref.resolution,\

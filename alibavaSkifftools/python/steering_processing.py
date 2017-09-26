@@ -645,7 +645,8 @@ def _helper_special_preprocessing(**kwd):
         'cluster_histogram' classes as they share the exactly 
         same code· 
 
-        Includes the signal polarity depending the sensor.
+        Includes the signal polarity and the sensor-ID depending the sensor.
+
 
         Parameters
         ----------
@@ -682,6 +683,11 @@ def _helper_special_preprocessing(**kwd):
                     " '{2}'".format(user_polarity,kwd["SIGNAL_POLARITY"],sensor_name)
             # Assuming user knows what is doing
             kwd["SIGNAL_POLARITY"]=int(user_polarity)
+
+        # If the sensor is the reference, be sure to use the
+        # ID starting at 7
+        if sensor_name.find("REF") == 0:
+            kwd["SENSORID_STARTS" ] = 7
             
         return kwd
 
