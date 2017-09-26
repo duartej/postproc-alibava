@@ -72,6 +72,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'SENSORID_STARTS': 'The sensor ID for the alibava data which will be stored as SENSORID_STARTS+chip_number',
         'MAX_FIRING_FREQ_PIXEL': 'The maximum allowed firing frequency to consider a pixel as hot',
         'PREALIGN_DUMP_GEAR': 'Whether to use or not a gear file to store the alignment constants, or use a LCIO file',
+        'DUT_ID': 'The ID assigned to the DUT, corresponding to 5+chip_number',
         'DUT_PLANES': 'The list of planes which need to find the missing coordinate',
         'MAX_RESIDUAL': 'The Maximum distance to determine if a hit is correlated [mm]',
         'REF_PLANE_LEFT': 'The telescope planes nearest to the DUT from the left, to extrapolate the hit',
@@ -1500,7 +1501,7 @@ class prealignment(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'12-prealignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
-                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR')
+                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR','DUT_ID')
     
     @staticmethod
     def get_description():
@@ -1509,6 +1510,7 @@ class prealignment(marlin_step):
     def special_preprocessing(self,**kwd):
         """Concrete implementation of the virtual function.
         Just change the boolean content to the equivalent string
+        And set the DUT-ID (5+chip_number)
 
         Parameters
         ----------
@@ -1516,6 +1518,7 @@ class prealignment(marlin_step):
             the dictionary of arguments, which must be defined
             at _ARGUMENTS. Must contain
              - PREALIGN_DUMP_GEAR
+             - DUT_OD
 
         Return
         ------
@@ -1524,18 +1527,33 @@ class prealignment(marlin_step):
         Raises
         ------
         RuntimeError
-            If PRE_ALIGNED_DUMP_GEAR is not present
+            If PRE_ALIGNED_DUMP_GEAR or INPUT_FILENAME were not 
+            present
 
         NotImplementedError
             If any of the introduced arguments is not defined in 
             the _ARGUMENTS static dictionary
         """
+        from .SPS2017TB_metadata import filename_parser
+        from .SPS2017TB_metadata import standard_sensor_name_map
+        from .SPS2017TB_metadata import get_beetle
+        
         if not kwd.has_key('PREALIGN_DUMP_GEAR'):
             raise RuntimeError("Needed 'PREALIGNED_DUMP_GEAR', argument not present")
         if kwd['PREALIGN_DUMP_GEAR'] == True:
             kwd['PREALIGN_DUMP_GEAR'] ='true'
         else:
             kwd['PREALIGN_DUMP_GEAR'] ='false'
+        
+        if not kwd.has_key("INPUT_FILENAMES"):
+            raise RuntimeError('Argument "INPUT_FILENAMES" must be explicitely set')
+        # Get the name of the sensor from the input filename: We are assuming that
+        # the name of the file follows the standard notation and is refering to the
+        # DUT (not the REF, althought they are already merged)
+        fnp = filename_parser(kwd["INPUT_FILENAMES"])
+        sensor_name = standard_sensor_name_map[fnp.sensor_name]
+        # And obtain the chip number
+        kwd["DUT_ID"] = 5+get_beetle(sensor_name)
 
         return kwd
 

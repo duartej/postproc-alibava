@@ -55,7 +55,7 @@
     <!--The name of the input hit collection-->
     <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit"> merged_hits_global </parameter>
     <!--How many events should be used for an approximation to the X,Y shifts (pre-alignment)? (default=50000)-->
-    <parameter name="Events" type="int">50000 </parameter>
+    <parameter name="Events" type="int">100000 </parameter>
     <!--Dump alignment into GEAR file instead of prealignment database-->
     <parameter name="DumpGEAR" type="bool"> @PREALIGN_DUMP_GEAR@ </parameter>
     <!--Name of LCIO db file where alignment constantds will be stored-->
@@ -65,11 +65,11 @@
     <!--SensorID of fixed plane-->
     <parameter name="FixedPlane" type="int">0 </parameter>
     <!--The list of sensor IDs that shall be excluded.-->
-    <!--parameter name="ExcludedPlanes" type="IntVec"> 6 </parameter-->
+    <parameter name="ExcludedPlanes" type="IntVec"> 1 2 3 4 </parameter>
     <!--The list of sensor IDs for which the X coordinate shall be excluded.-->
-    <!--parameter name="ExcludedPlanesXCoord" type="IntVec"> </parameter-->
+    <!--parameter name="ExcludedPlanesXCoord" type="IntVec"> 1 2 3 4 5</parameter-->
     <!--The list of sensor IDs for which the Y coordinate  shall be excluded.-->
-    <parameter name="ExcludedPlanesYCoord" type="IntVec"> 5</parameter>
+    <parameter name="ExcludedPlanesYCoord" type="IntVec"> @DUT_ID@ 7 </parameter>
     <!--Switch on or off the histogram filling-->
     <parameter name="HistogramFilling" type="bool"> true </parameter>
     <!--This is the name of the hot pixel collection that clusters should be checked against (optional).-->
@@ -80,19 +80,19 @@
          for a correlation band. Note: these numbers are ordered 
          according to the z position of the sensors and NOT according 
          to the sensor id.-->
-    <parameter name="ResidualsXMax" type="FloatVec">10 10 20 10 10 10  </parameter>
+    <parameter name="ResidualsXMax" type="FloatVec">20 20 20 20 20 20 20  </parameter>
     <!--Minimal values of the hit residuals in the X direction for a 
          correlation band. Note: these numbers are ordered according 
          to the z position of the sensors and NOT according to the sensor id.-->
-    <parameter name="ResidualsXMin" type="FloatVec">-10 -10 -20 -10 -10 -10  </parameter>
+    <parameter name="ResidualsXMin" type="FloatVec">-20 -20 -20 -20 -20 -20  </parameter>
     <!--Maximal values of the hit residuals in the Y direction for a 
          correlation band. Note: these numbers are ordered according to 
          the z position of the sensors and NOT according to the sensor id.-->
-    <parameter name="ResidualsYMax" type="FloatVec">10 10 10 10 10 10  </parameter>
+    <parameter name="ResidualsYMax" type="FloatVec">10 10 10 10 10 10 10 </parameter>
     <!--Minimal values of the hit residuals in the Y direction for a 
          correlation band. Note: these numbers are ordered according
          to the z position of the sensors and NOT according to the sensor id.-->
-    <parameter name="ResidualsYMin" type="FloatVec">-10 -10 -10 -10 -10 -10  </parameter>
+    <parameter name="ResidualsYMin" type="FloatVec">-10 -10 -10 -10 -10 -10 -10 </parameter>
     <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
     <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
   </processor>
