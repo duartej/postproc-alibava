@@ -709,7 +709,7 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
         filler_gear = ("WITHOUT DUT","XXX","XXX",geoid,5,"","")
     else:
         # Sensor id
-        sensorID = 5
+        sensorID = 5+get_beetle(sensor_name)
         if sensor_name.find("REF") == 0:
             # Covering the case of beetle2-> 5+1=6
             sensorID = 7
