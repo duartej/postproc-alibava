@@ -314,8 +314,12 @@ class specs_sensor():
         self.polarity = polarity 
         self.resolution = _binary_resolution(self.pitchX)
 # Instances
-mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
-ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
+# Note tha twe are using the 3D as micro-strip sensors, forcing
+# the pitch in Y be all the Y-sensor size 
+#mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
+#ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
+mtype = specs_sensor(6.4,7.5,0.05,7.5,0.23)
+ntype = specs_sensor(3.2,7.5,0.0250,7.5,0.23)
 lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
 ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,polarity=1.0)
 ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3,polarity=1.0)
