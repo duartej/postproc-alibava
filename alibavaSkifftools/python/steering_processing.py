@@ -315,7 +315,7 @@ class marlin_step(object):
                 # Get the parser and use
                 fnp = filename_parser(self.argument_values['ALIBAVA_INPUT_FILENAME'])
                 # The same name than the alibava data, but added the DATAMERGED
-                return "{0}_beam.DATAMERGED.slcio".format("_".join(fnp.filename.split("_")[:-1]))
+                return "{0}_beam.DATAMERGED.slcio".format("_".join(os.path.basename(fnp.filename).split("_")[:-1]))
             # The raw binary use of the arguments
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
                 return os.path.basename(self.argument_values['ALIBAVA_INPUT_FILENAME'].replace('.dat','.slcio'))
