@@ -435,6 +435,7 @@ class marlin_step(object):
         from .SPS2017TB_metadata import get_gear_content
         from .SPS2017TB_metadata import get_geo_id
         from .SPS2017TB_metadata import get_standard_sensor_name as ssnm
+        from .SPS2017TB_metadata import update_gear_with_telescope_aligned
 
         # Check for inconsistencies
         for key in kwd.keys():
@@ -466,8 +467,7 @@ class marlin_step(object):
             gear_content = get_gear_content(self.argument_values['RUN_NUMBER'],\
                     sensor_name=sensor_name,include_ref=True)
             geoid = get_geo_id(self.argument_values['RUN_NUMBER'],sensor_name)
-            # XXX -- Be CAREFUL WITH this file name (to be centralized)
-            gear_filename = 'gear_file'
+            gear_filename = get_gear_filename_common()
             with open(gear_filename+".xml",'w') as f:
                 f.write(gear_content)
             # More setters: 
@@ -476,13 +476,23 @@ class marlin_step(object):
             self.set_argument_value('GEO_ID',geoid)
             # INCLUDE all this info int the gear_file 
             self.set_argument_value('GEAR_FILE',gear_filename)
+            # Now if in the working directory exists a gear_file_aligned.xml file,
+            # create that version with the DUT and REF
+            try:
+                with open(os.path.join(os.getcwd(),get_gear_filename_common()+"_aligned.xml")) as f:
+                    gear_telescope_aligned = f.read()                    
+                content=update_gear_with_telescope_aligned(gear_content,gear_telescope_aligned)
+                fname = os.path.join(os.getcwd(),get_gear_filename_common()+"_aligned_DUTREF.xml")
+                with open(fname,"w") as f1:
+                    f1.write(content)
+            except IOError:
+                pass
         # The telescope case needs also to create the gear file
         if self.argument_values.has_key('TELESCOPE_INPUT_FILENAME') \
                 and not self.argument_values.has_key('ALIBAVA_INPUT_FILENAME'):
             gear_content = get_gear_content(self.argument_values['RUN_NUMBER'])
             geoid = get_geo_id(self.argument_values['RUN_NUMBER'])
-            # XXX -- Be CAREFUL WITH this file name (to be centralized)
-            gear_filename = 'gear_file.xml'
+            gear_filename = get_gear_filename_common()+'.xml'
             with open(gear_filename,'w') as f:
                 f.write(gear_content)
         
@@ -1546,7 +1556,7 @@ class prealignment(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'12-prealignment.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES',\
-                 'OUTPUT_FILENAME','GEAR_FILE','PREALIGN_DUMP_GEAR','DUT_ID')
+                 'GEAR_FILE','PREALIGN_DUMP_GEAR','DUT_ID')
     
     @staticmethod
     def get_description():

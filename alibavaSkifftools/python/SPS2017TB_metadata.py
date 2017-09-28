@@ -24,7 +24,8 @@ __all__ = [
         "get_active_sensor_list",
         "get_beetle",
         "get_setup",
-        "get_gear_content"
+        "get_gear_content",
+        "update_gear_with_telescope_aligned"
         ]
 
 # the EOS path where to find the alibava data
@@ -743,3 +744,86 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
 
 
     return gear_content_template.format(*filler_gear)
+
+
+def _aux_find_block(content,n):
+    """Extract the portion inside 'content' between 
+    n-<layer> </layer> 
+
+    Paremeters
+    ----------
+    code: str
+        The code to look at
+    n: int
+        The number of repetitions of <layer></layer>
+
+    Return
+    ------
+    first,last: int,int
+        The first position of <layer> and the position
+        of the n-</layer>
+    """
+    # Find the first <layer> tag
+    first_layer = content.find("<layer>")
+    last_layer = first_layer
+    # And now find the tel_planes </layer> which indicates 
+    # from where to where we should extract the telescope block
+    for i in xrange(n):
+        last_layer = content.find("</layer>",last_layer+1)
+    return first_layer,last_layer
+
+
+def update_gear_with_telescope_aligned(content,content_with_align):
+    """Substitute the telescope description in the 'content' string 
+    by the one found in the 'content_with_align' string, leaving all
+    the other blocks untouched.
+
+    Parameters
+    ----------
+    content: str
+        The content of the gear_file with the telescope and DUT and 
+        REF block descriptions
+    content_with_align: str
+        The content of the gear_file with the telescope aligned
+
+    Returns
+    -------
+    str: the gear with the telescope aligned and the DUT and REF
+        blocks
+
+    Raises
+    ------
+    RuntimeError: 
+        If no "siplanesNumber" string is found in the input common
+        gear file     
+    """
+    # First it is needed to know find out the number of telescope
+    # planes presents, which will be the number found at the common
+    # gear of the tag "siplaneNumber" and subtract 2 (i.e. DUT and REF)
+    import re
+    try:
+        line_with_number = filter(lambda l: l.find("siplanesNumber") != -1, content.split("\n"))[0]
+    except IndexError:
+        raise RuntimeError("No indication of the number of planes (using the"\
+                " 'siplanesNumber' tag) present in the common gear file")
+    # Extract the number
+    planes = int(re.sub("[^0-9]","",line_with_number))
+    tel_planes = planes-2
+    # Get the portion of code we need 
+    i,j=_aux_find_block(content_with_align,tel_planes)
+    tel_aligned_block = content_with_align[i:j]
+    # Prepare the new file content
+    # ---
+    # Get the indices to be replaced
+    io,jo = _aux_find_block(content,tel_planes)
+    # -replace with the align. telescope block and append 
+    # the rest of it
+    newcontent = content[0:io]+tel_aligned_block+content[jo:-1]
+    
+    return newcontent
+    
+
+
+
+
+
