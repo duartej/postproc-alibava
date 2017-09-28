@@ -88,7 +88,7 @@
     <!--The list of sensor IDs for which the Y coordinate  shall be excluded.-->
     <parameter name="ExcludedPlanesYCoord" type="IntVec"> @DUT_ID@ 7 </parameter>
     <!--Switch on or off the histogram filling-->
-    <parameter name="HistogramFilling" type="bool"> true </parameter>
+    <parameter name="HistogramFilling" type="bool"> false </parameter>
     <!--This is the name of the hot pixel collection that clusters should be checked against (optional).-->
     <parameter name="HotPixelCollectionName" type="string"> hotpixel_m26 </parameter>
     <!--Minimum number of hits to be considered as correlated (default=5)-->
