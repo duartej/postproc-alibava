@@ -1278,10 +1278,9 @@ class telescope_fitter(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
-                'OUTPUT_FILENAME','GEAR_FILE','GEAR_SUFFIX_INPUT',"LOCAL_HITNAME")
+                'OUTPUT_FILENAME','GEAR_FILE',"LOCAL_HITNAME")
         # The name of the telescope hits
         self.argument_values['LOCAL_HITNAME'] = 'telescope_hit'
-        self.argument_values['GEAR_SUFFIX_INPUT'] = ''
 
     
     @staticmethod
@@ -1652,11 +1651,10 @@ class fitter(telescope_fitter):
         
         self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
-                'OUTPUT_FILENAME','GEAR_FILE','GEAR_SUFFIX_INPUT','LOCAL_HITNAME')
+                'OUTPUT_FILENAME','GEAR_FILE','LOCAL_HITNAME')
         # The name of the telescope, DUT and REF hits
         self.argument_values['LOCAL_HITNAME'] = 'merged_hits'
-        self.argument_values['GEAR_SUFFIX_INPUT'] = '_DUTREF_PreAlign'
-    
+
 
 class simple_coordinate_finder_DUT(marlin_step):
     """ TO BE DEPRECATED"""
