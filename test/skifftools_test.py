@@ -54,7 +54,7 @@ class TestProcessingModule(unittest.TestCase):
             # Note we need to split first potential double arguments 
             # (as @ARG1@_@ARG2@ -> @ARG1@ @ARG2@)
             arglist=re.findall("@(.*)@",a.steering_file_content.\
-                    replace("@_","@\n").replace("@ ","@\n").replace("@/","@\n").replace("@-","@\n"))
+                    replace("@_","@\n").replace("@ ","@\n").replace("@/","@\n").replace("@-","@\n").replace("@@","@\n@"))
             for arg in arglist:
                 self.assertTrue(arg in a.required_arguments,\
                         "Argument '{0}' present in the template file '{1}'"\

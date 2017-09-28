@@ -100,6 +100,9 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'RESOLUTION_X_D':  'The telescope resolution (in X) in the downstream planes (2,3,4)',
         'RESOLUTION_Y_U':  'The telescope resolution (in Y) in the upstream planes (0,1)',
         'RESOLUTION_Y_D':  'The telescope resolution (in Y) in the downstream planes (2,3,4)',
+        'LOCAL_HITNAME': 'The local hits name to be used in the fitter',
+        'GEAR_SUFFIX_INPUT': 'The suffix to add to the input gear file',
+        'GEAR_SUFFIX': 'The suffix to put in the output gear file built by the "update_gear" step'
         }
 
 # Marlin step class definition
@@ -1166,13 +1169,17 @@ class telescope_update_gear(marlin_step):
         self.devices = ['Telescope']
 
         self.steering_file_template = os.path.join(get_template_path(),'041-telescope_update_gear.xml')
-        self.required_arguments = ('GEAR_FILE','ALIGN_CTE_LIST',\
+        self.required_arguments = ('GEAR_FILE','GEAR_SUFFIX','GEAR_SUFFIX_INPUT','ALIGN_CTE_LIST',\
                 'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
         # Auxiliary member to take into account if the step is run
         # within the telescope_full_reco metaclass, in that case 
         # the extraction of the iteration in the special_preprocesing
         # method is performed in a different approach
         self._embebbed_metaclass = in_full_reco_mode
+        
+        # Just using the Pre alignment
+        self.argument_values['GEAR_SUFFIX_INPUT'] = ""
+        self.argument_values['GEAR_SUFFIX'] = "_aligned"
         
         # A dummy lcio with one event to enter in the processEvent
         self.auxiliary_files.append('dummy_lcio.slcio')
@@ -1227,10 +1234,11 @@ class telescope_update_gear(marlin_step):
                         " The 'telescope_alignment' step must be performed previously. "\
                         " If it was, then lauch the script in the same directory were"\
                         " the 'telescope_alignment' was run")
-                # Very specific format
-                run_number = int(aligdb_file.split("-")[0])
-                # Extract the maximum number of iterations available 
-                iter_max = len(dbfiles)
+            # Very specific format
+            run_number = int(aligdb_file.split("-")[0])
+            # Extract the maximum number of iterations available 
+            iter_max = len(dbfiles)
+            print "HOLA"
         else:
             # Just using the steering files created by the metaclass for the telescope_alignment
             # steps to obtain the run_number and the number of iterations. Also it is needed to
@@ -1238,6 +1246,7 @@ class telescope_update_gear(marlin_step):
             # as part of the telescope_alignment steps but inside the filter)
             iter_max = len(glob.glob(os.path.join(os.getcwd(),"telescope_alignment*xml")))+1
             run_number = kwd['RUN_NUMBER']
+            print "HOLA--"
 
 
         # Prepare a processor for each alignment already performed (the prealigment is the 
@@ -1269,11 +1278,11 @@ class telescope_fitter(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
-                'OUTPUT_FILENAME','GEAR_FILE')
-        # The new @GEAR_FILE@_aligned.xml is needed to be copied in the
-        # working directory --> NOT ACTUALLY As the file will be created after 
-        # the alignement process... 
-        # self.auxiliary_files.append('@GEAR_FILE@_aligned.xml')
+                'OUTPUT_FILENAME','GEAR_FILE','GEAR_SUFFIX_INPUT',"LOCAL_HITNAME")
+        # The name of the telescope hits
+        self.argument_values['LOCAL_HITNAME'] = 'telescope_hit'
+        self.argument_values['GEAR_SUFFIX_INPUT'] = ''
+
     
     @staticmethod
     def get_description():
@@ -1612,7 +1621,45 @@ class prealignment(marlin_step):
 
         return kwd
 
+class sensors_update_gear(telescope_update_gear):
+    def __init__(self):
+        import os
+        import shutil
+        super(sensors_update_gear,self).__init__(False)
+        super(telescope_update_gear,self).__init__('sensors_update_gear')
+
+        self.devices = ['Telescope','DUT']
+
+        self.steering_file_template = os.path.join(get_template_path(),'041-telescope_update_gear.xml')
+        self.required_arguments = ('GEAR_FILE','GEAR_SUFFIX','GEAR_SUFFIX_INPUT','ALIGN_CTE_LIST',\
+                'ALIGNMENT_PROCESSOR_LOAD','ALIGNMENT_PROCESSOR_DESCRIPTION')
+        # Just using the Pre alignment
+        self.argument_values['GEAR_SUFFIX_INPUT'] = "_aligned_DUTREF"
+        self.argument_values['GEAR_SUFFIX'] = "_PreAlign"
+        
+        # A dummy lcio with one event to enter in the processEvent
+        self.auxiliary_files.append('dummy_lcio.slcio')
+    
+class fitter(telescope_fitter):
+    def __init__(self):
+        import os
+        import shutil
+        # mother instantiation
+        super(fitter,self).__init__()
+        super(telescope_fitter,self).__init__('fitter')
+
+        self.devices = ['Telescope','DUT']
+        
+        self.steering_file_template = os.path.join(get_template_path(),'05-telescope_fitter.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', \
+                'OUTPUT_FILENAME','GEAR_FILE','GEAR_SUFFIX_INPUT','LOCAL_HITNAME')
+        # The name of the telescope, DUT and REF hits
+        self.argument_values['LOCAL_HITNAME'] = 'merged_hits'
+        self.argument_values['GEAR_SUFFIX_INPUT'] = '_DUTREF_PreAlign'
+    
+
 class simple_coordinate_finder_DUT(marlin_step):
+    """ TO BE DEPRECATED"""
     def __init__(self):
         import os
         import shutil
@@ -1630,7 +1677,8 @@ class simple_coordinate_finder_DUT(marlin_step):
     
     @staticmethod
     def get_description():
-        return 'Simple coordinate finder for the DUTs: a line extrapolation from Telescope planes'  
+        #'Simple coordinate finder for the DUTs: a line extrapolation from Telescope planes
+        return '\033[1;31mTO BE DEPRECATED\033[1;m'  
 
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
@@ -1644,7 +1692,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
                 telescope_update_gear,telescope_fitter,
         telescope_full_reco,
         # Join both 
-        merger, hitmaker,prealignment,
+        merger, hitmaker,prealignment,sensors_update_gear,fitter,
         simple_coordinate_finder_DUT
         )
 # ==================================================================================================

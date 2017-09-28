@@ -18,7 +18,7 @@
  
     <global>
         <parameter name="LCIOInputFiles">dummy_lcio.slcio</parameter>
-        <parameter name="GearXMLFile" value="@GEAR_FILE@.xml"/>
+        <parameter name="GearXMLFile" value="@GEAR_FILE@@GEAR_SUFFIX_INPUT@.xml"/>
         <parameter name="MaxRecordNumber" value="9999999"/>
         <parameter name="SkipNEvents" value="0"/>
         <parameter name="SupressCheck" value="false"/>
@@ -30,5 +30,8 @@
     <processor name="UpdateGear" type="EUTelAlignConstantConverter">
         <!--List of alignment collections to be applied in the same order than was calculated-->
         <parameter name="AlignmentCollectionNames">@ALIGN_CTE_LIST@</parameter>
+        <!--Suffix for the new GEAR file, set to empty string 
+             (this is not default!) to overwrite old GEAR file-->
+        <parameter name="NewGEARSuffix">@GEAR_SUFFIX@</parameter>
     </processor>
 </marlin>
