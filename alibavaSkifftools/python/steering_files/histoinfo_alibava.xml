@@ -140,11 +140,11 @@
             title="Cluster Signal-to-Noise vs. Hit Amplitude" labelX="cluster SNR" labelY="Signal [ADCs]" />
 
         <histo name="hEta_vs_Time" perEachChip="true" type="TH2F"
-            xBin="101" xMin="0" xMax="100" yBin="100" yMin="-0.5" yMax="1.05"
+            xBin="101" xMin="0" xMax="100" yBin="100" yMin="-0.05" yMax="1.05"
             title="TDC time vs. #eta (seed)" labelY="#eta_{seed}" labelX="TDC time [ns]" />
         
         <histo name="hEtaFromCluster_vs_Time" perEachChip="true" type="TH2F"
-            xBin="101" xMin="0" xMax="100" yBin="100" yMin="-0.5" yMax="1.05"
+            xBin="101" xMin="0" xMax="100" yBin="100" yMin="-0.05" yMax="1.05"
             title="TDC time vs. #eta (cluster size=2)" labelY="#eta_{cluster}" labelX="TDC time [ns]" />
         
         <histo name="hEtaVsSNR" perEachChip="true" type="TH2F"
