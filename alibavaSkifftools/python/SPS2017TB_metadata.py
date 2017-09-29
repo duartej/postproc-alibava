@@ -4,6 +4,13 @@ the SPS Test Beam performed at May, 2017 at CERN
 
 Information extracted partially from 
 https://docs.google.com/spreadsheets/d/1Z4nlyHUdAhCy-oNC-472c0Sydg54GraveDxROsnZKrM/edit#gid=0
+
+SBA details: http://sba.web.cern.ch/sba/BeamsAndAreas/resultbeam.asp?beamline=H6
+------------------------------------------------
+Beam Line            : H6
+Experimental Zone    : 146 (H6A)
+Maximum Intensitities: 10^8 pions+ at 150 GeV/c
+                       10^7 pions- at 150 GeV/c 
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
