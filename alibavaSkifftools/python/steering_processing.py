@@ -1655,6 +1655,63 @@ class fitter(telescope_fitter):
         # The name of the telescope, DUT and REF hits
         self.argument_values['LOCAL_HITNAME'] = 'merged_hits'
 
+class create_ntuple(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        # mother instantiation
+        super(create_ntuple,self).__init__('create_ntuple')
+
+        self.devices = ['Telescope','DUT']
+        
+        self.steering_file_template = os.path.join(get_template_path(),'15-create_ntuple.xml')
+        self.required_arguments = ('INPUT_FILENAMES','OUTPUT_FILENAME','GEAR_FILE','DUT_ID')
+
+    @staticmethod
+    def get_description():
+        return 'Creates a ROOT n-tuple with the hits and reconstructed tracks'  
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Assign the DUT-ID (5+chip_number)
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - DUT_OD
+
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        RuntimeError
+            If DUT_ID or INPUT_FILENAME were not 
+            present
+
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        from .SPS2017TB_metadata import filename_parser
+        from .SPS2017TB_metadata import standard_sensor_name_map
+        from .SPS2017TB_metadata import get_beetle
+        
+        if not kwd.has_key("INPUT_FILENAMES"):
+            raise RuntimeError('Argument "INPUT_FILENAMES" must be explicitely set')
+        # Get the name of the sensor from the input filename: We are assuming that
+        # the name of the file follows the standard notation and is refering to the
+        # DUT (not the REF, althought they are already merged)
+        fnp = filename_parser(kwd["INPUT_FILENAMES"])
+        sensor_name = standard_sensor_name_map[fnp.sensor_name]
+        # And obtain the chip number
+        kwd["DUT_ID"] = 5+get_beetle(sensor_name)
+
+        return kwd
+
 
 class simple_coordinate_finder_DUT(marlin_step):
     """ TO BE DEPRECATED"""
@@ -1691,6 +1748,7 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         telescope_full_reco,
         # Join both 
         merger, hitmaker,prealignment,sensors_update_gear,fitter,
+        create_ntuple,
         simple_coordinate_finder_DUT
         )
 # ==================================================================================================

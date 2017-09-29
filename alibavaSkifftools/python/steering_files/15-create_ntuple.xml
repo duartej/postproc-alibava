@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="us-ascii"?>
+<!-- ?xml-stylesheet type="text/xsl" href="http://ilcsoft.desy.de/marlin/marlin.xsl"? -->
+<!-- ?xml-stylesheet type="text/xsl" href="marlin.xsl"? -->
+
+
+<!--##########################################
+    #                                        #
+    #     Steering file for marlin created   #
+    #     by alibavaSkifftools               #
+    #                                        #
+    ##########################################-->
+
+<marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
+
+   <execute>
+      <processor name="LocaltoGlobal"/>
+      <processor name="MyEUTelTreeCreator"/>
+      <processor name="PrintEventNumber"/>
+   </execute>
+
+   <global>
+      <parameter name="LCIOInputFiles">@INPUT_FILENAMES@ </parameter>
+      <parameter name="GearXMLFile" value="@GEAR_FILE@_aligned_DUTREF_PreAlign.xml"/>
+      <!-- Some value here, otherwise no event is processed-->
+      <parameter name="MaxRecordNumber" value="99999999"/>
+      <parameter name="SkipNEvents" value="0"/>
+      <parameter name="SupressCheck" value="false"/>
+      <parameter name="Verbosity" value="ERROR"/>
+   </global>
+   
+   <processor name="LocaltoGlobal" type="EUTelProcessorCoordinateTransformHits">
+       <parameter name="hitCollectionNameInput" type="string" lcioInType="TrackerHit"> merged_hits </parameter>
+        <parameter name="hitCollectionNameOutput" type="string" lcioOutType="TrackerHit"> hits_global_new </parameter>
+        <parameter name="Verbosity" type="string">WARNING3</parameter>
+   </processor>
+   
+   <processor name="MyEUTelTreeCreator" type="EUTelTreeCreator">
+       <!--EUTelTreeCreator Creates a simple tree from a merged collection of hits (where they are included the DUT hits) and tracks-->
+       <!--The id of the DUT planes-->
+       <parameter name="DUTPlanes" type="IntVec">7 @DUT_ID@</parameter>
+       <!--Input hit collection name. Hits should be in global coordinates and pre-aligned-->
+       <parameter name="InputHitCollectionName" type="string" lcioInType="TrackerHit">hits_global_new </parameter>
+       <!--Input track collection name to be used for the DUT missing coordinate search-->
+       <parameter name="InputTrackCollectionName" type="string" lcioInType="Track">track </parameter>
+       <!--The ntuple ROOT filename-->
+       <parameter name="OutputFilename" type="string">@OUTPUT_FILENAME@ </parameter>
+       <!--The id of the telescope planes-->
+       <parameter name="TelescopePlanes" type="IntVec">0 1 2 3 4  </parameter>
+       <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+       <!--parameter name="Verbosity" type="string"> </parameter-->
+   </processor>
+   
+   <processor name="PrintEventNumber" type="EUTelUtilityPrintEventNumber">
+      <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
+      <!--Print event number for every n-th event-->
+      <parameter name="EveryNEvents" type="int" value="2500"/>
+      <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+      <parameter name="Verbosity" type="string" value="MESSAGE"/>
+      <!--print the event timestamp as read from LCIO-->
+      <!--parameter name="printTimestamp" type="bool" value="false"/-->
+  </processor>
+</marlin>
