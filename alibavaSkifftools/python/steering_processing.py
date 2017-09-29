@@ -1,5 +1,45 @@
 #!/usr/bin/env python
-"""Processing the steering files
+"""Steering files preparation to be used as input of a Marling job
+
+The module contains an abtract class, 'marlin_step', which absorbes all 
+the mechanisms to create a steering file to be used as input to a 
+Marlin job (marlin step). The main method of the class is the 
+'publish_steering', used by the clients to actually generate the
+steering file with the info provided in the class. The parameters
+(listed at _ARGUMENTS global variable) are provided by the user throught
+the dictionary 'argument_values', allowing as well the use of per-default
+values.
+
+A marlin step will be defined in the class declaration, using the appropiate
+data members in the '__init__' method. A client can use the class by just
+instantiating it and call the 'publish_steering' method with the specific
+_ARGUMENTS (as a dictionary). The 'publish_steering' follows the sequence:
+    1. A special processing if needed (special_preprocessing call) 
+    2. Arguments provided by user subtitution
+    3. Arguments not provided by user, but with declared default values
+    4. Arguments provided by the class at declaration (in the __init__)
+
+A marlin step must inherit from this class and must instantiate in its
+constructor:
+    * 'steering_template' : a template of the steering file. The template
+       contains some ARGUMENTS between "@" tokens, which are wildcards
+       to be substituted
+    
+    * 'required_arguments': a list of _ARGUMENTS to be substituted 
+    in the steering files template
+    
+    * 'get_description'   : method, just a description of what the step
+    does
+
+The following data members/methods can be optionally used:        
+    * 'argument_values'  : a dict of _ARGUMENTS with its values which
+    are going to be used no matter what the user inserts
+    
+    * 'auxiliary_files'  : a list of files which should be copied in
+    the working directory
+
+    * 'special_preprocessing': method, to be used when some special 
+    manipulations are needed beyond the usual flow of the class
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
