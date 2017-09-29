@@ -91,6 +91,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'TELESCOPE_INPUT_FILENAME': 'The input file name (ACONITE Telescope RAW data or slcio for the merger)',
         'INPUT_FILENAMES': 'The list of input file names (LCIO DATA)',
         'OUTPUT_FILENAME': 'Name of the output LCIO file created by the LCIOOutputProcessor',
+        'NTUPLE_FILENAME': 'Name of the output ROOT file created by the EUTelTreeCreator',
         'GEAR_FILE': 'The name of the gear file to be used',
         'PEDESTAL_OUTPUT_FILENAME': 'Name of the output LCIO file created by the AlibavaPedestalNoiseProcessor',
         'PEDESTAL_INPUT_FILENAME': 'Name of the input LCIO file created by the AlibavaPedestalNoiseProcessor,'\
@@ -352,6 +353,9 @@ class marlin_step(object):
             pass
         elif argument == 'PEDESTAL_INPUT_FILENAME':
             pass
+        elif argument == 'NTUPLE_FILENAME':
+            if self.argument_values.has_key('INPUT_FILENAMES'):
+                return os.path.basename(self.argument_values['INPUT_FILENAMES'].split('.')[0]+'.ntuple.root')
         elif argument == 'OUTPUT_FILENAME':
             # The merger use of the the Alibava and Telescope input filenames
             if self.argument_values.has_key('ALIBAVA_INPUT_FILENAME') and \
@@ -1705,7 +1709,7 @@ class create_ntuple(marlin_step):
         self.devices = ['Telescope','DUT']
         
         self.steering_file_template = os.path.join(get_template_path(),'15-create_ntuple.xml')
-        self.required_arguments = ('INPUT_FILENAMES','OUTPUT_FILENAME','GEAR_FILE','DUT_ID')
+        self.required_arguments = ('INPUT_FILENAMES','NTUPLE_FILENAME','GEAR_FILE','DUT_ID')
 
     @staticmethod
     def get_description():

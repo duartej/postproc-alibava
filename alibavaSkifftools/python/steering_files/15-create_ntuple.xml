@@ -43,7 +43,7 @@
        <!--Input track collection name to be used for the DUT missing coordinate search-->
        <parameter name="InputTrackCollectionName" type="string" lcioInType="Track">track </parameter>
        <!--The ntuple ROOT filename-->
-       <parameter name="OutputFilename" type="string">@OUTPUT_FILENAME@ </parameter>
+       <parameter name="OutputFilename" type="string">@NTUPLE_FILENAME@ </parameter>
        <!--The id of the telescope planes-->
        <parameter name="TelescopePlanes" type="IntVec">0 1 2 3 4  </parameter>
        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
