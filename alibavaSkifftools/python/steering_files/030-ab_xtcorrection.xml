@@ -11,6 +11,8 @@
 <marlin xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://ilcsoft.desy.de/marlin/marlin.xsd">
     <execute>
         <processor name="MyAIDAProcessor"/>
+        <processor name="LoadXTFactorsDB"/>
+        <processor name="MyAlibavaCrosstalkCorrection"/>
         <processor name="MyAlibavaSeedClustering"/>
         <processor name="Save"/>
         <processor name="PrintEventNumber"/>
@@ -46,21 +48,47 @@
         <!-- compression of output file 0: false >0: true (default) -->
         <parameter name="Compress" type="int" value="1"/>
         <!-- filename without extension-->
-        <parameter name="FileName" type="string" value="@ROOT_FILENAME@_@RUN_NUMBER@"/>
+        <parameter name="FileName" type="string" value="@ROOT_FILENAME@_@RUN_NUMBER@_@ITERATION@"/>
         <!-- type of output file root (default) or xml )-->
         <parameter name="FileType" type="string" value="root"/>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
         <!--parameter name="Verbosity" type="string" value=""/-->
     </processor>
-   
+    
+    <processor name="LoadXTFactorsDB" type="ConditionsProcessor">
+      <!--Initialization string for conditions database-->
+      <parameter name="DBInit" type="string">localhost:lccd_test:calvin:hobbes </parameter>
+      <!--Initialization of a simple conditions file handler-->
+      <parameter name="SimpleFileHandler" type="StringVec"> xtfactors @CURRENT_WORKING_DIR@/crosstalk_factors_@RUN_NUMBER@-@PREITERATION@.slcio xtfactors  </parameter>
+      <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+      <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
+  </processor>
+      
+    <processor name="MyAlibavaCrosstalkCorrection" type="AlibavaCrosstalkCorrection">
+        <!--The neighbourg coefficients of the assymetric cross-talk,
+        ordered by neighbour distance to the seed-->
+        <parameter name="f" type="EventFloat">@XT_COEFFICIENTS@</parameter>
+        <!--Forces the number of maximum neighbourgs to be considered in the correction-->
+        <parameter name="MaximumNeighbourgs" type="int">@MAX_NEIGHBOURG@</parameter>
+        <!--Name of the collection coefficients, if is not found in the 
+             event, the content of the 'f' property is used-->
+        <parameter name="CollectionName" type="string">xtfactors</parameter>
+        <!--Input collection name, it should be pedestal subtracted-->
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">@INPUT_RECODATA@ </parameter>
+        <!--Output data collection name-->
+        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData">@OUTPUT_RECODATA@ </parameter>
+        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
+        <!--parameter name="Verbosity" type="string">MESSAGE</parameter-->
+    </processor>
+    
     <processor name="MyAlibavaSeedClustering" type="AlibavaSeedClustering">
         <!--AlibavaSeedClustering finds clusters using seed and neighbour cuts -->
         <!--Input collection name, it should be pedestal subtracted-->
-        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">recodata_cmmd </parameter>
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">@OUTPUT_RECODATA@ </parameter>
         <!--Output data collection name-->
-        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData">alibava_clusters </parameter>
+        <parameter name="OutputCollectionName" type="string" lcioOutType="TrackerData">alibava_clusters</parameter>
         <!--Name of the LCIO file where is going to be stored the cross-talk factors-->
-        <parameter name="xtLCIOFile" type="string">crosstalk_factors_@RUN_NUMBER@-pre.slcio</parameter>
+        <parameter name="xtLCIOFile" type="string">crosstalk_factors_@RUN_NUMBER@-@ITERATION@.slcio</parameter>
         <!--The signal/noise ratio that a neighbour channels has to pass to be added to the cluster-->
         <parameter name="NeighbourSNRCut" type="float"> @SNRCUT_NGB@ </parameter>
         <!--Noise collection name, better not to change-->
@@ -86,7 +114,7 @@
         <!--Writes the current event to the specified 
              LCIO outputfile. Needs to be the last ActiveProcessor.-->
         <!--drops the named collections from the event-->
-        <parameter name="DropCollectionNames" type="StringVec"> tmprecodata </parameter>
+        <parameter name="DropCollectionNames" type="StringVec"> tmprecodata @INPUT_RECODATA@ @REMOVE_CLUSTERS@</parameter>
         <!--drops all collections of the given type from the event-->
         <!--parameter name="DropCollectionTypes" type="StringVec"> SimTrackerHit SimCalorimeterHit </parameter-->
         <!-- write complete objects in subset collections to the file (i.e. ignore subset flag)-->
@@ -106,9 +134,9 @@
     <processor name="PrintEventNumber" type="EUTelUtilityPrintEventNumber">
         <!--EUTelUtilityPrintEventNumber prints event number to screen depending on the verbosity level-->
         <!--Print event number for every n-th event-->
-        <parameter name="EveryNEvents" type="int" value="5000"/>
+        <parameter name="EveryNEvents" type="int" value="20000"/>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
-        <!--parameter name="Verbosity" type="string" value=""/-->
+        <parameter name="Verbosity" type="string" value="MESSAGE"/>
         <!--print the event timestamp as read from LCIO-->
         <!--parameter name="printTimestamp" type="bool" value="false"/-->
     </processor>

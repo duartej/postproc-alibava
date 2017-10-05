@@ -107,6 +107,11 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MINCMMDERR': 'Minimum value for the common mode error histogram',
         'CMMDCUT_MIN': 'The minimum common mode noise ADC counts acceptable to use an event',
         'CMMDCUT_MAX': 'The maximum common mode noise ADC counts acceptable to use an event',
+        'XT_COEFFICIENTS': 'The neighbourg coefficients for the asymmetric cross-talk correction',
+        'MAX_NEIGHBOURG': 'The maximum of neighbourg coefficients to be used in the correction using the FIR filter',
+        'INPUT_RECODATA': 'The raw data signal collection name to apply the Cross-talk correction',
+        'OUTPUT_RECODATA': 'The raw data signal collection name as result of the Cross-talk correction',
+        'REMOVE_CLUSTERS': 'Whether or not to remove the clusters (useful for the cross-talk correction)',
         'SNRCUT_SEED': 'The minimum signal to noise ratio that a channel has to pass to be used as cluster seed', 
         'SNRCUT_NGB': 'The minimum signal to noise ratio that a neighbour channel has to pass to be added to a cluster', 
         'SIGNAL_POLARITY': 'The polarity of the signal (-1 for negative signals)',
@@ -393,6 +398,16 @@ class marlin_step(object):
             return -100.0
         elif argument == 'CMMDCUT_MAX':
             return 100.0
+        elif argument == 'XT_COEFFICIENTS':
+            return ''
+        elif argument == 'MAX_NEIGHBOURG':
+            return 2
+        elif argument == 'INPUT_RECODATA':
+            return 'recodata_cmmd'
+        elif argument == 'OUTPUT_RECODATA':
+            return 'recodata_cmmd_xscorrected'
+        elif argument == 'REMOVE_CLUSTERS':
+            return ''
         elif argument == 'SNRCUT_SEED':
             return 5
         elif argument == 'SNRCUT_NGB':
@@ -700,11 +715,11 @@ class signal_reconstruction(marlin_step):
     @staticmethod
     def get_description():
         return 'Signal reconstruction: pedestal and common mode subtraction, plus common mode cut'
-    
+
 def _helper_special_preprocessing(**kwd):
-        """Function to be used by the 'alibava_clustering' and
-        'cluster_histogram' classes as they share the exactly 
-        same code· 
+        """Function to be used by the ;alibava_xtcorrection', 
+        'alibava_clustering' and 'cluster_histogram' classes 
+        as they share the exactly same code
 
         Includes the signal polarity and the sensor-ID depending the sensor.
 
@@ -752,6 +767,108 @@ def _helper_special_preprocessing(**kwd):
             
         return kwd
 
+
+class alibava_xtcorrection(marlin_step):
+    def __init__(self):
+        import os
+        import shutil
+        super(alibava_xtcorrection,self).__init__('alibava_xtcorrection')
+        self.devices = ['DUT']
+
+        self.steering_file_template = os.path.join(get_template_path(),'030-ab_xtcorrection.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'GEAR_FILE',\
+                'ITERATION','PREITERATION','XT_COEFFICIENTS', 'MAX_NEIGHBOURG',\
+                'INPUT_RECODATA','OUTPUT_RECODATA', 'REMOVE_CLUSTERS',\
+                'PEDESTAL_INPUT_FILENAME','SNRCUT_NGB','SNRCUT_SEED',\
+                'SIGNAL_POLARITY','GEAR_FILE','OUTPUT_FILENAME',\
+                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING",\
+                'SNRCUT_NGB','CURRENT_WORKING_DIR')
+        # Define iteration-dependent cuts: the input-output collections
+        self._dependent_cuts = { 'INPUT_RECODATA': { } , 'OUTPUT_RECODATA': {} }
+        original = 'recodata_cmmd'
+        for i in xrange(5):
+            self._dependent_cuts['INPUT_RECODATA'][i] = original
+            self._dependent_cuts['OUTPUT_RECODATA'][i] = "{0}_xscorrected_{1}".format(original,i+1)
+            original = self._dependent_cuts['OUTPUT_RECODATA'][i] 
+    
+    @staticmethod
+    def get_description():
+        return 'Inductive cross-talk correction using iteratively a FIR filter'  
+    
+    def special_preprocessing(self,**kwd):
+        """Concrete implementation of the virtual function.
+        Set the alignment constant name, the residuals and
+        resolutions corresponding to the given iteration.
+
+        Parameters
+        ----------
+        kwd: dict
+            the dictionary of arguments, which must be defined
+            at _ARGUMENTS. Must contain
+             - ITERATION: the alignment iteration
+            Optionally, could contain (if not, default values
+            are going to be filled):
+             - INPUT_RECODATA: The name of the alibava clusters
+             - OUTPUT_RECODATA: The name of the alibava clusters with 
+                                x-talk correction
+        Return
+        ------
+        kwd: the updated dictionary
+        
+        Raises
+        ------
+        TypeError
+            If the 'ITERATION' is not an integer
+        
+        RuntimeError
+            If ITERATION is not present
+
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        import os
+        
+        # Calling the base class method (to force the 
+        # active channels pre-processing)
+        kwd = super(alibava_xtcorrection,self).special_preprocessing(**kwd)
+        # Calling the special helper as well
+        kwd = _helper_special_preprocessing(**kwd)
+
+        # And some more needed operations
+        if kwd.has_key('REMOVE_CLUSTERS'):
+            if kwd['REMOVE_CLUSTERS']:
+                kwd['REMOVE_CLUSTERS'] = "alibava_clusters"
+            else:
+                kwd['REMOVE_CLUSTERS'] = ''
+        #   - ITERATION
+        if not kwd.has_key('ITERATION'):
+            raise RuntimeError("Needed 'ITERATION' argument not provided")
+        if int(kwd['ITERATION']) == 0:
+            kwd['PREITERATION'] = 'pre'
+        elif kwd['ITERATION'].isdigit():
+            kwd['PREITERATION'] = int(kwd['ITERATION'])-1
+        else:
+            raise TypeError("Not valid 'ITERATION' argument passed: "+kwd['ITERATION'])
+
+        # Set the per default values if the user did not provide them
+        # Note the dependenced of the iteration, therefore cannot 
+        # be set in the __init__
+        args_to_set = ['INPUT_RECODATA','OUTPUT_RECODATA']
+        for thearg in args_to_set:
+            if not kwd.has_key(thearg):
+                k = int(kwd['ITERATION'])
+                # -- Find the last ITERATION value in the 
+                #    _dependent_cuts dict. Higher iterations
+                #    are equivalent than the last available one 
+                while k >= 0:
+                    try:
+                        kwd[thearg] = self._dependent_cuts[thearg][k]
+                        break
+                    except KeyError:
+                        k-=1
+        return kwd
+
 class alibava_clustering(marlin_step):
     def __init__(self):
         import os
@@ -760,12 +877,12 @@ class alibava_clustering(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
-                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','SENSORID_STARTS','OUTPUT_FILENAME',\
+                'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','OUTPUT_FILENAME',\
                 'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
     
     @staticmethod
     def get_description():
-        return 'Cluster finding algorithm and conversion from Alibava clusters to EUTelSparseCluster'
+        return 'Cluster finding algorithm (includes the asymmetric cross-talk factors calculation)'
 
     def special_preprocessing(self,**kwd):
         """Concrete implementation of the virtual function.
@@ -795,6 +912,21 @@ class alibava_clustering(marlin_step):
         # active channels pre-processing)
         kwd = super(alibava_clustering,self).special_preprocessing(**kwd)
         return _helper_special_preprocessing(**kwd)
+
+class alibava_converter(marlin_step):
+    def __init__(self):
+        import os
+        super(alibava_converter,self).__init__('alibava_converter')
+        self.devices = ['DUT']
+
+        self.steering_file_template = os.path.join(get_template_path(),'031-ab_converter.xml')
+        self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER',\
+                'INPUT_FILENAMES','GEAR_FILE','SENSORID_STARTS',\
+                'OUTPUT_FILENAME')
+    
+    @staticmethod
+    def get_description():
+        return 'Conversion from Alibava clusters to EUTelSparseCluster'
 
 class cluster_histograms(marlin_step):
     def __init__(self):
@@ -1783,7 +1915,9 @@ class simple_coordinate_finder_DUT(marlin_step):
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
         calibration_conversion,calibration_extraction,\
-        rs_conversion,signal_reconstruction,alibava_clustering,
+        rs_conversion,signal_reconstruction, alibava_xtcorrection,\
+        alibava_clustering,
+        alibava_converter,
         cluster_histograms,
         alibava_full_reco,
         # Telescope related
