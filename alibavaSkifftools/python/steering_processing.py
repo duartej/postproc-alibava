@@ -898,13 +898,16 @@ class alibava_clustering(marlin_step):
 
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
+                'CALIBRATION_INPUT_FILENAME',\
                 'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','OUTPUT_FILENAME',\
                 'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING",\
-                'REMOVE_CLUSTERS')
+                'REMOVE_CLUSTERS','CURRENT_WORKING_DIR')
+        # Needed files
+        self.auxiliary_files.append('histoinfo_alibava.xml')
     
     @staticmethod
     def get_description():
-        return 'Cluster finding algorithm (includes the asymmetric cross-talk factors calculation)'
+        return 'Cluster finding algorithm (includes the asymmetric cross-talk factors calculation) and histograms'
 
     def special_preprocessing(self,**kwd):
         """Concrete implementation of the virtual function.
