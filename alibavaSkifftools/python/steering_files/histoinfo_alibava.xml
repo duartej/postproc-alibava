@@ -148,7 +148,7 @@
             title="TDC time vs. #eta (cluster size=2)" labelY="#eta_{cluster}" labelX="TDC time [ns]" />
         
         <histo name="hNeighboursCharge" perEachChip="true" type="TH2F"
-            xBin="11" xMin="-5.5" xMax="5.5" yBin="200" yMin="-0.05" yMax="1.05"
+            xBin="11" xMin="-5.5" xMax="5.5" yBin="200" yMin="-0.5" yMax="0.5"
             title="Seed distance neighbours vs. relative Charge " labelY="Relative charge to seed" labelX="Neighbourg distance" />
         
         <histo name="hEtaVsSNR" perEachChip="true" type="TH2F"
