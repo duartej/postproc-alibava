@@ -389,6 +389,8 @@ if __name__ == '__main__':
             help=template_args['CMMDCUT_MAX'])
     st_parser.add_argument('--max-neighbourg',dest="MAX_NEIGHBOURG",action='store',\
             help=template_args['MAX_NEIGHBOURG'])
+    st_parser.add_argument('--clusters-name',dest="CLUSTERS_NAME",action='store',\
+            help=template_args['CLUSTERS_NAME'])
     st_parser.add_argument('--remove-clusters',dest="REMOVE_CLUSTERS",action='store_true',\
             help=template_args['REMOVE_CLUSTERS'])
     st_parser.add_argument('--snrcut-seed',dest="SNRCUT_SEED",action='store',\

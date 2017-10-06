@@ -111,6 +111,7 @@ _ARGUMENTS = { 'ROOT_FILENAME': 'Name of the output root file created by the AID
         'MAX_NEIGHBOURG': 'The maximum of neighbourg coefficients to be used in the correction using the FIR filter',
         'INPUT_RECODATA': 'The raw data signal collection name to apply the Cross-talk correction',
         'OUTPUT_RECODATA': 'The raw data signal collection name as result of the Cross-talk correction',
+        'CLUSTERS_NAME': 'The name of the output alibava cluster collection',
         'REMOVE_CLUSTERS': 'Whether or not to remove the clusters (useful for the cross-talk correction)',
         'SNRCUT_SEED': 'The minimum signal to noise ratio that a channel has to pass to be used as cluster seed', 
         'SNRCUT_NGB': 'The minimum signal to noise ratio that a neighbour channel has to pass to be added to a cluster', 
@@ -401,13 +402,15 @@ class marlin_step(object):
         elif argument == 'XT_COEFFICIENTS':
             return ''
         elif argument == 'MAX_NEIGHBOURG':
-            return 2
+            return 5
         elif argument == 'INPUT_RECODATA':
             return 'recodata_cmmd'
         elif argument == 'OUTPUT_RECODATA':
             return 'recodata_cmmd_xscorrected'
         elif argument == 'REMOVE_CLUSTERS':
             return ''
+        elif argument == 'CLUSTERS_NAME':
+            return 'alibava_clusters'
         elif argument == 'SNRCUT_SEED':
             return 5
         elif argument == 'SNRCUT_NGB':
@@ -717,7 +720,7 @@ class signal_reconstruction(marlin_step):
         return 'Signal reconstruction: pedestal and common mode subtraction, plus common mode cut'
 
 def _helper_special_preprocessing(**kwd):
-        """Function to be used by the ;alibava_xtcorrection', 
+        """Function to be used by the 'alibava_xtcorrection', 
         'alibava_clustering' and 'cluster_histogram' classes 
         as they share the exactly same code
 
@@ -742,6 +745,19 @@ def _helper_special_preprocessing(**kwd):
         from .SPS2017TB_metadata import filename_parser
         from .SPS2017TB_metadata import sensor_name_spec_map
         from .SPS2017TB_metadata import standard_sensor_name_map
+
+
+        # Some needed operations
+        if kwd.has_key('REMOVE_CLUSTERS'):
+            # Remove the clusters if asked for, and put the name
+            # of the clusters to be removed
+            if kwd['REMOVE_CLUSTERS']:
+                if kwd.has_key('CLUSTERS_NAME'):
+                    kwd['REMOVE_CLUSTERS'] = kwd['CLUSTERS_NAME']
+                else:
+                    kwd['REMOVE_CLUSTERS'] = "alibava_clusters"
+            else:
+                kwd['REMOVE_CLUSTERS'] = ''
         
         user_polarity=None
         if kwd.has_key('SIGNAL_POLARITY'):
@@ -772,17 +788,21 @@ class alibava_xtcorrection(marlin_step):
     def __init__(self):
         import os
         import shutil
-        super(alibava_xtcorrection,self).__init__('alibava_xtcorrection')
+        super(alibava_xtcorrection,self).__init__('xt')
         self.devices = ['DUT']
 
         self.steering_file_template = os.path.join(get_template_path(),'030-ab_xtcorrection.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'INPUT_FILENAMES', 'GEAR_FILE',\
                 'ITERATION','PREITERATION','XT_COEFFICIENTS', 'MAX_NEIGHBOURG',\
-                'INPUT_RECODATA','OUTPUT_RECODATA', 'REMOVE_CLUSTERS',\
+                'INPUT_RECODATA','OUTPUT_RECODATA', 'REMOVE_CLUSTERS','CLUSTERS_NAME',\
                 'PEDESTAL_INPUT_FILENAME','SNRCUT_NGB','SNRCUT_SEED',\
+                'CALIBRATION_INPUT_FILENAME',\
                 'SIGNAL_POLARITY','GEAR_FILE','OUTPUT_FILENAME',\
                 'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING",\
                 'SNRCUT_NGB','CURRENT_WORKING_DIR')
+        # Needed files
+        self.auxiliary_files.append('histoinfo_alibava.xml')
+        
         # Define iteration-dependent cuts: the input-output collections
         self._dependent_cuts = { 'INPUT_RECODATA': { } , 'OUTPUT_RECODATA': {} }
         original = 'recodata_cmmd'
@@ -828,7 +848,13 @@ class alibava_xtcorrection(marlin_step):
             the _ARGUMENTS static dictionary
         """
         import os
-        
+
+        # Include the iteration in the class name, to be
+        # used in the name of the output filename
+        if not kwd.has_key('ITERATION') or not kwd["ITERATION"].isdigit():
+            raise RuntimeError("Needed 'ITERATION' argument not correctly provided")
+        self.step_name += str(kwd['ITERATION'])
+
         # Calling the base class method (to force the 
         # active channels pre-processing)
         kwd = super(alibava_xtcorrection,self).special_preprocessing(**kwd)
@@ -836,11 +862,6 @@ class alibava_xtcorrection(marlin_step):
         kwd = _helper_special_preprocessing(**kwd)
 
         # And some more needed operations
-        if kwd.has_key('REMOVE_CLUSTERS'):
-            if kwd['REMOVE_CLUSTERS']:
-                kwd['REMOVE_CLUSTERS'] = "alibava_clusters"
-            else:
-                kwd['REMOVE_CLUSTERS'] = ''
         #   - ITERATION
         if not kwd.has_key('ITERATION'):
             raise RuntimeError("Needed 'ITERATION' argument not provided")
@@ -878,7 +899,8 @@ class alibava_clustering(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'03-ab_clustering.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER','INPUT_FILENAMES', 'PEDESTAL_INPUT_FILENAME',\
                 'SNRCUT_NGB','SNRCUT_SEED','SIGNAL_POLARITY','GEAR_FILE','OUTPUT_FILENAME',\
-                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING")
+                'ACTIVE_CHANNELS',"ENABLE_AUTOMASKING","CRITERIUM_AUTOMASKING",\
+                'REMOVE_CLUSTERS')
     
     @staticmethod
     def get_description():
@@ -922,7 +944,7 @@ class alibava_converter(marlin_step):
         self.steering_file_template = os.path.join(get_template_path(),'031-ab_converter.xml')
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER',\
                 'INPUT_FILENAMES','GEAR_FILE','SENSORID_STARTS',\
-                'OUTPUT_FILENAME')
+                'OUTPUT_FILENAME','CLUSTERS_NAME')
     
     @staticmethod
     def get_description():

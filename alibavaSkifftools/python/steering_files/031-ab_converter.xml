@@ -44,7 +44,7 @@
     <processor name="MyAlibavaClusterConverter" type="AlibavaClusterConverter">
         <!--AlibavaClusterConverter converts AlibavaClusters to EUTelSparseCluster and  :) -->
         <!--Input alibava cluster collection name-->
-        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">alibava_clusters </parameter>
+        <parameter name="InputCollectionName" type="string" lcioInType="TrackerData">@CLUSTERS_NAME@ </parameter>
         <!--The value that should be stored in missing coordinate. This 
              number has to be integer since it will be used as channel 
              number of the missing coordinate-->
