@@ -1009,6 +1009,13 @@ class alibava_full_reco(marlin_step):
         # -- Dummy 
         self.required_arguments = ()
 
+        # Iteration for the cross-talk correction
+        self._max_iterations = 3
+        self._iteration = 0
+        self._iter_init  = False
+        self._remove_clusters = True
+        self._clusters_name   = 'pre_alibava_clusters'
+
         # The list of steps with their needed arguments
         self.step_chain = ( 
                 (pedestal_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.pedestal_raw_file},self.update_output),
@@ -1021,12 +1028,30 @@ class alibava_full_reco(marlin_step):
                 (rs_conversion(), { 'ALIBAVA_INPUT_FILENAME': self.beam_raw_file},self.update_output),
                 (signal_reconstruction(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
                         'ACTIVE_CHANNELS': self.active_channels },self.update_output),
+                # Extracting the xt factors
                 (alibava_clustering(), {'INPUT_FILENAMES': self.last_output_filename, 'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
-                        'ACTIVE_CHANNELS': self.active_channels },self.update_output),
-                # Note that the cluster_histograms
-                (cluster_histograms(), { 'INPUT_FILENAMES': self.last_output_filename, \
-                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file,
-                        'ACTIVE_CHANNELS': self.active_channels}, self.dummy )
+                        'CALIBRATION_INPUT_FILENAME': self.calibration_file, 'ACTIVE_CHANNELS': self.active_channels, \
+                        'REMOVE_CLUSTERS': self.remove_clusters },self.update_output),
+                # The iterative correction, let's fix it to 3 iterations
+                (alibava_xtcorrection(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration,\
+                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
+                        'CALIBRATION_INPUT_FILENAME': self.calibration_file, 'ACTIVE_CHANNELS': self.active_channels, 
+                        'REMOVE_CLUSTERS': self.remove_clusters, 'CLUSTERS_NAME': self.clusters_name },self.update_output),
+                (alibava_xtcorrection(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration,\
+                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
+                        'CALIBRATION_INPUT_FILENAME': self.calibration_file, 'ACTIVE_CHANNELS': self.active_channels, 
+                        'REMOVE_CLUSTERS': self.remove_clusters, 'CLUSTERS_NAME': self.clusters_name },self.update_output),
+                (alibava_xtcorrection(),{'INPUT_FILENAMES': self.last_output_filename, 'ITERATION': self.iteration,\
+                        'PEDESTAL_INPUT_FILENAME': self.pedestal_file,\
+                        'CALIBRATION_INPUT_FILENAME': self.calibration_file, 'ACTIVE_CHANNELS': self.active_channels, 
+                        'REMOVE_CLUSTERS': self.remove_clusters, 'CLUSTERS_NAME': self.clusters_name },self.update_output),
+                # Assuming the correction is done, now using the clusters made in the last correction to convert them
+                # (no need to plot them as they are present in the last step)
+                (alibava_converter(), {'INPUT_FILENAMES': self.last_output_filename,'CLUSTERS_NAME': self.clusters_name}, self.update_output)
+                # Note that the cluster_histograms, not needed anymore
+                #(cluster_histograms(), { 'INPUT_FILENAMES': self.last_output_filename, \
+                #        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file,
+                #        'ACTIVE_CHANNELS': self.active_channels}, self.dummy )
                 )
 
     # Some datamembers used in the step_chain are not going to be 
@@ -1055,6 +1080,37 @@ class alibava_full_reco(marlin_step):
     def active_channels(self):
         return self._active_channels
     
+    def iteration(self):
+        """Return and update iteration and related 
+        data members
+        """
+        self._iter_init = True
+        self._iteration += 1
+        if self._iteration == self._max_iterations:
+            self._remove_clusters = False
+            self._clusters_name   = 'alibava_clusters'
+        # Need it as string for posterior processing
+        return "{0}".format(self._iteration-1)
+    
+    def get_iteration_without_modification(self):
+        """Getter without updating it
+        """
+        if self._iter_init:
+            return self._iteration-1
+        else:
+            return self._iteration
+
+    def remove_clusters(self):
+        """Always remove except in the last iteration
+        See iteration method
+        """
+        return self._remove_clusters
+
+    def clusters_name(self):
+        """See iteration method
+        """
+        return self._clusters_name
+    
     # Updaters
     def update_output(self,step_inst):
         """Update the last_output_filename data member using the value
@@ -1067,7 +1123,7 @@ class alibava_full_reco(marlin_step):
     
     def update_calibration(self,step_inst):
         self._calibration_file = step_inst.argument_values['CALIBRATION_OUTPUT_FILENAME']
-
+    
     def dummy(self,step_inst):
         pass
 
@@ -1100,6 +1156,7 @@ class alibava_full_reco(marlin_step):
         import datetime
         import os
         import stat
+        import shutil
     
         # Check for inconsistencies
         for key in ['ALIBAVA_INPUT_FILENAME','PEDESTAL_INPUT_FILENAME','CALIBRATION_INPUT_FILENAME']:
@@ -1139,6 +1196,12 @@ class alibava_full_reco(marlin_step):
             newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
             # Create the steering file for this step
             step.publish_steering_file(**newargs)
+            # In case of cross-tal correction, change the file name to 
+            # include the iteration and don't remove the old xml
+            if isinstance(step,alibava_xtcorrection):
+                old_steering_filename = step.steering_file
+                step.steering_file = old_steering_filename.replace(".xml","_{0}.xml".format(self.get_iteration_without_modification()))
+                shutil.move(old_steering_filename,step.steering_file)
             # The particular action defined: it will update file names...
             # See the properties and updaters defined above
             action(step)
@@ -1439,7 +1502,6 @@ class telescope_update_gear(marlin_step):
             run_number = int(aligdb_file.split("-")[0])
             # Extract the maximum number of iterations available 
             iter_max = len(dbfiles)
-            print "HOLA"
         else:
             # Just using the steering files created by the metaclass for the telescope_alignment
             # steps to obtain the run_number and the number of iterations. Also it is needed to
@@ -1447,7 +1509,6 @@ class telescope_update_gear(marlin_step):
             # as part of the telescope_alignment steps but inside the filter)
             iter_max = len(glob.glob(os.path.join(os.getcwd(),"telescope_alignment*xml")))+1
             run_number = kwd['RUN_NUMBER']
-            print "HOLA--"
 
 
         # Prepare a processor for each alignment already performed (the prealigment is the 
