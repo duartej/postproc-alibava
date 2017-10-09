@@ -808,7 +808,7 @@ class alibava_xtcorrection(marlin_step):
         original = 'recodata_cmmd'
         for i in xrange(5):
             self._dependent_cuts['INPUT_RECODATA'][i] = original
-            self._dependent_cuts['OUTPUT_RECODATA'][i] = "{0}_xscorrected_{1}".format(original,i+1)
+            self._dependent_cuts['OUTPUT_RECODATA'][i] = "{0}_xtcor_{1}".format(original,i+1)
             original = self._dependent_cuts['OUTPUT_RECODATA'][i] 
     
     @staticmethod
@@ -849,6 +849,8 @@ class alibava_xtcorrection(marlin_step):
         """
         import os
 
+        # IMPORTANT. The ITERATION needs to be the first one,
+        # do not change!!
         # Include the iteration in the class name, to be
         # used in the name of the output filename
         if not kwd.has_key('ITERATION') or not kwd["ITERATION"].isdigit():
@@ -1015,6 +1017,12 @@ class alibava_full_reco(marlin_step):
         self._iter_init  = False
         self._remove_clusters = True
         self._clusters_name   = 'pre_alibava_clusters'
+         
+        # Helper dictionary to assure that the first element
+        # to be processed from the self.step_chain dictionary
+        # is always the 'ITERATION', as there are some other
+        # keys that takes their values depending the 'ITERATION'
+        self._helper_orderator = { 'ITERATION': 0 }
 
         # The list of steps with their needed arguments
         self.step_chain = ( 
@@ -1053,6 +1061,13 @@ class alibava_full_reco(marlin_step):
                 #        'PEDESTAL_INPUT_FILENAME': self.pedestal_file, 'CALIBRATION_INPUT_FILENAME': self.calibration_file,
                 #        'ACTIVE_CHANNELS': self.active_channels}, self.dummy )
                 )
+        # update the ordered dictionary to contain all the defined keys
+        k = 1
+        for keylist in map(lambda (i,_thedict,j): _thedict.keys(), self.step_chain):
+            for thekey in keylist:
+                if not self._helper_orderator.has_key(thekey):
+                    self._helper_orderator[thekey] = k
+                    k += 1
 
     # Some datamembers used in the step_chain are not going to be 
     # populated until the call to the step is performed, using them
@@ -1086,6 +1101,7 @@ class alibava_full_reco(marlin_step):
         """
         self._iter_init = True
         self._iteration += 1
+        # The last iteration
         if self._iteration == self._max_iterations:
             self._remove_clusters = False
             self._clusters_name   = 'alibava_clusters'
@@ -1170,7 +1186,6 @@ class alibava_full_reco(marlin_step):
         # The active channels, if any
         try:
             self._active_channels = kwd['ACTIVE_CHANNELS']
-            print self._active_channels
         except KeyError:
             # use the default active channels
             from .SPS2017TB_metadata import active_channels,filename_parser,get_standard_sensor_name
@@ -1193,7 +1208,10 @@ class alibava_full_reco(marlin_step):
         # Setting the values provided by the user
         for (step,args,action) in self.step_chain:
             # Redefine the args dict, activating the values of the dict
-            newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
+            # Note that we use the helper dictionary to be sure that the 
+            # ITERATOR key is the first one in being processed
+            newargs = dict(map(lambda (x,y): (x,y()), \
+                    sorted(args.iteritems(),key=lambda (i,j): self._helper_orderator[i])))
             # Create the steering file for this step
             step.publish_steering_file(**newargs)
             # In case of cross-tal correction, change the file name to 
