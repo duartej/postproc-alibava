@@ -402,7 +402,7 @@ class marlin_step(object):
         elif argument == 'XT_COEFFICIENTS':
             return ''
         elif argument == 'MAX_NEIGHBOURG':
-            return 5
+            return 7
         elif argument == 'INPUT_RECODATA':
             return 'recodata_cmmd'
         elif argument == 'OUTPUT_RECODATA':
