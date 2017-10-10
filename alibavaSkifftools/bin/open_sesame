@@ -1,9 +1,33 @@
 #!/usr/bin/env python
-"""
-Extract the list of alibava raw data files from a parent folder.
-The folder should contain subdirectories with the name
-of the involved sensors, and the file names follows a pre-defined
-naming convention.
+"""Multitool for the processing of the ALiBaVa and Telescope data.
+The available sub-commands are:
+    * list_files: Extract the list of alibava raw data files from a parent 
+      folder. The folder should contain subdirectories with the name of the
+      involved sensors, and the file names follows a pre-defined naming 
+      convention.
+    
+    * steering: Build the needed steering files to run a given step of the 
+      marlin framework reconstruction for the ALIBAVA or TELESCOPE data. 
+      Note that the steering file is created in the working directory. All
+      the available options but the `--print-availble-steps` are directly 
+      related with the relevant steering file (see the steering files under
+      `steering_files` directory). Two meta-steps which prepare the full
+      sequence needed are available for the AliBaVa data and the Telescope
+      data. 
+
+   * sensor_maps: Produce charge and efficiency maps for the ALiBaVa data 
+     acquired sensors, processed using the Marlin framework. The ALiBaVa 
+     data has been merged with the Telescope data (EUTelescope software) 
+     and has provided a ROOT NTUPLE file with a specific structure 
+     containing both the ALiBaVa sensors data and reconstructed tracks from
+     the telescope (this is the NTUPLE input for script).
+
+   * merge_eore: Create the steering file to be used to merge a collection
+     of slcio files containing the 'End of Run Event' (EORE). The usual 
+     method (lcio_merge_files) does not take into account that last event 
+     added by the EUTelescope processors and it will result in a lost of 
+     synchronization. Using the created steering file here, the EOREs will
+     be removed and the events merged properly.
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
@@ -142,6 +166,24 @@ def create_steering_file(step_name,**args):
     step = steering_processing.create_marlin_step(step_name)
     # And create the steering file
     step.publish_steering_file(**args)
+
+def sensor_map_production(ntuplename):
+    """Produce the charge maps and the efficiency maps (hit 
+    reconstruction efficiency) for the sensor included in the 
+    NTUPLE. Wrapper to the method at alibavaSkifftools.marlin_postprocessor
+    See details in there
+
+    Parameters
+    ----------
+    ntuplename: str
+        The name of the ROOT ntuple. The filename MUST follow
+        the standard notation defined through the class 
+        alibavaSkifftools.SPS2017TB_metadata.filename_parser 
+    """
+    from alibavaSkifftools.marlin_postprocessor import sensor_map_production
+    
+    # Just do the job
+    sensor_map_production(ntuplename)
 
 
 def merge_files(lcio_files,output_name):
@@ -409,6 +451,21 @@ if __name__ == '__main__':
             action=StepNamesAction,help='Just print the available step names')
     st_parser.set_defaults(which='steering',ignore_runs=[])
     
+    # -- Subparser: Marlin post-processing sensor maps
+    usage_sm  = "Produce charge and efficiency maps for the "
+    usage_sm += "ALiBaVa data acquired sensors, processed using the "
+    usage_sm += "Marlin framework. The ALiBaVa data has been merged "
+    usage_sm += "with the Telescope data (EUTelescope software) and "
+    usage_sm += "has provided a ROOT NTUPLE file with a specific structure "
+    usage_sm += "containing both the ALiBaVa sensors data and reconstructed "
+    usage_sm += "tracks from the telescope (this is the NTUPLE input for "
+    usage_sm += "script)."
+    
+    sm_parser = subparsers.add_parser("sensor_maps",description=usage_sm)
+    sm_parser.add_argument('ntuple',help="The root NTUPLE "\
+            " file obtained by the EUTelTreeCreator processor")
+    sm_parser.set_defaults(which='sensor_maps')
+    
     # -- Subparser: simple file merger when dealing with EORE extra events
     usage_fm  = "Create the steering file to be used to merge a collection "
     usage_fm += "of slcio files containing the 'End of Run Event' (EORE). "
@@ -436,6 +493,8 @@ if __name__ == '__main__':
         the_args = dict(filter(lambda (k,v): k in valid_args and v is not None,args.__dict__.iteritems()))
         # arguments in the template steering files
         create_steering_file(args.step,**the_args)
+    elif args.which == "sensor_maps":
+        sensor_map_production(args.ntuple)
     elif args.which == 'merge_eore':
         steering_filename=merge_files(args.lcio_files,args.output)
         print "\033[1;34mTo create the merged file, run: \033[1;m\n"\

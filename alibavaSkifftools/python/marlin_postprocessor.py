@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 """Post-processor module to be applied to 
-the output of the EUTelescope Marlin jobs
+the output of the EUTelescope Marlin jobs. 
+This module acts as liason between the Marlin
+EUTelTreeCreator processor (the creator of the
+ntuple) and the post-processing python
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
@@ -24,8 +27,8 @@ RESOLUTION= { DUTPLANE: 0.2, REFPLANE : 0.1 } # in mm
 SENSOR_NAME = { REFPLANE: "REF", DUTPLANE: "DUT" }
 
 # UNITS
-mm = 1.0
-um = 1e3
+MM = 1.0
+UM = 1e3
 
 class metadata_container(object):
     """Container of some globals which are going to be
@@ -36,6 +39,14 @@ class metadata_container(object):
         """Use the tree structure to define the DUT 
         planes ids, their resolutions, etc
 
+        Parameters
+        ----------
+        tree: ROOT.Tree
+            The ntuple containing tracks and DUT, REF sensors
+            hits
+        dut_name: str
+            The 
+
         Raises
         ------
         RuntimeError:
@@ -44,18 +55,22 @@ class metadata_container(object):
         from .SPS2017TB_metadata import sensor_name_spec_map
         import math
 
+        # Names (following conventions at .SPS2017TB_metadata
+        self.ref_name = "REF_0_b1"
+        self.dut_name = dut_name
+
         # The REF plane is explicitely set to 7 ALWAYS
         self.ref_plane = 7
         # Get the DUT by using the hit branches
         try:
-            self.dut_plane = map(lambda br: int(br.GetName().replace("hit_X","")),
-                filter(lambda x: x.GetName().find("hit_X_") == 0, tree.GetListOfBranches()))
+            self.dut_plane = map(lambda br: int(br.GetName().replace("hit_X_","")),
+                filter(lambda x: x.GetName().find("hit_X_") == 0, tree.GetListOfBranches()))[0]
         except IndexError:
             raise RuntimeError("Unexpected tree structure")
-        # Resolutions: REF and DUT (binary plust
-        _p = 1.0/sqrt(12.0)        
-        self.resolution = { self.ref_plane: sensor_name_spec_map["REF_0_b1"].pitchX*_p, 
-                self.dut_plane: sensor_name_spec_map[dut_name]*_p }
+        # Resolutions: REF and DUT (binary so far)
+        _p = 1.0/math.sqrt(12.0)
+        self.resolution = { self.ref_plane: sensor_name_spec_map[self.ref_name].pitchX*_p/MM , 
+                self.dut_plane: sensor_name_spec_map[self.dut_name].pitchX*_p/MM }
 
 class dummy_list(list):
     """A dummy list which returns always
@@ -481,29 +496,46 @@ class processor(object):
 
         return m
 
-def run(fname):
+def sensor_map_production(fname):
+    """Produce the charge maps and the efficiency maps (hit 
+    reconstruction efficiency) for the sensor included in the 
+    NTUPLE.
+
+    Parameters
+    ----------
+    fname: str
+        The name of the ROOT ntuple produced by the EUTelTreeCreator
+        processor (part of the EUTelescope package, which uses the 
+        Marlin framework). The filename MUST follow the standard 
+        notation defined through the class 
+        `alibavaSkifftools.SPS2017TB_metadata.filename_parser`
+    """
     import ROOT
-    
     import timeit
+    from .SPS2017TB_metadata import filename_parser 
+    from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
 
-    f =ROOT.TFile.Open(fname)
+    # Get the name of the sensor and some other useful info
+    fp = filename_parser(fname)
+    # Get the root file and the tree
+    f = ROOT.TFile.Open(fname)
     t = f.Get("events")
+    # And obtain some metadata (ID of the sensors and sensors
+    # resolutions)
+    metadata = metadata_container(t,name_converter[fp.sensor_name])
+
     # Set some globals
-    tree_inspector(t)
+    #tree_inspector(t)
 
-    # The hits and tracks
-    dut = hits_plane_accessor(t,DUTPLANE)
-    ref = hits_plane_accessor(t,REFPLANE)
-    tracks = tracks_accessor(t,[0,1,2,3,4],REFPLANE,DUTPLANE)
-
+    # The hits and tracks 
+    dut = hits_plane_accessor(t,metadata.dut_plane)
+    ref = hits_plane_accessor(t,metadata.ref_plane)
+    tracks = tracks_accessor(t,[0,1,2,3,4],metadata.ref_plane,metadata.dut_plane)
+    
+    # Process the data
     start_time = timeit.default_timer()
     wtch = processor()
     for _t in t:
         wtch.process(_t,tracks,ref,dut)
     print timeit.default_timer()-start_time
-    return wtch
-
-
-if __name__ == "__main__":
-    import sys
-    run(sys.argv[1])
+    #return wtch
