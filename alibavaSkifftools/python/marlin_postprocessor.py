@@ -1,9 +1,7 @@
 #!/usr/bin/env python
-"""Post-processor module to be applied to 
-the output of the EUTelescope Marlin jobs. 
-This module acts as liason between the Marlin
-EUTelTreeCreator processor (the creator of the
-ntuple) and the post-processing python
+"""Post-processor module to be applied to the output of the EUTelescope 
+Marlin jobs. This module acts as liason between the Marlin EUTelTreeCreator
+processor (the creator of the ntuple) and the post-processing python
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
@@ -19,7 +17,6 @@ __status__ = "Development"
 
 # Resolution of the DUT plus the error in the fit (?) 0.04 mm 
 # Incluir covariance en los hits fitted
-import math
 # TODO OBTAIN FROM SPS
 REFPLANE=7
 DUTPLANE=6
@@ -49,7 +46,7 @@ class metadata_container(object):
 
         Raises
         ------
-        RuntimeError:
+        RuntimeError
             When the tree doesn't contain the Branch hit_X_#
         """
         from .SPS2017TB_metadata import sensor_name_spec_map
@@ -74,7 +71,7 @@ class metadata_container(object):
 
 class dummy_list(list):
     """A dummy list which returns always
-    the value in the firsts element
+    the value in the first element
     """
     def __getitem__(self,i):
         return list.__getitem__(self,0)
@@ -83,11 +80,40 @@ class hits_plane_accessor(object):
     """Access to the TBranches contained in a 
     TTree created by the EUTelTreeCreator class from
     the https://github.com/duartej/eutelescope/ package.
+    
+    Attributes
+    ----------
+    id: int
+        The telescope plane ID
+    x: ROOT.std.vector(float)()
+        The vector of x-position of the hits 
+    y: ROOT.std.vector(float)()
+        The vector of y-position of the hits
+    z: dummy_list instance
+        The vector of z-position of the hits, which is 
+        the same for all the hits belonging to the same 
+        plane. Therefore, it is extracted in the first
+        event from the branch, and afterwards used in
+        all the events
+    x_local: ROOT.std.vector(float)()
+        The vector of x local position of the hits 
+    y_local: ROOT.std.vector(float)()
+        The vector of y local position of the hits
+    charge: ROOT.std.vector(int)()
+        The hit total charge in ADCs counts 
     """
     def __init__(self,tree,planeid):
-        """Accessor
+        """Accessors for the branches related with Alibava
+        sensors hits
+
+        Parameters
+        ----------
+        tree: ROOT.TTree
+            The ntuple 
+        planeid: int
+            The sensor plane ID
+        
         """
-        # Improve!! Associate just a TBranch
         self.id = planeid
         # Check if there is any problem
         if len(filter(lambda br: br.GetName() == "hit_X_{0}".format(self.id) ,tree.GetListOfBranches())) == 0:
@@ -119,11 +145,32 @@ class hits_plane_accessor(object):
     
     @property
     def n(self):
+        """The number of hit elements
+
+        Return
+        ------
+        int
+        """
         return self.x.size()
     
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
         if (x,z) are equal
+
+        Parameters
+        ----------
+        i: int
+            The hit index of this (self) instance to be 
+            compare
+        other: hit_plane_accesor instance (or any other instance
+            with a method 'z.__getitem__')
+            The other instance to compare with
+        j: int
+            The hit index of the 'other' instance
+
+        Return
+        ------
+        bool
         """
         return abs(self.x[i]-other.x[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
@@ -135,9 +182,12 @@ class hits_plane_accessor(object):
 
         Parameters
         ----------
-        track_acc: 
+        track_acc: tracks_accessor instance
+            The accessor to the telescope tracks branches
+        histo: ROOT.TH2
+            The histogram to store correlation between the 
+            hit in the sensor and the hit in the track
 
-        Return
         Return
         ------
         hitlist: dict(int,list(int))
@@ -172,16 +222,70 @@ class track_hits_plane_accessor(object):
     """Access to the TBranches contained in a 
     TTree created by the EUTelTreeCreator class from
     the https://github.com/duartej/eutelescope/ package.
+
+    Attributes
+    ----------
+    id: int
+        The telescope plane ID
+    x: ROOT.std.vector(float)()
+        The vector of x-position of the hits 
+    y: ROOT.std.vector(float)()
+        The vector of y-position of the hits
+    z: ROOT.std.vector(float)()
+        The vector of z-position of the hits. In the case
+        of measured hits, the plane is obviously restricting
+        the z to be the same for all hits
+    x_local: ROOT.std.vector(float)()
+        The vector of x local position of the hits 
+    y_local: ROOT.std.vector(float)()
+        The vector of y local position of the hits
+    track_index: ROOT.std.vector(int)()
+        The index (a number identifying univocaly a 
+        track in the event) of the track which the 
+        hit is associated
     """
-    def __init__(self,tree,planeid,ismeas):
-        """
+    def __init__(self,tree,planeid,ismeas,ref_plane_id,dut_plane_id):
+        """Accessors for the branches related with the
+        telescope hits. The hits are associated to 
+        reconstructed tracks of the telescope, and therefore
+        can refer to the measured or the fitted one.
+        
+
+        Parameters
+        ----------
+        tree: ROOT.TTree
+            The ntuple 
+        planeid: int
+            The telescope plane ID
+        ismeas: bool
+            Whether this instance should deal with associated
+            measured hits (true) or fitted hits (false)
+        ref_plane_id: int
+            The plane ID of the Alibava-REF sensor
+        dut_plane_id: int
+            The plane ID of the Alibava-DUT sensor
+
+        Raises
+        ------
+        AssertionError
+            When the REF and DUT plane ID introduced are exactly
+            the same
+        RuntimeError
+            The plane index introduced does not belong to any
+            (checking the 'trk_hit_meas(|fit)_X_<planeID>' brach)
         """
         if ismeas:
             prefix = "trk_hit_meas"
         else:
             prefix = "trk_hit_fit"
-        # Improve!! Associate just a TBranch
+
         self.id = planeid
+        self.is_dut = (self.id == dut_plane_id)
+        self.is_ref = (self.id == ref_plane_id)
+        # A consistency check
+        if self.is_ref and self.is_dut:
+            raise AssertionError("The plane index for the DUT and the "\
+                    "REF Alibava sensor planes are exactly the same: {0}".format(dut_plane_id))
         # Check if there is any problem
         if len(filter(lambda br: br.GetName() == "{0}_X_{1}".format(prefix,self.id) ,tree.GetListOfBranches())) == 0:
             raise RuntimeError("The INDEX '{0}' does not identify any Telescope"\
@@ -198,11 +302,32 @@ class track_hits_plane_accessor(object):
     
     @property
     def n(self):
+        """The number of hit elements
+
+        Return
+        ------
+        int
+        """
         return self.x.size()
     
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
         if (x,z) are equal
+
+        Parameters
+        ----------
+        i: int
+            The hit index of this (self) instance to be 
+            compare
+        other: track_hits_plane_accesor instance (or any other instance
+            with a method 'z.__getitem__')
+            The other instance to compare with
+        j: int
+            The hit index of the 'other' instance
+
+        Return
+        ------
+        bool
         """
         return abs(self.x[i]-other.x[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
@@ -210,20 +335,41 @@ class track_hits_plane_accessor(object):
     def get_hits_with_same_track_indices(self,itrk):
         """Return the list of indices for those hits belonging 
         to the itrk-track
+
+        Parameters
+        ----------
+        itrk: int
+            The index of the track
+
+        Return
+        ------
+        list(int): The list of hits (indices) of the itrk-track
         """
         return filter(lambda i: self.track_index[i] == itrk,xrange(self.n))
 
     def get_hit_with_same_track_index(self,i,other):
-        """Return the index corresponding to 'other'
-        that has the same 'track_index' data member that the i-hit
+        """A track has a list of associated hits (either measured
+        or fitted). This function returns the index of the hit
+        of a different plane which belongs to the same track than
+        the i-hit of this instance.
 
         Parameters
         ----------
         i: int
             The index of the hit to check
         other: track_hits_plane_accessor
-            The instance to check for a hit with the same track 
-            index than the i-hit
+            The other plane to check
+
+        Return
+        ------
+        int: The corresponding hit-index of the other instance associated
+            to the same track
+
+        Raises
+        ------
+        RuntimeError
+            Whenever there is more than one element matched in
+            the other plane. 
         """
         matched = filter(lambda other_i: other.track_index[other_i] == self.track_index[i],\
                 xrange(other.n))
@@ -236,28 +382,100 @@ class track_hits_plane_accessor(object):
 
 
     def is_dut(self):
+        """Whether the plane corresponds to the Alibava DUT
         """
-        """
-        return self.id == DUTPLANE
+        return self.is_dut
     
     def is_ref(self):
+        """Whether the plane corresponds to the Alibava REF
         """
-        """
-        return self.id == REFPLANE
+        return self.is_ref
     
 
 class tracks_accessor(object):
     """Access to the TBranches contained in a 
     TTree created by the EUTelTreeCreator class from
     the https://github.com/duartej/eutelescope/ package.
+    
+    A track is defined as a straight line using 
+    a reference point (r0) and a vector director (v).
+    Any point of the track can be obtained with
+     x(t)=r0+v(t)
+    using the parameter t
+    Each track has a list of associated hits as well.
+
+    
+    Attributes
+    ----------
+    refid: int
+        The Alibava REF ID
+    dutid: int
+        The Alibava DUT ID
+    tel_planes: list(int)
+        The list of telescope planes
+    matched_hits: functor
+        See _matched_hits method
+    x0: float
+        The x-position of the reference point
+    y0: float
+        The y-position of the reference point
+    z0: float
+        The z-position of the reference point
+    z0: float
+        The z-position of the reference point
+    dxdz: float
+        The vector director (x component)
+    dydz: float
+        The vector director (y component)
+    telescope_measured_hits: list(track_hits_plane_accesor)
+        The telescope (measured) hits organized by planes
+    telescope_fitted_hits: list(track_hits_plane_accesor)
+        The telescope (fitted) hits organized by planes
+    dut_measured_hits: track_hits_plane_accesor
+        The DUT (measured hits), note that this data member
+        is only usable if the tracks were fitted in the 
+        Marlin processor using the DUT sensor as telescope
+        plane
+    dut_fitted_hits: track_hits_plane_accesor
+        The DUT (fitted hits), note that this data member
+        is only usable if the tracks were fitted in the 
+        Marlin processor using the DUT sensor as telescope
+        plane
+    ref_measured_hits: track_hits_plane_accesor
+        The REF (measured hits), note that this data member
+        is only usable if the tracks were fitted in the 
+        Marlin processor using the DUT sensor as telescope
+        plane
+    ref_fitted_hits: track_hits_plane_accesor
+        The REF (fitted hits), note that this data member
+        is only usable if the tracks were fitted in the 
+        Marlin processor using the DUT sensor as telescope
+        plane
     """
     def __init__(self,tree,tel_planes,ref_plane,dut_plane):
-        """
+        """Accessors for the branches related with the
+        telescope tracks.       
+        
         Parameters
         ----------
-         hits
+        tree: ROOT.TTree
+            The ntuple 
+        tel_planes: list(int)
+            The list of telescope planes ID
+        ref_plane_id: int
+            The plane ID of the Alibava-REF sensor
+        dut_plane_id: int
+            The plane ID of the Alibava-DUT sensor
+
+        Raises
+        ------
+        AssertionError
+            When the REF and DUT plane ID introduced are exactly
+            the same
+        RuntimeError
+            The plane index introduced does not belong to any
+            (checking the 'trk_hit_meas(|fit)_X_<planeID>' brach)
         """
-        # Improve!! Associate just a TBranch
         self.refid = ref_plane
         self.dutid = dut_plane
         self.tel_planes = tel_planes
@@ -286,17 +504,23 @@ class tracks_accessor(object):
         self.dydz = tree.trk_dydz
         # -- the associated hits
         # --- telescope
-        self.telescope_measured_hits = map(lambda i: track_hits_plane_accessor(tree,i,True),self.tel_planes)
-        self.telescope_fitted_hits = map(lambda i: track_hits_plane_accessor(tree,i,False),self.tel_planes)
+        self.telescope_measured_hits = map(lambda i: track_hits_plane_accessor(tree,i,True,self.refid,self.dutid),self.tel_planes)
+        self.telescope_fitted_hits = map(lambda i: track_hits_plane_accessor(tree,i,False,self.refid,self.dutid),self.tel_planes)
         # --- dut
-        self.dut_measured_hits = track_hits_plane_accessor(tree,self.dutid,True)
-        self.dut_fitted_hits = track_hits_plane_accessor(tree,self.dutid,False)
+        self.dut_measured_hits = track_hits_plane_accessor(tree,self.dutid,True,self.refid,self.dutid)
+        self.dut_fitted_hits = track_hits_plane_accessor(tree,self.dutid,False,self.refid,self.dutid)
         # --- ref
-        self.ref_measured_hits = track_hits_plane_accessor(tree,self.refid,True)
-        self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False)
+        self.ref_measured_hits = track_hits_plane_accessor(tree,self.refid,True,self.refid,self.dutid)
+        self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False,self.refid,self.dutid)
         
     @property
     def n(self):
+        """The number of tracks
+
+        Return
+        ------
+        int
+        """
         return self.x0.size()
 
     def _matched_hits(self,duthits,refhits,h):
@@ -367,12 +591,24 @@ class tracks_accessor(object):
             The index of the track
         z: float
             The z-position where to predict 
+        
+        Return
+        ------
+        (float,float): Predicted position at the z-plane
         """
         t = z-self.z0[i]
         return (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t)
 
 class processor(object):
-    def __init__(self):
+    """Results extractor. Histograms are defined and filled here
+    XXX MISSING DOC
+    """
+    def __init__(self,minst):
+        """ XXX MISSING DOC
+        Parameters
+        ----------
+        minst: metadata_container instance
+        """
         import ROOT
 
         # some info numbers
@@ -385,16 +621,16 @@ class processor(object):
         self.events_with_ref_no_tracks = 0
         self.events_with_ref_dut_tracks = 0
         # Some statistic histograms
-        self.residual_projection = { DUTPLANE: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-RESOLUTION[DUTPLANE],RESOLUTION[DUTPLANE]),
-                REFPLANE: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-RESOLUTION[REFPLANE],RESOLUTION[REFPLANE]) }
+        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.0*MM,2.0*MM),
+                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-2.*MM,2.*MM) }
         # -- histograms DUTS/REF
-        self.hmap = { DUTPLANE: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0,10.0,100,-10.0,10.0),
-                REFPLANE: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0,10.0,100,-10.0,10.0) }
-        self.hcharge = { DUTPLANE: ROOT.TH2F("charge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0,10.0,100,-10.0,10.0),
-                REFPLANE: ROOT.TH2F("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0,10.0,100,-10.0,10.0) }
+        self.hmap = { minst.dut_plane: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
+        self.hcharge = { minst.dut_plane: ROOT.TH2F("charge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
         # Correlations
-        self.hcorr_trkX = { DUTPLANE: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
-                REFPLANE: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
+        self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
+                minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
         self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
         self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
         # efficiendy
@@ -406,10 +642,31 @@ class processor(object):
                 [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
-    def draw_all_in_canvas():
+    #def draw_all_in_canvas():
+    #    """
+    #    """
+    #    import ROOT
+    def create_efficiency(self):
+        """Create the hit efficiency map using the total and pass
+        histograms
+        """
+        import ROOT
+        self.eff = ROOT.TEfficiency(self.hpass,self.htotal)
+        self.eff.SetName("sensor_efficiency")
+        self.eff.SetDirectory(0)
+        self._allhistograms.append(self.eff)        
+
+    def store_histos(self,filename):
         """
         """
         import ROOT
+        # Create the efficiency before recording them
+        self.create_efficiency()
+        # Store all the histograms
+        f=ROOT.TFile.Open(filename,"RECREATE")
+        for h in self._allhistograms:
+            h.Write()
+        f.Close()
 
     def fill_statistics(self,ndut,nref,tracks):
         """Fill some statistic related with the number of dut, 
@@ -488,11 +745,14 @@ class processor(object):
     def __str__(self):
         """Summarize the information
         """
-        m = "Events with DUT: {0} (eff: {1:.2f}%)\n".format(self.events_with_dut,float(self.events_with_dut)/float(self.total_events)*100.)
-        m+= "Events with REF: {0} (eff: {1:.2f}%)\n".format(self.events_with_ref,float(self.events_with_ref)/float(self.total_events)*100.)
-        m+= "\nEvents with DUT but no tracks: {0}\n".format(self.events_with_dut_no_tracks)
-        m+= "Events with REF but no tracks: {0}\n".format(self.events_with_ref_no_tracks)
-        m+= "Events with REF and DUT and tracks: {0}".format(self.events_with_ref_dut_tracks)
+        m = "|-------------------------------------------|\n"
+        m+= " Events with DUT: {0} (eff: {1:.2f}%)\n".format(self.events_with_dut,float(self.events_with_dut)/float(self.total_events)*100.)
+        m+= " Events with REF: {0} (eff: {1:.2f}%)\n".format(self.events_with_ref,float(self.events_with_ref)/float(self.total_events)*100.)
+        m+= "\n Events with DUT but no tracks: {0}\n".format(self.events_with_dut_no_tracks)
+        m+= " Events with REF but no tracks: {0}\n".format(self.events_with_ref_no_tracks)
+        m+= " Events with REF and DUT and tracks: {0}\n".format(self.events_with_ref_dut_tracks)
+        m+= "\n Total processed events: {0}\n".format(self.total_events)
+        m+= "|-------------------------------------------|"
 
         return m
 
@@ -509,9 +769,16 @@ def sensor_map_production(fname):
         Marlin framework). The filename MUST follow the standard 
         notation defined through the class 
         `alibavaSkifftools.SPS2017TB_metadata.filename_parser`
+
+    Raises
+    ------
+    IOError
+        Whenever the ROOT file is not present
     """
     import ROOT
     import timeit
+    import sys
+    import os
     from .SPS2017TB_metadata import filename_parser 
     from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
 
@@ -519,7 +786,12 @@ def sensor_map_production(fname):
     fp = filename_parser(fname)
     # Get the root file and the tree
     f = ROOT.TFile.Open(fname)
-    t = f.Get("events")
+    if not f or f.IsZombie():
+        raise IOError("Invalid or not found ROOT file '{0}'".format(fname))
+    try:
+        t = f.Get("events")
+    except ReferenceError:
+        raise ReferenceError("Invalid NTUPLE format at '{0}'".format(fname))
     # And obtain some metadata (ID of the sensors and sensors
     # resolutions)
     metadata = metadata_container(t,name_converter[fp.sensor_name])
@@ -533,9 +805,19 @@ def sensor_map_production(fname):
     tracks = tracks_accessor(t,[0,1,2,3,4],metadata.ref_plane,metadata.dut_plane)
     
     # Process the data
-    start_time = timeit.default_timer()
-    wtch = processor()
-    for _t in t:
+    #start_time = timeit.default_timer()
+    wtch = processor(metadata)
+    
+    nentries = t.GetEntries()
+    pointpb = float(nentries)/100.0
+    for i,_t in enumerate(t):
+        sys.stdout.write("\r\033[1;34mINFO\033[1;m -- Processing file '"+\
+                os.path.basename(fname)+" [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+        sys.stdout.flush()
         wtch.process(_t,tracks,ref,dut)
-    print timeit.default_timer()-start_time
-    #return wtch
+    print
+    #print timeit.default_timer()-start_time
+    print wtch
+    foutput = "sensor_maps_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
+    print "File created at '{0}'".format(foutput)
+    wtch.store_histos(foutput)
