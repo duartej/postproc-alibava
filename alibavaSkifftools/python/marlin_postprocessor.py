@@ -621,8 +621,8 @@ class processor(object):
         self.events_with_ref_no_tracks = 0
         self.events_with_ref_dut_tracks = 0
         # Some statistic histograms
-        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.0*MM,2.0*MM),
-                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-2.*MM,2.*MM) }
+        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-0.5*MM,0.5*MM),
+                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-0.5*MM,0.5*MM) }
         # -- histograms DUTS/REF
         self.hmap = { minst.dut_plane: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
                 minst.ref_plane: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
