@@ -481,6 +481,39 @@ if __name__ == '__main__':
     fm_parser.add_argument('-o','--output',dest='output',action='store',\
             help="The merged file [Default: merged_output.slcio")
     fm_parser.set_defaults(which='merge_eore',output='merged_output.slcio')
+    
+    # -- Subparser: Post-processing and analysis of the ROOT files created by 
+    #               the `fortythieves` executable
+    usage_an  = "Post-processing of the ROOT files created by the 'fortythieves' "
+    usage_an += "executable, including cluster finding, position and sensor "
+    usage_an += "characteristics analysis (eta distributions, charge distributions, ...) "
+    
+    an_parser = subparsers.add_parser("sensor_analysis",description=usage_an)
+    an_parser.add_argument('root_file',help="The `fortythieves` ROOT file, "\
+            " containing the pedestal and calibration pre-processing")
+    an_parser.add_argument('-c', '--chip-selection',dest='chip_selection',\
+            type=int,help="Manually select the chip to process. This option has "
+            "precedence over the chip extraction by using the ROOT file name")
+    an_parser.add_argument('-t','--time-window', nargs=2,dest='time_window',\
+            type=float,help="The TDC time window to cut [Default: 0 100]")
+    an_parser.add_argument('--snr-seed',dest='snr_seed',action='store',type=float,\
+            help="The Signal to Noise cut to be considered a channel as a seed"\
+            " of a cluster [Default: 5]")
+    an_parser.add_argument('--snr-neighbour',dest='snr_neighbour',action='store',type=float,\
+            help="The Signal to Noise cut to be considered a channel into a cluster"\
+            " [Default: 3]")
+    an_parser.add_argument('-m',"--masked-channels",nargs="+",dest='masked_channels',type=int,\
+            action='store',help="Manual masking channels")
+    an_parser.add_argument("--no-automask-channels",dest='noautomask',action='store_true',\
+            help="Change the default behaviour of automasking channels (see --automask-criterium)")
+    an_parser.add_argument("--automask-criterium",dest='automask_criterium',action='store',type=float,\
+            help="The criterium to used to decide if a channel is noisy or not. "\
+            "A noisy channel is defined as |Noise_i - <Noise>| > X sigma [Default: 2.5]")
+    an_parser.add_argument("--cross-talk-correction",dest='xtcorrection',action='store',type=int,\
+            help="The number of iterations needed for the FIR filter when applying the inductive"\
+            " cross-talk correction. A value of 0, no correction is applied (default)")
+    an_parser.set_defaults(which='sensor_analysis',snr_seed=5,snr_neighbour=3,\
+            time_window=[0.0,100.0],automask_criterium=2.5,xtcorrection=0)
 
     args = parser.parse_args()
     
@@ -499,4 +532,5 @@ if __name__ == '__main__':
         steering_filename=merge_files(args.lcio_files,args.output)
         print "\033[1;34mTo create the merged file, run: \033[1;m\n"\
                 " \033[1;29mMarlin {0}\033[1;m".format(steering_filename)
-
+    elif args.which == 'sensor_analysis':
+        print args
