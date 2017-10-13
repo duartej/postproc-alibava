@@ -90,7 +90,9 @@ class alibava_analysis(object):
         """
         return self._lib.ioft_get_entries(self._ioft)
     
-    def process(self,i):
+    # XXX: Should be not exposed? Given that it is used by
+    # the analysis_sensor class? (see find_clusters)
+    def process_event(self,i):
         """
         """
         return self._lib.ioft_process(self._ioft,i)
@@ -287,3 +289,23 @@ class alibava_analysis(object):
         self._lib.ioft_initialize(self._ioft)
         # And mask the noisy channels 
         self._lib.aa_mask_channels(self._sensor_analysis)
+
+    def process(self,i=-1):
+        """Processing the event, i.e finding cluster algorithm 
+        in action.
+        XXX DOC
+
+        Parameters
+        ----------
+        i: int, optional
+            The entry to process, if -1 means all events will
+            be processed
+        """
+        if i==-1:
+            evts = xrange(self.get_entries())
+        else:
+            evts = [ i ]
+        for k in evts:
+            # XXX MEssage processing
+            self._lib.aa_find_clusters(self._sensor_analysis,k)
+

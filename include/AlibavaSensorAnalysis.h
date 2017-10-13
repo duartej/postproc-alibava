@@ -20,6 +20,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <memory>
 
 // forward
 class IOFortythieves;
@@ -62,7 +63,7 @@ class AlibavaSensorAnalysis
         void mask_channels();
 
         // Finding algorithm
-        StripCluster find_clusters(const std::vector<float> & adc_corrected);
+        std::vector<std::unique_ptr<StripCluster> > find_clusters(const int & event_number);
 
         // Obtain whetere a channel number is masked or not
         bool is_channel_masked(const int & ich);

@@ -390,6 +390,8 @@ def sensor_analysis(args):
     an_inst.configure(**configurables)
     ## -- initialize data and algorithms
     an_inst.initialize()
+    ## Process all events and store results
+    an_inst.process()
 
 
 

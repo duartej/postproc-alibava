@@ -180,9 +180,168 @@ void AlibavaSensorAnalysis::mask_channels()
 }
 
 
-StripCluster AlibavaSensorAnalysis::find_clusters(const std::vector<float> & /*adc_corr*/)
+std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters(const int & event_number)
 {
-    return StripCluster();
+    // Get the data at the entry
+    // XXX: this function assumes a initialization of the IOFortythieves
+    //      Probably protect this with a functor...
+    _ft->process(event_number);
+    
+    // Check which channels we can added to a cluster,
+    // obviously not the ones masked. 
+    // ------------------------------------------------
+    // Note that all channels are set to true initially
+    std::vector<bool> channel_can_be_used(_ft->adc_data().size(),true);
+
+    // Now, mask channels that cannot pass the neighbour cut, 
+    // add the *channel numbers* as seed candidate if it pass SeedSNRCut
+    std::vector<int> seedCandidates;
+    for(int ichan=0; ichan<static_cast<int>(_ft->adc_data().size()); ++ichan)
+    {
+        // Not use this channel if is already masked
+        if(this->is_channel_masked(ichan))
+        {
+            channel_can_be_used[ichan]=false;
+            continue;
+        }
+        // if it is here, it is not masked, so ..
+        const float snr = (_polarity*_ft->adc_data()[ichan])/_ft->noise()[ichan];
+	// mask channels that cannot pass neighbour cut
+        // therefore, we don't need to check it in the next loop
+        if(snr < _snr_neighbour)
+        {
+            channel_can_be_used[ichan]=false;
+        }
+        else if(snr > _snr_seed) 
+        {
+            seedCandidates.push_back(ichan);
+        }
+    }
+    // sort seed channels according to their SNR, highest comes first!
+    std::sort(seedCandidates.begin(),seedCandidates.end(),
+            [&] (const int & ichanLeft,const int & ichanRight) 
+            { return ((_polarity*_ft->adc_data()[ichanLeft])/_ft->noise()[ichanLeft] > 
+                (_polarity*_ft->adc_data()[ichanRight])/_ft->noise()[ichanRight]); });
+    
+    // Define some functors to be used to provide order to the cluster
+    // finding loop (first left, then right)
+    // -- the pseudo-iterator (with respect the central seed)
+    auto low_strip_functor = [] (int & _index) { --_index; };
+    auto high_strip_functor = [] (int & _index) { ++_index; };
+    std::vector<std::function<void (int&)> > 
+        next_strip_functor{ low_strip_functor, high_strip_functor };
+    
+    // -- the definition of edge of the chip
+    auto low_isEdge_functor = [&] (const int & _index) { return (_index < 0); }; 
+    auto high_isEdge_functor = [&] (const int & _index) { return (_index >= int(channel_can_be_used.size())); }; 
+    std::vector<std::function<bool (const int &)> >
+        isEdge_functor{ low_isEdge_functor, high_isEdge_functor };
+    // -- and the initial neighbour to the central seed. This 
+    //    vector must be used as: seedChan+initial_neighbour[k]
+    const std::vector<int> initial_neighbour = { -1, 1 };
+        
+    // Get the pointer to the histo
+    //TH2F * hSeedNeighbours = dynamic_cast<TH2F*>(_rootObjectMap[getHistoNameForChip(_neighbourgsHistoName,chipnum)]);
+
+    // now form clusters starting from the seed channel 
+    // that has highest SNR, and store them into a vector
+    std::vector<std::unique_ptr<StripCluster> > clusterVector;
+    for(const int & seedChan: seedCandidates)
+    {
+        // if this seed channel was used in another cluster or
+        // is masked, skip it
+	if(!channel_can_be_used[seedChan])
+        {
+            continue;
+        }
+        // Fill the cluster data
+        std::unique_ptr<StripCluster> acluster(new StripCluster);
+        acluster->set_polarity(_polarity);
+        //acluster.set_eta_seed( this->calculateEta(trkdata,seedChan) );
+        // FIXME:: Really need it?
+        acluster->set_sensitive_direction(0);
+	// add seed channel to the cluster
+        acluster->add(seedChan, _ft->adc_data()[seedChan]);
+        // mask seed channel so no other cluster can use it!
+        channel_can_be_used[seedChan]=false;
+        
+        // We will check if one of the neighbours is not bonded,
+        // i.e., there is no connexion ... ??? or it means continuity??
+        // If there is at least one non-bonded channel, the entire
+        // cluster is not used
+        bool there_is_non_bonded_channel = false;
+
+        // Search for hit inclusion, (left direction, right direction)
+        for(unsigned int k=0; k<next_strip_functor.size(); ++k)
+        {
+            // Find the initial neighbour 
+            const int ichanInitial=seedChan+initial_neighbour[k];
+
+            // start the inclusion of neighbours
+            for(int ichan=ichanInitial;  ; next_strip_functor[k](ichan))
+            {
+                // first, check if the strip is in the edge
+                if(isEdge_functor[k](ichan))
+                {
+                    // The neighbour is not bonded
+                    // XXX: Check this, I'm not sure ...
+                    there_is_non_bonded_channel = true;
+                    // break the loop
+                    break;
+                }
+                // or if the channel is masked
+                if(this->is_channel_masked(ichan))
+                {
+                    // The neighbour is not bonded
+                    // XXX: Check this, I'm not sure ...
+                    there_is_non_bonded_channel=true;
+                    break;
+                }
+                // Fill the neighbour histo (left < 0; right >0)
+                //hSeedNeighbours->Fill(ichan-seedChan,dataVec[ichan]/dataVec[seedChan]);
+
+                // And the channel if possible
+                if(channel_can_be_used[ichan])
+                {
+                    acluster->add(ichan, _ft->adc_data()[ichan]);
+                    // and mask it so that it will not be added to any other cluster
+                    channel_can_be_used[ichan]=false;
+                }
+                else
+                {
+                    // if it is not possible to add it, 
+                    // the cluster is over (and don't found any non-bonded channel)
+                    break;
+                }
+            }
+        }
+	
+	// now if there is no neighbour not bonded
+	if(there_is_non_bonded_channel == false)
+        {
+            // fill the histograms and add them to the cluster vector
+            //this->fillHistos(acluster);
+            clusterVector.push_back(std::move(acluster));
+        }
+
+        // Cross-talk diagnosis plot
+        /*if(acluster.getClusterSize() == 1)
+        {
+            for(int ineigh=1; ineigh < _nNeighbourgs && ineigh > 0 && ineigh < ALIBAVA::NOOFCHANNELS; ++ineigh)
+            {
+                // Be sure the neighbourgs are in equal conditions 
+                // (no seed next-to-neighbourg)
+                if(std::find_if(seedCandidates.begin(),seedCandidates.end(), 
+                            [&seedChan,&ineigh] (const int & ch) { return (ch == seedChan-ineigh-1 || ch == seedChan+ineigh+1); }) != seedCandidates.end()) 
+                {
+                   // Found another cluster/seed too close
+                   break;
+                }
+                hSeedNeighbours->Fill(ineigh,(dataVec[seedChan-ineigh]-dataVec[seedChan+ineigh])/dataVec[seedChan]);
+            }
+        }*/
+    }
+    return clusterVector;
 }
 
 
@@ -248,6 +407,12 @@ extern "C"
     // ---- Masking channels (part of the initialization of the
     // algorithm)
     void aa_mask_channels(AlibavaSensorAnalysis * aa_inst) { aa_inst->mask_channels(); }
+    // ---- The workhorse class: process all events, finding clusters and storing the results
+    void aa_find_clusters(AlibavaSensorAnalysis * aa_inst, int evt)
+    {
+        std::vector<std::unique_ptr<StripCluster> > theclusters(aa_inst->find_clusters(evt));
+        //aa_inst->store_event(theclusters);
+    }
 #ifdef __cplusplus
 }
 #endif
