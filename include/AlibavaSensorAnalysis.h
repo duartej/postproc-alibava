@@ -29,14 +29,32 @@ class AlibavaSensorAnalysis
     public:
         AlibavaSensorAnalysis(IOFortythieves * io_ft);
         AlibavaSensorAnalysis() = delete;
-        ~AlibavaSensorAnalysis() { ; }
+        ~AlibavaSensorAnalysis();
 
         // Configuration functions
-        inline void configure_time_cut(const float & t0,const float & t1) { _tdc_t0 = t0; _tdc_t1 = t1; }
+        inline void configure_polarity(const int & polarity) { _polarity = polarity; }
+        inline void configure_time_cut(const float & t0,const float & t1) { _tdc_cut[0] = t0; _tdc_cut[1] = t1; }
         inline void configure_masked_channels(const std::vector<int> & masked_channels) 
-                                { _masked_channels = new std::vector<int>(masked_channels); }
+        { 
+            if(_masked_channels != nullptr)
+            {
+                _masked_channels->resize(0);
+                _masked_channels->assign(masked_channels.begin(),masked_channels.end());
+            }
+            else
+            {
+                _masked_channels = new std::vector<int>(masked_channels); 
+            }
+        }
         inline void configure_snr_seed(const float & snr_min) { _snr_seed = snr_min; }
         inline void configure_snr_neighbour(const float & snr_min) { _snr_neighbour = snr_min; }
+
+        // Getters 
+        inline int get_polarity() const { return _polarity; }
+        inline const std::vector<float> & get_time_cut() const { return _tdc_cut; }
+        inline const std::vector<int> * get_masked_channels() const { return _masked_channels; }
+        inline float get_snr_seed() const { return _snr_seed; }
+        inline float get_snr_neighbour() const { return _snr_neighbour; }
         
         // Finding algorithm
         StripCluster find_clusters(const std::vector<float> & adc_corrected);
@@ -46,9 +64,10 @@ class AlibavaSensorAnalysis
         // The input data
         IOFortythieves * _ft;
 
+        // Signal polarity of the sensor
+        int _polarity;
         // TDC time cut
-        float _tdc_t0;
-        float _tdc_t1;
+        std::vector<float> _tdc_cut;
         // Masked channels
         std::vector<int> * _masked_channels;
         // Seed and neighbour cuts for the cluster finding
