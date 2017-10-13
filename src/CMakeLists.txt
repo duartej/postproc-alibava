@@ -1,7 +1,7 @@
 # Some useful libraries
 add_library(IOManagersAlibava SHARED IOManager.cxx IOAlibavaReader.cxx AlibavaPostProcessor.cxx AlibavaDiagnosis.cxx)
 # The fortythieves post-processor library
-add_library(AlibavaSensorAnalysis SHARED IOFortythieves.cxx)
+add_library(AlibavaSensorAnalysis SHARED IOFortythieves.cxx AlibavaSensorAnalysis.cxx StripCluster.cxx)
 
 # Make sure the compiler can find include files for the library
 # when other libraries or executables link to IOManager
