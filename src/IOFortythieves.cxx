@@ -145,8 +145,9 @@ void IOFortythieves::initialize()
 
 void IOFortythieves::process(const int & i)
 {
-    // Recall that the Events treee is friend of this,
+    // Recall that the Events tree is friend of this,
     _trees["postproc_Events"]->GetEntry(i);
+    // Now all the Event-related data-members are filled
 }
 
 // C-Wrapper for the python use with ctypes

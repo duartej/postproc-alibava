@@ -52,6 +52,7 @@ class alibava_analysis(object):
         self._lib.aa_configure_polarity.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
         self._lib.aa_configure_time_cut.argtypes = [ ctypes.c_void_p, ctypes.c_float, ctypes.c_float ]
         self._lib.aa_configure_masked_channels.argtypes = [ ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.c_int ]
+        self._lib.aa_configure_mask_criterium.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
         self._lib.aa_configure_snr_seed.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
         self._lib.aa_configure_snr_neighbour.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
         # -- getters of configuration member
@@ -63,10 +64,15 @@ class alibava_analysis(object):
         self._lib.aa_number_masked_channels.restype = ctypes.c_int
         self._lib.aa_masked_channels_getter.argtype = [ ctypes.c_void_p ]
         self._lib.aa_masked_channels_getter.restype = ctypes.POINTER(ctypes.c_int)
+        self._lib.aa_mask_criterium_getter.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_mask_criterium_getter.restype = ctypes.c_float
         self._lib.aa_snr_seed_getter.argtypes = [ ctypes.c_void_p ]
         self._lib.aa_snr_seed_getter.restype = ctypes.c_float
         self._lib.aa_snr_neighbour_getter.argtypes = [ ctypes.c_void_p ]
         self._lib.aa_snr_neighbour_getter.restype = ctypes.c_float
+
+        # -- modifiers
+        self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p ]
 
         # The objects
         self._ioft              = self._lib.ioft_new(filename,chip)
@@ -79,12 +85,6 @@ class alibava_analysis(object):
         self._lib.ioft_delete(self._ioft)
     
     # -- Functions related with IOFortythieves
-    def initialize(self):
-        """Wrapper to the initialization:
-        The noise, pedestal and calibration data are filled
-        """
-        self._lib.ioft_initialize(self._ioft)
-
     def get_entries(self):
         """
         """
@@ -96,17 +96,8 @@ class alibava_analysis(object):
         return self._lib.ioft_process(self._ioft,i)
     
     # -- Functions related with AlibavaSensorAnalysis
-    #@callit_once
-    def set_polarity(self,p):
-        """Set the signal polarity of this sensor
-
-        Parameters
-        ----------
-        t1: int
-            The signal polarity, -1|+1
-        """
-        self._lib.aa_configure_polarity(self._sensor_analysis,p)
-    
+    # ==============================================
+    # Configurables
     @property
     def polarity(self):
         """Get the signal polarity, using the C-function 
@@ -120,20 +111,18 @@ class alibava_analysis(object):
         """
         # Get the pointer object and convert it to a 2-tuple
         return self._lib.aa_polarity_getter(self._sensor_analysis)
-
-    #@callit_once
-    def set_time_cut(self,t0,t1):
-        """Set the TDC time cut 
+    @polarity.setter
+    def polarity(self,p):
+        """Set the signal polarity of this sensor
 
         Parameters
         ----------
-        t0: float
-            The minimum TDC time
-        t1: float 
-            The maximum TDC time
+        t1: int
+            The signal polarity, -1|+1
         """
-        self._lib.aa_configure_time_cut(self._sensor_analysis,t0,t1)
+        self._lib.aa_configure_polarity(self._sensor_analysis,p)
     
+
     @property
     def time_cut(self):
         """Get the TDC time cuts, using the C-function 
@@ -148,8 +137,40 @@ class alibava_analysis(object):
         fpointer = self._lib.aa_time_cut_getter(self._sensor_analysis)
         return (fpointer[0],fpointer[1])
 
-    #@callit_once
-    def set_masked_channels(self,masked_chan):
+    @time_cut.setter
+    def time_cut(self,t0,t1):
+        """Set the TDC time cut 
+
+        Parameters
+        ----------
+        t0: float
+            The minimum TDC time
+        t1: float 
+            The maximum TDC time
+        """
+        self._lib.aa_configure_time_cut(self._sensor_analysis,t0,t1)
+    
+    @property
+    def masked_channels(self):
+        """Get the masked channels, using the C-function (and 
+        therefore using the value contained in the data member
+        of the C++ class)
+
+        Return
+        ------
+        masked_channels: n-tuple(int) | None
+        """
+        # First obtain the number of channels, if any
+        n = self._lib.aa_number_masked_channels(self._sensor_analysis)
+        if n == 0 :
+            return None
+        # Obtain the pointer
+        mch_pointer = self._lib.aa_masked_channels_getter(self._sensor_analysis)
+        # And now convert it to a list (before return the n-tuple
+        return tuple(map(lambda i: mch_pointer[i] ,xrange(n)))
+    
+    @masked_channels.setter
+    def masked_channels(self,masked_chan):
         """User defined masked channels
 
         Parameters
@@ -173,26 +194,50 @@ class alibava_analysis(object):
         self._lib.aa_configure_masked_channels(self._sensor_analysis,mch_arr,len(masked_chan))
     
     @property
-    def masked_channels(self):
-        """Get the masked channels, using the C-function (and 
-        therefore using the value contained in the data member
-        of the C++ class)
+    def automask_criterium(self):
+        """Get the masked channels criterium used, i.e. how many sigmas
+        away from the mean noise, a channel is to be considered a noisy 
+        channel. Note that this setter is using the C-function (and 
+        therefore using the value contained in the data member of the 
+        C++ class):
+        The noisy channel condition is given by:
+
+        .. math:: i-strip is noisy \Leftrightarrow |N_{i} - \langle Noise\\rangle| > X\sigma
 
         Return
         ------
-        masked_channels: n-tuple(int) | None
+        float: The X 
         """
-        # First obtain the number of channels, if any
-        n = self._lib.aa_number_masked_channels(self._sensor_analysis)
-        if n == 0 :
-            return None
-        # Obtain the pointer
-        mch_pointer = self._lib.aa_masked_channels_getter(self._sensor_analysis)
-        # And now convert it to a list (before return the n-tuple
-        return tuple(map(lambda i: mch_pointer[i] ,xrange(n)))
-    
-    #@callit_once 
-    def set_snr_seed(self,snr):
+        # Get the pointer object and convert it to a 2-tuple
+        return self._lib.aa_mask_criterium_getter(self._sensor_analysis)
+
+    @automask_criterium.setter
+    def automask_criterium(self,sigma):
+        """Set the masked channels criterium used, i.e. how many sigmas
+        away from the mean noise, a channel is to be considered a noisy 
+        channel. Note that this setter is using the C-function (and 
+        therefore using the value contained in the data member of the 
+        C++ class):
+        The noisy channel condition is given by:
+
+        .. math:: i-strip is noisy \Leftrightarrow |N_{i} - \langle Noise\\rangle| > X\sigma
+
+        Parameters
+        ----------
+        sigma: float
+        """
+        self._lib.aa_configure_mask_criterium(self._sensor_analysis,sigma)
+
+    @property
+    def snr_seed(self):
+        """Get the Signal-to-Noise Ratio (SNR) for a seed-cluster
+        candidate, using the C-function (and therefore using the
+        value contained in the data member of the C++ class)
+        """
+        return self._lib.aa_snr_seed_getter(self._sensor_analysis)
+
+    @snr_seed.setter
+    def snr_seed(self,snr):
         """Set the Signal-to-Noise Ratio (SNR) for a seed-cluster
         candidate
 
@@ -204,15 +249,14 @@ class alibava_analysis(object):
         self._lib.aa_configure_snr_seed(self._sensor_analysis,snr)
 
     @property
-    def snr_seed(self):
-        """Get the Signal-to-Noise Ratio (SNR) for a seed-cluster
+    def snr_neighbour(self):
+        """Get the Signal-to-Noise Ratio (SNR) for a strip
         candidate, using the C-function (and therefore using the
         value contained in the data member of the C++ class)
         """
-        return self._lib.aa_snr_seed_getter(self._sensor_analysis)
-
-    #@callit_once 
-    def set_snr_neighbour(self,snr):
+        return self._lib.aa_snr_neighbour_getter(self._sensor_analysis)
+    @snr_neighbour.setter
+    def snr_neighbour(self,snr):
         """Set the Signal-to-Noise Ratio (SNR) for a strip candidate
         to be included in a cluster
 
@@ -223,10 +267,23 @@ class alibava_analysis(object):
         """
         self._lib.aa_configure_snr_neighbour(self._sensor_analysis,snr)
     
-    @property
-    def snr_neighbour(self):
-        """Get the Signal-to-Noise Ratio (SNR) for a strip
-        candidate, using the C-function (and therefore using the
-        value contained in the data member of the C++ class)
+    # ==============================================
+    # Methods 
+    def configure(self,**cfg):
         """
-        return self._lib.aa_snr_neighbour_getter(self._sensor_analysis)
+        """
+        for key,val in cfg.iteritems():
+            if hasattr(self,key):
+                setattr(self,key,val)
+        #self.print_configuration()
+    
+    def initialize(self):
+        """Wrapper to the initialization of the 
+        data and the algorithms
+        The noise, pedestal and calibration data are filled
+        and the masked channels are set
+        """
+        # Initialize the data
+        self._lib.ioft_initialize(self._ioft)
+        # And mask the noisy channels 
+        self._lib.aa_mask_channels(self._sensor_analysis)
