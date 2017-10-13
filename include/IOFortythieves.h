@@ -41,27 +41,19 @@ class IOFortythieves
         // Process the event entry
         void process(const int & i);
         // Get the total entries for the Events tree
-        inline int get_entries() const { return _entries; };
+        inline int get_entries() const { return _entries; }
 
         // Getter for the noise vector 
-        inline const std::vector<float> & noise() const { return _noise; };
-        inline const std::vector<float> & pedestal() const { return _pedestal; };
-        inline const std::vector<float> & calibration() const { return _calibration; };
+        inline const std::vector<float> & noise() const { return _noise; }
+        inline const std::vector<float> & pedestal() const { return _pedestal; }
+        inline const std::vector<float> & calibration() const { return _calibration; }
 
         // Getters for event-related 
-        inline int event_number() const { return _event_number; };
-        inline int run_number() const { return _run_number; };
-        inline float event_time() const { return _event_time; };
-        inline float temperature() const { return _temperature; };
+        inline int event_number() const { return _event_number; }
+        inline int run_number() const { return _run_number; }
+        inline float event_time() const { return _event_time; }
+        inline float temperature() const { return _temperature; }
         inline const std::vector<float> & adc_data() const { return *_adc_data; }
-
-        // Accessor for plain branch variable
-        /*template <class T> 
-            const  T & get(const std::string & variable);
-        // Accessor for vector-like variable
-        template <class T>
-            const T & get(const std::string & variable, const int & index);
-        */
 
     private:
         // The current beetle
@@ -91,7 +83,7 @@ class IOFortythieves
         // Note that this vector provides the number of electrons
         // which corresponds to a ADC (per channel)
         std::vector<float> _calibration;
-
 };
+
 
 #endif

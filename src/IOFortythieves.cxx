@@ -42,7 +42,7 @@ IOFortythieves::IOFortythieves(const std::string & filename,const int & chip) :
     // Create the root file
     _file = TFile::Open(filename.c_str());
     // XXX: Check validity of the pointer
-
+    
     // And obtain the relevant trees
     for(auto & treename: _TREENAMES)
     {
@@ -55,13 +55,15 @@ IOFortythieves::IOFortythieves(const std::string & filename,const int & chip) :
         // XXX: Check validity of the pointer
         // De-activate branches (afterwards activate only the used ones)
         _trees[treename]->SetBranchStatus("*",0);
-    }
+   }
+    
     // keep track of the branches which are going to be used
     std::map<std::string,std::vector<std::string> > used_branches;
     used_branches["Events"].push_back("eventTime");
     used_branches["Events"].push_back("temperature");
     used_branches["Events"].push_back("eventNumber");
     used_branches["Events"].push_back("runNumber");
+
     // Remember the ROOT file notation for the chip is chip+1 (it has beetle 1 and 2)
     const std::string adc_data_str("postproc_data_beetle"+std::to_string(chip+1));
     used_branches["postproc_Events"].push_back(adc_data_str);
@@ -146,3 +148,17 @@ void IOFortythieves::process(const int & i)
     // Recall that the Events treee is friend of this,
     _trees["postproc_Events"]->GetEntry(i);
 }
+
+// C-Wrapper for the python use with ctypes
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+    IOFortythieves * ioft_new(const char * fn, int chip) { return new IOFortythieves(fn,chip); }
+    void ioft_delete(IOFortythieves * io_ft) { io_ft->~IOFortythieves(); }
+    void ioft_initialize(IOFortythieves * io_ft) { io_ft->initialize(); }
+    void ioft_process(IOFortythieves * io_ft, int i) { io_ft->process(i); }
+    int ioft_get_entries(IOFortythieves * io_ft) { return io_ft->get_entries(); }
+#ifdef __cplusplus
+}
+#endif
