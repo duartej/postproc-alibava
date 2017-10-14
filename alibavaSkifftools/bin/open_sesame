@@ -390,11 +390,10 @@ def sensor_analysis(args):
     an_inst.configure(**configurables)
     ## -- initialize data and algorithms
     an_inst.initialize()
+    ## Initialize persistifier
+    an_inst.book_results(args.root_file.replace(".root","_analysis_cluster.root"))
     ## Process all events and store results
     an_inst.process()
-
-
-
 
 
 if __name__ == '__main__':

@@ -1,5 +1,7 @@
 #!/usr/bin/env python
-"""Python wrapper to the AlibavaSensorAnalysis C-code. 
+"""Alibava cluster analysis from a ROOT file created using
+the `fortythieves`. 
+Python wrapper to the AlibavaSensorAnalysis C-code. 
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
@@ -32,6 +34,9 @@ class alibava_analysis(object):
         import ctypes
 
         # some useful attributes
+        # -- whether or not the results should be stored in a file
+        #    using the IOASAResults class
+        self._store_results = False
 
         # Library
         self._lib = ctypes.cdll.LoadLibrary("libAlibavaSensorAnalysis.so")
@@ -48,6 +53,12 @@ class alibava_analysis(object):
         self._lib.aa_new.restype = ctypes.c_void_p
         self._lib.aa_new.argtypes = [ ]
         self._lib.aa_delete.argtypes = [ ctypes.c_void_p ]
+        # All involved types for the IOASAResults
+        self._lib.ioresults_new.restye   = ctypes.c_void_p
+        self._lib.ioresults_new.argtypes = [ ctypes.c_char_p ]
+        self._lib.ioresults_delete.argtypes = [ ctypes.c_void_p ]
+        self._lib.ioresults_book_tree.argtypes = [ ctypes.c_void_p ]
+        self._lib.ioresults_fill_tree.argtypes = [ ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p ]
         # -- some setters
         self._lib.aa_configure_polarity.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
         self._lib.aa_configure_time_cut.argtypes = [ ctypes.c_void_p, ctypes.c_float, ctypes.c_float ]
@@ -75,14 +86,17 @@ class alibava_analysis(object):
         self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
 
         # The objects
-        self._ioft              = self._lib.ioft_new(filename,chip)
-        self._sensor_analysis   = self._lib.aa_new()
+        self._ioft            = self._lib.ioft_new(filename,chip)
+        self._sensor_analysis = self._lib.aa_new()
+        self._results         = None 
 
     def __del__(self):
         """Freeing memory by calling the destructor function
         """
         self._lib.aa_delete(self._sensor_analysis)
         self._lib.ioft_delete(self._ioft)
+        if self._store_results:
+            self._lib.ioresults_delete(self._results)
     
     # -- Functions related with IOFortythieves
     def get_entries(self):
@@ -270,9 +284,12 @@ class alibava_analysis(object):
         self._lib.aa_configure_snr_neighbour(self._sensor_analysis,snr)
     
     # ==============================================
-    # Methods 
+    # Main methods
     def configure(self,**cfg):
-        """
+        """Configure the ...
+        
+        Parameters
+        ----------
         """
         for key,val in cfg.iteritems():
             if hasattr(self,key):
@@ -280,15 +297,29 @@ class alibava_analysis(object):
         #self.print_configuration()
     
     def initialize(self):
-        """Wrapper to the initialization of the 
-        data and the algorithms
-        The noise, pedestal and calibration data are filled
-        and the masked channels are set
+        """Wrapper to the initialization of the data and
+        the algorithms. The noise, pedestal and calibration
+        data are filled and the masked channels are set.
         """
         # Initialize the data
         self._lib.ioft_initialize(self._ioft)
         # And mask the noisy channels 
         self._lib.aa_mask_channels(self._sensor_analysis,self._ioft)
+
+    def book_results(self,filename):
+        """Wrapper to the storage manager to store the analized
+        data: book and prepare the output ROOT file
+
+        Parameters
+        ----------
+        filename: str
+            The name of the output ROOT file
+        """
+        # instantiate the results data member and book the tree
+        # XXX need status flag??
+        self._results = self._lib.ioresults_new(filename)
+        self._lib.ioresults_book_tree(self._results)
+        self._store_results = True
 
     def process(self,i=-1):
         """Processing the event, i.e finding cluster algorithm 
@@ -301,12 +332,26 @@ class alibava_analysis(object):
             The entry to process, if -1 means all events will
             be processed
         """
+        import sys
+
+        # If there is a results instance booked
+        if self._store_results:
+            analyze_event=lambda: self._lib.ioresults_fill_tree(self._results,self._ioft,self._sensor_analysis)
+        else:
+            analyze_event=lambda: self._lib.aa_find_clusters(self._sensor_analysis,self._ioft)
+        # Whether or not process all the events
         if i==-1:
             evts = xrange(self.get_entries())
         else:
             evts = [ i ]
-        for k in evts:
-            # XXX MEssage processing
-            self.process_event(k)
-            self._lib.aa_find_clusters(self._sensor_analysis,self._ioft)
 
+        point = float(self.get_entries())/100.0
+        for k in evts:
+            # Progress bar 
+            sys.stdout.write("\r\033[1;34mINFO\033[1;m Alibava cluster analysis "+\
+                    "[ "+"\b"+str(int(float(k)/point)).rjust(3)+"%]")
+            sys.stdout.flush()
+            self.process_event(k)
+            analyze_event()
+        print
+    

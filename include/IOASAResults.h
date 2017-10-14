@@ -19,6 +19,7 @@
 
 // forward declarations
 class AlibavaSensorAnalysis;
+class IOFortythieves;
 class TFile;
 class TTree;
 
@@ -33,7 +34,7 @@ class IOASAResults
         void book_tree();
 
         // Tree filling
-        void fill_tree(const AlibavaSensorAnalysis * aa_inst);
+        void fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnalysis * aa_inst);
 
     private:
         TFile *_file; 
@@ -43,6 +44,7 @@ class IOASAResults
         // -- Simple elements
         int _event_number;
         int _polarity;
+        int _cluster_number;
         float _event_time;
         float _temperature;
         // -- int vectors
@@ -55,12 +57,14 @@ class IOASAResults
         std::vector<float> * _cluster_eta;
         // -- maps for cluster-dependent variable
         //    cluster Id: vector
-        //std::map<int,std::vector<float> > * _cluster_channels;
+        std::map<int,std::vector<float> > * _cluster_channels;
 
-        // Helper branches
-        std::vector<std::vector<int> *> _branches_int;
-        // Helper branches
-        std::vector<std::vector<float> *> _branches_float;
+        // Helper vector to easy and speed up common and
+        // rutinary steps
+        // -- for int vectos
+        std::vector<std::vector<int> **> _branches_int;
+        // -- for float
+        std::vector<std::vector<float> **> _branches_float;
 
         // clear vectors members before fill them
         void clear_variables();

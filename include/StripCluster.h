@@ -29,6 +29,9 @@ class StripCluster
         void add(const int & channel, const float & adc);
         // Getters
         inline unsigned int size() const { return _channels.size(); }
+        // Channels
+        inline float channels(const int & element_index) { return _channels[element_index]; }
+        // Charge
         inline float charge(const int & element_index) { return _signal_map[_element_index[element_index]]; }
         float charge() const;
 
