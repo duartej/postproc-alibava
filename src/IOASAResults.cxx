@@ -140,7 +140,7 @@ void IOASAResults::book_tree()
     _tree->Branch("cluster_seed_channel",&(_cluster_seed_channel));
     _tree->Branch("cluster_seed_charge",&(_cluster_seed_charge));
     _tree->Branch("cluster_eta_seed",&(_cluster_eta_seed));
-    _tree->Branch("cluster_eta",&(_cluster_eta_seed));
+    _tree->Branch("cluster_eta",&(_cluster_eta));
 
     clear_variables();
 }
@@ -169,9 +169,8 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
         _cluster_charge->push_back(cl->charge());
         _cluster_seed_channel->push_back(cl->channels(0));
         _cluster_seed_charge->push_back(cl->charge(0));
-        // XXX
-        _cluster_eta_seed->push_back(0); 
-        _cluster_eta->push_back(0); 
+        _cluster_eta_seed->push_back(cl->eta_seed()); 
+        _cluster_eta->push_back(cl->eta()); 
     }
     _tree->Fill();
     

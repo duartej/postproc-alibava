@@ -251,9 +251,10 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
         // Fill the cluster data
         std::unique_ptr<StripCluster> acluster(new StripCluster());
         acluster->set_polarity(_polarity);
-        //acluster.set_eta_seed( this->calculateEta(trkdata,seedChan) );
         // FIXME:: Really need it?
         acluster->set_sensitive_direction(0);
+        // Calculate the seed eta (using neighbours)
+        acluster->set_eta_seed( this->calculate_seed_eta(seedChan,ioft->adc_data()) );
 	// add seed channel to the cluster
         acluster->add(seedChan, ioft->adc_data()[seedChan]);
         // mask seed channel so no other cluster can use it!
@@ -336,6 +337,64 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
         }*/
     }
     return clusterVector;
+}
+
+float AlibavaSensorAnalysis::calculate_seed_eta(const int & seed_channel,const std::vector<float> & adcs )
+{
+    // we will multiply all signal values by _signalPolarity to work on positive signal always
+    const float seed_signal = _polarity*adcs[seed_channel];
+    
+    // now make an unrealistic signal: impossible to get it from alibava
+    const float unrealistic_signal = -10000;
+	
+    const int left_channel = seed_channel-1;
+    float left_signal = unrealistic_signal;
+    bool left_usable = false;
+    // check if the channel on the left is masked
+    if( left_channel >= 0 && this->is_channel_masked(left_channel)==false ) 
+    {
+        left_signal = _polarity*adcs[left_channel];
+        left_signal = true;
+    }
+    
+    const int right_channel = seed_channel+1;
+    float right_signal = unrealistic_signal;
+    bool right_usable = false;
+    // check if the channel on the right is masked
+    if( right_channel < static_cast<int>(adcs.size()) && this->is_channel_masked(right_channel) == false ) 
+    {
+        right_signal = _polarity*adcs[right_channel];
+        right_usable = true;
+    }
+	
+    // now compare right and left channel to see which one is higher
+
+    // if both right anf left channel is masked. Simply return -1
+    // this case should not be saved by clustering algorithm anyways
+    if(!left_usable && !right_usable) 
+    {
+        //std::cout << "Both neighbours are masked!"<< std::endl;
+        return -1.0;
+    }
+	
+    float eta = -1;
+    // compare left and right signals
+    // here both signal has to be positive (if not noise)
+    // if one of the channel is masked, since it will be 
+    // set to unrealisticSignal other signal will always 
+    // be higher then the masked one.
+    // Eta calculation: chargeOnLeftChannel / (chargeOnLeftChannel + chargeOnRightChannel)
+    if( left_signal > right_signal) 
+    {
+        // then seed channel is on the right
+	eta = left_signal/(left_signal+seed_signal);
+    }
+    else 
+    {
+        // seed channel is on the left
+	eta = seed_signal/(seed_signal+right_signal);
+    }
+    return eta;	
 }
 
 

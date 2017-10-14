@@ -75,6 +75,9 @@ class AlibavaSensorAnalysis
         // Obtain whetere a channel number is masked or not
         bool is_channel_masked(const int & ich);
 
+        // Calculate the eta of a seed (only using their two neighbours)
+        float calculate_seed_eta(const int & seed_channel, const std::vector<float> & adc_data);
+
 
     private:
         // Signal polarity of the sensor

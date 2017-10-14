@@ -24,16 +24,23 @@ class StripCluster
         ~StripCluster();
 
         inline void set_polarity(const int & polarity) { _signal_polarity = polarity; }
-        inline void set_eta_seed(const float & eta_seed) { _eta_seed = eta_seed; }
+        inline void set_eta_seed(const float & etaseed) { _eta_seed = etaseed; }
         inline void set_sensitive_direction(const int & direction) { _sensitive_direction = direction; }
         void add(const int & channel, const float & adc);
         // Getters
+        // -- Number of strips belonging to the cluster
         inline unsigned int size() const { return _channels.size(); }
-        // Channels
+        // -- The number of channels given the element index 
+        //    Note that the seed is always the element 0
         inline float channels(const int & element_index) { return _channels[element_index]; }
-        // Charge
+        // -- The charge of the channel 
         inline float charge(const int & element_index) { return _signal_map[_element_index[element_index]]; }
+        // -- The total charge of the cluster
         float charge() const;
+        // -- The eta of the cluster (see details in the implementation)
+        float eta();
+        // -- The eta of the seed (see details in the implementation)
+        inline float eta_seed() const { return _eta_seed; }
 
     private:
         int _signal_polarity;
@@ -49,6 +56,7 @@ class StripCluster
         // 0: X, 1:Y and 2:Z
         int _sensitive_direction;
 
+        bool _eta_calculated;
         float _eta_seed;
         float _eta_cluster;
 };
