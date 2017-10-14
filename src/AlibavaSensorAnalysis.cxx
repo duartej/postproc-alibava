@@ -76,8 +76,7 @@ namespace auxfunc
 }
 
 
-AlibavaSensorAnalysis::AlibavaSensorAnalysis(IOFortythieves * io_ft):
-    _ft(io_ft),
+AlibavaSensorAnalysis::AlibavaSensorAnalysis():
     _polarity(-1),
     _masked_channels(nullptr),
     _mask_criterium(2.5),
@@ -102,7 +101,7 @@ bool AlibavaSensorAnalysis::is_channel_masked(const int & ich)
     return (std::find(_masked_channels->begin(),_masked_channels->end(),ich) != _masked_channels->end());
 }
 
-void AlibavaSensorAnalysis::mask_channels()
+void AlibavaSensorAnalysis::mask_channels(const IOFortythieves * ioft)
 {
     // Asumming configuration XXX: Maybe a state flag stating that?
     if(_masked_channels)
@@ -124,14 +123,14 @@ void AlibavaSensorAnalysis::mask_channels()
     // Get the noise vector and check the noisy channel condition
     // which is given by:
     //    i-strip is noisy if |N_{i} - <Noise> > Xsigma
-    for(int ch=0; ch < static_cast<int>(_ft->noise().size()); ++ch)
+    for(int ch=0; ch < static_cast<int>(ioft->noise().size()); ++ch)
     {
         // Not using already masked channels
         if(this->is_channel_masked(ch))
         {
             continue;
         }
-        non_noisy_map.emplace(ch,_ft->noise()[ch]);
+        non_noisy_map.emplace(ch,ioft->noise()[ch]);
     }
 
     // 1. Obtain the mean and the standard deviation for the noise
@@ -142,7 +141,7 @@ void AlibavaSensorAnalysis::mask_channels()
     //    while using criteria defined by the user, by
     //    removing iteratively noisy channels until converge, i.e
     //    the non_noisy_map will not loose any element anymore
-    unsigned int last_vec_size = _ft->noise().size();
+    unsigned int last_vec_size = ioft->noise().size();
     do
     {
         // after the check from the 'while' statement, update
@@ -180,23 +179,18 @@ void AlibavaSensorAnalysis::mask_channels()
 }
 
 
-std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters(const int & event_number)
+std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters(const IOFortythieves * ioft)
 {
-    // Get the data at the entry
-    // XXX: this function assumes a initialization of the IOFortythieves
-    //      Probably protect this with a functor...
-    _ft->process(event_number);
-    
     // Check which channels we can added to a cluster,
     // obviously not the ones masked. 
     // ------------------------------------------------
     // Note that all channels are set to true initially
-    std::vector<bool> channel_can_be_used(_ft->adc_data().size(),true);
+    std::vector<bool> channel_can_be_used(ioft->adc_data().size(),true);
 
     // Now, mask channels that cannot pass the neighbour cut, 
     // add the *channel numbers* as seed candidate if it pass SeedSNRCut
     std::vector<int> seedCandidates;
-    for(int ichan=0; ichan<static_cast<int>(_ft->adc_data().size()); ++ichan)
+    for(int ichan=0; ichan<static_cast<int>(ioft->adc_data().size()); ++ichan)
     {
         // Not use this channel if is already masked
         if(this->is_channel_masked(ichan))
@@ -205,7 +199,7 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
             continue;
         }
         // if it is here, it is not masked, so ..
-        const float snr = (_polarity*_ft->adc_data()[ichan])/_ft->noise()[ichan];
+        const float snr = (_polarity*ioft->adc_data()[ichan])/ioft->noise()[ichan];
 	// mask channels that cannot pass neighbour cut
         // therefore, we don't need to check it in the next loop
         if(snr < _snr_neighbour)
@@ -220,8 +214,8 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
     // sort seed channels according to their SNR, highest comes first!
     std::sort(seedCandidates.begin(),seedCandidates.end(),
             [&] (const int & ichanLeft,const int & ichanRight) 
-            { return ((_polarity*_ft->adc_data()[ichanLeft])/_ft->noise()[ichanLeft] > 
-                (_polarity*_ft->adc_data()[ichanRight])/_ft->noise()[ichanRight]); });
+            { return ((_polarity*ioft->adc_data()[ichanLeft])/ioft->noise()[ichanLeft] > 
+                (_polarity*ioft->adc_data()[ichanRight])/ioft->noise()[ichanRight]); });
     
     // Define some functors to be used to provide order to the cluster
     // finding loop (first left, then right)
@@ -255,13 +249,13 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
             continue;
         }
         // Fill the cluster data
-        std::unique_ptr<StripCluster> acluster(new StripCluster);
+        std::unique_ptr<StripCluster> acluster(new StripCluster());
         acluster->set_polarity(_polarity);
         //acluster.set_eta_seed( this->calculateEta(trkdata,seedChan) );
         // FIXME:: Really need it?
         acluster->set_sensitive_direction(0);
 	// add seed channel to the cluster
-        acluster->add(seedChan, _ft->adc_data()[seedChan]);
+        acluster->add(seedChan, ioft->adc_data()[seedChan]);
         // mask seed channel so no other cluster can use it!
         channel_can_be_used[seedChan]=false;
         
@@ -303,7 +297,7 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
                 // And the channel if possible
                 if(channel_can_be_used[ichan])
                 {
-                    acluster->add(ichan, _ft->adc_data()[ichan]);
+                    acluster->add(ichan, ioft->adc_data()[ichan]);
                     // and mask it so that it will not be added to any other cluster
                     channel_can_be_used[ichan]=false;
                 }
@@ -351,7 +345,7 @@ extern "C"
 {
 #endif
     // Constructor and destructor
-    AlibavaSensorAnalysis * aa_new(IOFortythieves * ioft) { return new AlibavaSensorAnalysis(ioft); }
+    AlibavaSensorAnalysis * aa_new() { return new AlibavaSensorAnalysis(); }
     void aa_delete(AlibavaSensorAnalysis * aa_inst) { aa_inst->~AlibavaSensorAnalysis(); }
     // Configuration: setters and Getters
     // -- Signal polarity
@@ -406,11 +400,11 @@ extern "C"
     // Modifier functions
     // ---- Masking channels (part of the initialization of the
     // algorithm)
-    void aa_mask_channels(AlibavaSensorAnalysis * aa_inst) { aa_inst->mask_channels(); }
+    void aa_mask_channels(AlibavaSensorAnalysis * aa_inst,IOFortythieves *ioft) { aa_inst->mask_channels(ioft); }
     // ---- The workhorse class: process all events, finding clusters and storing the results
-    void aa_find_clusters(AlibavaSensorAnalysis * aa_inst, int evt)
+    void aa_find_clusters(AlibavaSensorAnalysis * aa_inst, IOFortythieves * ioft)
     {
-        std::vector<std::unique_ptr<StripCluster> > theclusters(aa_inst->find_clusters(evt));
+        std::vector<std::unique_ptr<StripCluster> > theclusters(aa_inst->find_clusters(ioft));
         //aa_inst->store_event(theclusters);
     }
 #ifdef __cplusplus

@@ -18,10 +18,9 @@
 #include<vector>
 
 // forward declarations
-// the canvas
-class TObject;
+class AlibavaSensorAnalysis;
+class TFile;
 class TTree;
-
 
 class IOASAResults
 {
@@ -30,49 +29,41 @@ class IOASAResults
         IOASAResults() = delete;
         ~IOASAResults();
 
-        // Initialization of the histograms
-        void book_plots();
-        
-        // Initialization of external plot objects, the object is cloned here
-        void book_plot(const std::string & name, const TObject * plotobject);
+        // Tree initialization
+        void book_tree();
 
-        // Fill the set of predefined monitor plots (except the calibration
-        // ones, which needs a specific function, see set_calibration_plot)
-        void set_diagnostic_plots(const std::pair<std::vector<float>,std::vector<float> > & pednoise);
-
-        // Get the objects needed to create the 2dim calibration plot (note
-        // this function make sense only in the calibration file
-        const std::vector<TObject*> get_calibration_plots() const;
-        // Set 3dim calibration plot 
-        void set_calibration_plot(const std::vector<TObject*> & curves);
-
-        // Fill all the diagnostic plots
-        void fill_diagnostic_plots(TTree * event_tree, TTree * header_tree);
-
-        // Store the defined plots to a canvas
-        void deliver_plots();
+        // Tree filling
+        void fill_tree(const AlibavaSensorAnalysis * aa_inst);
 
     private:
         TFile *_file; 
         TTree *_tree;
 
-        // The map of plots
-        std::map<std::string,TObject*> _histos; 
+        // The variables to get attached the new branches:
+        // -- Simple elements
+        int _event_number;
+        int _polarity;
+        float _event_time;
+        float _temperature;
+        // -- int vectors
+        std::vector<int> * _cluster_size;
+        std::vector<int> * _cluster_seed_channel;
+        // -- float vectors
+        std::vector<float> * _cluster_charge;
+        std::vector<float> * _cluster_seed_charge;
+        std::vector<float> * _cluster_eta_seed;
+        std::vector<float> * _cluster_eta;
+        // -- maps for cluster-dependent variable
+        //    cluster Id: vector
+        //std::map<int,std::vector<float> > * _cluster_channels;
 
-        // Get the relation between the histogram name and the branched needed
-        // to fill it (note that the branch change depending the processing or
-        // not previously of the pedestal file
-        std::map<std::string,std::string> get_branch_names(bool was_pedfile_proc);
-        // Decide whether or not the current channel could be a seed cluster
-        bool is_seed_cluster(const float & signal, const float & noise, const float & SoverN = 5.0) const;
+        // Helper branches
+        std::vector<std::vector<int> *> _branches_int;
+        // Helper branches
+        std::vector<std::vector<float> *> _branches_float;
 
-        // the draw options
-        inline std::map<std::string,std::string> get_draw_option()
-        {
-            return { {"temperature","L"} ,{"tdc","L"}, {"pedestal","L"},
-                {"noise","L"},{"commonmode","L"},{"noiseevent","L"},
-                {"signal",""},{"hits",""},{"timeprofile","prof"}    };
-        }
+        // clear vectors members before fill them
+        void clear_variables();
 };
 
 #endif

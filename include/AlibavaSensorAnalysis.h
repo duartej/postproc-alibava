@@ -14,6 +14,9 @@
 
 #include "StripCluster.h"
 
+// XXX
+#include "IOFortythieves.h"
+
 // ROOT
 
 // System headers
@@ -28,8 +31,7 @@ class IOFortythieves;
 class AlibavaSensorAnalysis
 {
     public:
-        AlibavaSensorAnalysis(IOFortythieves * io_ft);
-        AlibavaSensorAnalysis() = delete;
+        AlibavaSensorAnalysis();
         ~AlibavaSensorAnalysis();
 
         // Configuration functions
@@ -58,21 +60,23 @@ class AlibavaSensorAnalysis
         inline float get_mask_criterium() const { return _mask_criterium; }
         inline float get_snr_seed() const { return _snr_seed; }
         inline float get_snr_neighbour() const { return _snr_neighbour; }
+        // Per event base getters, wrappers to the IOFortythieves instance
+        /*inline int get_event_number() { return _ft->event_number(); }
+        inline int get_run_number() { return _ft->run_number(); }
+        inline int event_time() { return _ft->event_time(); }
+        inline int get_temperature() { return _ft->temperature(); }*/
         
         // Automatic noisy channel masking
-        void mask_channels();
+        void mask_channels(const IOFortythieves * ioft_inst);
 
         // Finding algorithm
-        std::vector<std::unique_ptr<StripCluster> > find_clusters(const int & event_number);
+        std::vector<std::unique_ptr<StripCluster> > find_clusters(const IOFortythieves * ioft_inst);
 
         // Obtain whetere a channel number is masked or not
         bool is_channel_masked(const int & ich);
 
 
     private:
-        // The input data
-        IOFortythieves * _ft;
-
         // Signal polarity of the sensor
         int _polarity;
 

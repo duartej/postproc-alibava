@@ -46,7 +46,7 @@ class alibava_analysis(object):
         # All involved types for the AlibavaSensorAnalysis
         # -- constructor and destructor
         self._lib.aa_new.restype = ctypes.c_void_p
-        self._lib.aa_new.argtypes = [ ctypes.c_int ]
+        self._lib.aa_new.argtypes = [ ]
         self._lib.aa_delete.argtypes = [ ctypes.c_void_p ]
         # -- some setters
         self._lib.aa_configure_polarity.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
@@ -72,11 +72,11 @@ class alibava_analysis(object):
         self._lib.aa_snr_neighbour_getter.restype = ctypes.c_float
 
         # -- modifiers
-        self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
 
         # The objects
         self._ioft              = self._lib.ioft_new(filename,chip)
-        self._sensor_analysis   = self._lib.aa_new(self._ioft)
+        self._sensor_analysis   = self._lib.aa_new()
 
     def __del__(self):
         """Freeing memory by calling the destructor function
@@ -288,7 +288,7 @@ class alibava_analysis(object):
         # Initialize the data
         self._lib.ioft_initialize(self._ioft)
         # And mask the noisy channels 
-        self._lib.aa_mask_channels(self._sensor_analysis)
+        self._lib.aa_mask_channels(self._sensor_analysis,self._ioft)
 
     def process(self,i=-1):
         """Processing the event, i.e finding cluster algorithm 
@@ -307,5 +307,6 @@ class alibava_analysis(object):
             evts = [ i ]
         for k in evts:
             # XXX MEssage processing
-            self._lib.aa_find_clusters(self._sensor_analysis,k)
+            self.process_event(k)
+            self._lib.aa_find_clusters(self._sensor_analysis,self._ioft)
 
