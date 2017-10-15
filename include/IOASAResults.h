@@ -47,6 +47,8 @@ class IOASAResults
         int _cluster_number;
         float _event_time;
         float _temperature;
+        float _common_mode;
+        float _event_noise;
         // -- int vectors
         std::vector<int> * _cluster_size;
         std::vector<int> * _cluster_seed_channel;

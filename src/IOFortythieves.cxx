@@ -35,6 +35,8 @@ IOFortythieves::IOFortythieves(const std::string & filename,const int & chip) :
     _run_number(-1),
     _event_number(-1),
     _temperature(-1),
+    _common_mode(-99999.9),
+    _event_noise(-99999.9),
     _adc_data(nullptr)
 {
     // XXX Check the chip number chip < ALIBAVA::NOOFCHIPS
@@ -65,8 +67,14 @@ IOFortythieves::IOFortythieves(const std::string & filename,const int & chip) :
     used_branches["Events"].push_back("runNumber");
 
     // Remember the ROOT file notation for the chip is chip+1 (it has beetle 1 and 2)
+    // -- The adc-data
     const std::string adc_data_str("postproc_data_beetle"+std::to_string(chip+1));
     used_branches["postproc_Events"].push_back(adc_data_str);
+    // -- The common mode and event noise
+    const std::string common_mode_str("postproc_cmmd_beetle"+std::to_string(chip+1));
+    used_branches["postproc_Events"].push_back(common_mode_str);
+    const std::string event_noise_str("postproc_cmmd_noise_beetle"+std::to_string(chip+1));
+    used_branches["postproc_Events"].push_back(event_noise_str);
 
     // Read both trees at the same time
     _trees["postproc_Events"]->AddFriend(_trees["Events"]);
@@ -87,6 +95,9 @@ IOFortythieves::IOFortythieves(const std::string & filename,const int & chip) :
     _trees["Events"]->SetBranchAddress("eventNumber",&_event_number);
     _trees["Events"]->SetBranchAddress("runNumber",&_run_number);
 
+    // -- The common noise and event noise
+    _trees["postproc_Events"]->SetBranchAddress(common_mode_str.c_str(),&_common_mode);
+    _trees["postproc_Events"]->SetBranchAddress(event_noise_str.c_str(),&_event_noise);
     // -- ADCs corrected by common noise and pedestals
     _trees["postproc_Events"]->SetBranchAddress(adc_data_str.c_str(),&_adc_data);
 }

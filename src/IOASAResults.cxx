@@ -30,6 +30,8 @@ IOASAResults::IOASAResults(const std::string & filename):
     _cluster_number(-1),
     _event_time(-1),
     _temperature(-1),
+    _common_mode(-99999.9),
+    _event_noise(-99999.9),
     _cluster_size(nullptr),
     _cluster_seed_channel(nullptr),
     _cluster_charge(nullptr),
@@ -114,6 +116,8 @@ void IOASAResults::clear_variables()
     _event_time = -1;
     _temperature = -1;
     _cluster_number = -1;
+    _common_mode = -99999.9;
+    _event_noise = -99999.9;
 
     // vectors
     for(auto & el: _branches_int)
@@ -134,6 +138,8 @@ void IOASAResults::book_tree()
     _tree->Branch("eventTime",&(_event_time));
     _tree->Branch("temperature",&(_temperature));
     _tree->Branch("polarity",&(_polarity));
+    _tree->Branch("common_mode",&(_common_mode));
+    _tree->Branch("event_noise",&(_event_noise));
     _tree->Branch("cluster_number",&(_cluster_number));
     _tree->Branch("cluster_size",&(_cluster_size));
     _tree->Branch("cluster_charge",&(_cluster_charge));
@@ -156,6 +162,8 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
     _event_time   = ioft_inst->event_time();
     _temperature  = ioft_inst->temperature();
     _polarity     = aa_inst->get_polarity();
+    _common_mode  = ioft_inst->common_mode();
+    _event_noise  = ioft_inst->event_noise();
     
     // Get the clusters
     const std::vector<std::unique_ptr<StripCluster> > clusters = aa_inst->find_clusters(ioft_inst);

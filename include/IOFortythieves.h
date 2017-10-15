@@ -53,6 +53,8 @@ class IOFortythieves
         inline int run_number() const { return _run_number; }
         inline float event_time() const { return _event_time; }
         inline float temperature() const { return _temperature; }
+        inline float common_mode() const { return _common_mode; }
+        inline float event_noise() const { return _event_noise; }
         inline const std::vector<float> & adc_data() const { return *_adc_data; }
 
     private:
@@ -75,6 +77,12 @@ class IOFortythieves
         int _event_number;
         float _event_time;
         float _temperature;
+        // -- Common mode, i.e. the ADC mean in an event (not included those
+        //    strips which could be signal)
+        float _common_mode;
+        // -- Event noise, i.e the standard deviation of the ADC counts in an
+        //    event (not included those which could be signal
+        float _event_noise;
         // -- the data (in ADC counts, pedestal and common mode extracted)
         std::vector<float> * _adc_data;
         // The noise, pedestal and calibration vectors
