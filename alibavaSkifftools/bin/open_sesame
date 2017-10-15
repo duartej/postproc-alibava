@@ -291,6 +291,84 @@ def merge_files(lcio_files,output_name):
         f.write(steering_content)
     return stname
 
+def parser_channels_opt(ranges_list,reciprocal_list=False):
+    """Parse a list of strings with the format:
+        [ 'first1-last1', 'first2-last2', ... ]
+    and returns it in a list of 2-tuples of ints
+    
+    Parameters
+    ----------
+    ranges_list: list(str)
+        The list
+    reciprocal_list: bool
+        Whether or not return the reciprocal set
+
+
+    Return
+    ------
+    list( (int,int) )
+
+    Raises
+    ------
+    RuntimeError:
+        When any element of the list is not of the form
+        'first-last'
+    ValueError:
+        When any element of the range is not an integer
+    """
+    ranges = []
+    for first_last in configurables["used_channels"]:
+        try:
+            first_str,last_str = first_last.split("-")
+        except ValueError:
+            raise RuntimeError("Element not following the"\
+                    "convention 'first-last'. Instead: '{0}'".format(first_last))
+        try:
+            first,last = int(first_str),int(last_str)
+        except ValueError:
+            raise RuntimeError("Not valid range: '{0}'-'{1}'".format(first_str,last_str))
+        ranges.append( (first,last) )
+
+    if not reciprocal_list:
+        return ranges
+    # Else, let's do a bit of job
+
+    # Instead of returning the list, let's return the reciprocal
+    # first, explicitely all the channels into a extensive list
+    pre_range_set = []
+    for rlist in ranges:
+        pre_range_set += rlist
+    # create the set of all the elements
+    range_set = set(pre_range_set)
+    # [ 0,127 ] channels
+    INITIAL_CHANNEL =0 
+    FINAL_CHANNEL   = 127
+    all_channels = set(xrange(INITIAL_CHANNEL,FINAL_CHANNEL+1))
+    # OBtain the difference
+    reciprocal = allchannels.difference(range_set)
+    # Collapse the list into 2-tuples of edges
+    first = reciprocal[0]
+    current = reciprocal[0]
+    previous= reciprocal[0]
+    ranges_new = []
+    for i in reciprocal:
+        # First check if arrive to the end
+        if current == FINAL_CHANNEL:
+            ranges_new.append( (first,current) )
+            break
+        # Continuity, nothing to do but go on
+        if current == previous+1:
+            previous = current
+            current = i
+            continue
+        # if here, a break between two numbers have found
+        # close the range here
+        ranges_new.append( (first,previous) )
+        # prepare the new range
+        first = current
+    return ranges_new
+
+
 def sensor_analysis(args):
     """Post-processing of the ROOT files created by the 'fortythieves'
     executable, including cluster finding, position and sensor
@@ -319,10 +397,10 @@ def sensor_analysis(args):
         of a cluster
     snr_neighbour: float
         The Signal to Noise cut to be considered a channel into a cluster
-    masked_channels: list(int), optional
-        Manual masking channels. If not present indicates that the channel
-        masking is done automaticaly (using the criteria defined at 
-        `automask_criterium`)
+    masked_channels: list(str), optional
+        Manual masking channels.  
+    used_channels: list(str), optional
+        Manual selecting channels. 
     automask_criterium: float, optional
         The criterium to used to decide if a channel is noisy or not. A 
         noisy channel is defined as |Noise_i - <Noise>| > X sigma. 
@@ -363,6 +441,19 @@ def sensor_analysis(args):
                     "defined as the filename does not follow the standard "
                     "naming convention (this info is parsed from the file name)")
         configurables["chip_selection"] = get_beetle(standard_sensor_name_map[fnp.sensor_name])
+    # either masking or selecting channels
+    if configurables["used_channels"] and configurables["masked_channels"]:
+        raise RuntimeError("The '--masked-channels' option and the "\
+                "'--used-channels' are mutually exclusive options")
+    if configurables["used_channels"]:
+        # Extract the list of ranges:
+        used_channels = parser_channel_opt(configurables["used_channels"],True)
+        # convert it into a list of masked channels
+        masked_channels = []
+    if configurables["masked_channels"]:
+        # Extract the list of ranges:
+        masked_channels = parser_channel_opt(configurables["masked_channels"])
+    
     # Masking channels automatically
     if not configurables["noautomask"]:
         if args.masked_channels != None:
@@ -606,8 +697,19 @@ if __name__ == '__main__':
     an_parser.add_argument('--snr-neighbour',dest='snr_neighbour',action='store',type=float,\
             help="The Signal to Noise cut to be considered a channel into a cluster"\
             " [Default: 3]")
-    an_parser.add_argument('-m',"--masked-channels",nargs="+",dest='masked_channels',type=int,\
-            action='store',help="Manual masking channels")
+    an_parser.add_argument('-m',"--masked-channels",nargs="+",dest='masked_channels',type=str,\
+            metavar='first-last',\
+            action='store',help="Manual masking channels (reciproc to "\
+            "'--used-channels' option. The channels must be introduced "\
+            "in pair of ranges, i.e. '-u 1-10 12-127' means that the "\
+            "masked channels are the channels between the 1 and 10 and "\
+            "the 12 and 127, both edges included. Remaining channels are selected")
+    an_parser.add_argument('-u',"--use-channels",nargs="+",dest='used_channels',type=str,
+            metavar="first-last",action='store',help="Channels to be "\
+            "used (reciproc to '--masked-channel' option). The channels "\
+            "must be introduced in pair of ranges, i.e. '-u 1-10 12-127' "\
+            "means that the selected channels are the channels between the "\
+            "1 and 10 and the 12 and 127, both edges included. Remaining channels are masked")
     an_parser.add_argument("--polarity",dest='polarity',type=int,\
             action='store',help="Manual inclusion of the signal polarity (not needed and ignored "\
             " if the file name follows the standard naming convention)")
