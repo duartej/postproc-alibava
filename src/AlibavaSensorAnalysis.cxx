@@ -431,7 +431,7 @@ float AlibavaSensorAnalysis::calculate_seed_eta(const int & seed_channel,const s
     if( left_channel >= 0 && this->is_channel_masked(left_channel)==false ) 
     {
         left_signal = _polarity*adcs[left_channel];
-        left_signal = true;
+        left_usable = true;
     }
     
     const int right_channel = seed_channel+1;
