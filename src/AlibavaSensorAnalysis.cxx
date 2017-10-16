@@ -88,8 +88,8 @@ AlibavaSensorAnalysis::AlibavaSensorAnalysis():
 {
     // Fix the size of the TDC cut vector
     _tdc_cut.resize(2);
-    _tdc_cut[0] = 0.0;
-    _tdc_cut[1] = 100.0;
+    _tdc_cut[0] = 3.0;
+    _tdc_cut[1] = 30.0;
 }
 
 AlibavaSensorAnalysis::~AlibavaSensorAnalysis()
