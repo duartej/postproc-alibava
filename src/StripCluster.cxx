@@ -33,7 +33,7 @@ void StripCluster::add(const int & channel, const float & adc)
     // Re-evaluate the eta when ask for it
     _eta_calculated = false;
     // add the strip
-    _signal_map[channel]=_signal_polarity*adc;
+    _signal_map[channel]=adc;
     _channels.push_back(channel); 
     _element_index[_channels.size()-1] = channel;
 }
@@ -42,7 +42,7 @@ float StripCluster::charge() const
 {
     // -- Memorize it as well?
     return std::accumulate(_signal_map.begin(),_signal_map.end(),0.0, 
-            [] (int previous, const std::map<int,float>::value_type & p) { return previous+p.second; }) ;
+            [this] (int previous, const std::map<int,float>::value_type & p) { return _signal_polarity*(previous+p.second); }) ;
 }
 
 float StripCluster::eta()

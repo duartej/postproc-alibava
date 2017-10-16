@@ -34,7 +34,7 @@ class StripCluster
         //    Note that the seed is always the element 0
         inline float channels(const int & element_index) { return _channels[element_index]; }
         // -- The charge of the channel 
-        inline float charge(const int & element_index) { return _signal_map[_element_index[element_index]]; }
+        inline float charge(const int & element_index) { return _signal_polarity*_signal_map[_element_index[element_index]]; }
         // -- The total charge of the cluster
         float charge() const;
         // -- The eta of the cluster (see details in the implementation)
