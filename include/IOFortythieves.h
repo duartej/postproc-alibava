@@ -38,6 +38,10 @@ class IOFortythieves
         // (noise, calibration, ...) ready to be used.
         void initialize();
 
+        // Some informational getters
+        const char * get_filename() const;
+        inline int get_chip_number() const { return _chip; }
+
         // Process the event entry
         void process(const int & i);
         // Get the total entries for the Events tree

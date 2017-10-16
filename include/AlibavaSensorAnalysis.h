@@ -14,11 +14,6 @@
 
 #include "StripCluster.h"
 
-// XXX
-#include "IOFortythieves.h"
-
-// ROOT
-
 // System headers
 #include <string>
 #include <map>
@@ -49,9 +44,13 @@ class AlibavaSensorAnalysis
                 _masked_channels = new std::vector<int>(masked_channels); 
             }
         }
+        inline void configure_not_automasking() { _automasking = false; }
         inline void configure_mask_criterium(const float & sigma) { _mask_criterium = sigma; }
         inline void configure_snr_seed(const float & snr_min) { _snr_seed = snr_min; }
         inline void configure_snr_neighbour(const float & snr_min) { _snr_neighbour = snr_min; }
+
+        // print configuration 
+        void print_configuration(IOFortythieves * ioft = nullptr);
 
         // Getters 
         inline int get_polarity() const { return _polarity; }
@@ -60,11 +59,6 @@ class AlibavaSensorAnalysis
         inline float get_mask_criterium() const { return _mask_criterium; }
         inline float get_snr_seed() const { return _snr_seed; }
         inline float get_snr_neighbour() const { return _snr_neighbour; }
-        // Per event base getters, wrappers to the IOFortythieves instance
-        /*inline int get_event_number() { return _ft->event_number(); }
-        inline int get_run_number() { return _ft->run_number(); }
-        inline int event_time() { return _ft->event_time(); }
-        inline int get_temperature() { return _ft->temperature(); }*/
         
         // Automatic noisy channel masking
         void mask_channels(const IOFortythieves * ioft_inst);
@@ -86,6 +80,8 @@ class AlibavaSensorAnalysis
         // TDC time cut
         std::vector<float> _tdc_cut;
 
+        // Allow automasking
+        bool _automasking;
         // Masked channels
         std::vector<int> * _masked_channels;
         // Masked criterium (if automatic masking is enabled)

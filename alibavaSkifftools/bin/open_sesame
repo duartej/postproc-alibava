@@ -294,7 +294,8 @@ def merge_files(lcio_files,output_name):
 def parser_channels_opt(ranges_list,reciprocal_list=False):
     """Parse a list of strings with the format:
         [ 'first1-last1', 'first2-last2', ... ]
-    and returns it in a list of 2-tuples of ints
+    and returns it as an explicitelly list of all the numbers
+    between those edges
     
     Parameters
     ----------
@@ -306,7 +307,7 @@ def parser_channels_opt(ranges_list,reciprocal_list=False):
 
     Return
     ------
-    list( (int,int) )
+    list(int): list of all channels
 
     Raises
     ------
@@ -317,7 +318,7 @@ def parser_channels_opt(ranges_list,reciprocal_list=False):
         When any element of the range is not an integer
     """
     ranges = []
-    for first_last in configurables["used_channels"]:
+    for first_last in ranges_list:
         try:
             first_str,last_str = first_last.split("-")
         except ValueError:
@@ -330,14 +331,17 @@ def parser_channels_opt(ranges_list,reciprocal_list=False):
         ranges.append( (first,last) )
 
     if not reciprocal_list:
-        return ranges
+        explicit_list =[]
+        for f,l in ranges:
+            explicit_list += range(f,l+1)
+        return explicit_list
     # Else, let's do a bit of job
 
     # Instead of returning the list, let's return the reciprocal
     # first, explicitely all the channels into a extensive list
     pre_range_set = []
-    for rlist in ranges:
-        pre_range_set += rlist
+    for f,l in ranges:
+        pre_range_set += range(f,l+1)
     # create the set of all the elements
     range_set = set(pre_range_set)
     # [ 0,127 ] channels
@@ -345,28 +349,45 @@ def parser_channels_opt(ranges_list,reciprocal_list=False):
     FINAL_CHANNEL   = 127
     all_channels = set(xrange(INITIAL_CHANNEL,FINAL_CHANNEL+1))
     # OBtain the difference
-    reciprocal = allchannels.difference(range_set)
+    reciprocal = list(all_channels.difference(range_set))
     # Collapse the list into 2-tuples of edges
-    first = reciprocal[0]
+    try:
+        first = reciprocal[0]
+    except IndexError:
+        # Emtpy list?
+        return []
     current = reciprocal[0]
     previous= reciprocal[0]
     ranges_new = []
-    for i in reciprocal:
+    for i in reciprocal[1:]:
+        current = i
+        if current == reciprocal[-1] and current != FINAL_CHANNEL:
+            # add the missing
+            ranges_new.append( (first,current) )
+            break
         # First check if arrive to the end
+        if current == FINAL_CHANNEL and previous != FINAL_CHANNEL-1:
+            ranges_new.append( (first,previous) )
+            ranges_new.append( (current,current) )
+            break
         if current == FINAL_CHANNEL:
             ranges_new.append( (first,current) )
             break
         # Continuity, nothing to do but go on
         if current == previous+1:
             previous = current
-            current = i
             continue
+        # A special case where the last channel is used
         # if here, a break between two numbers have found
         # close the range here
         ranges_new.append( (first,previous) )
-        # prepare the new range
+        # prepare the new range: initialize
         first = current
-    return ranges_new
+        previous = current
+    explicit_list =[]
+    for f,l in ranges_new:
+        explicit_list += range(f,l+1)
+    return explicit_list
 
 
 def sensor_analysis(args):
@@ -442,32 +463,37 @@ def sensor_analysis(args):
                     "naming convention (this info is parsed from the file name)")
         configurables["chip_selection"] = get_beetle(standard_sensor_name_map[fnp.sensor_name])
     # either masking or selecting channels
-    if configurables["used_channels"] and configurables["masked_channels"]:
+    if args.used_channels and args.masked_channels:
         raise RuntimeError("The '--masked-channels' option and the "\
                 "'--used-channels' are mutually exclusive options")
-    if configurables["used_channels"]:
+    if args.used_channels:
+        # Extract the list of ranges and convert the used channels 
+        # list into the masked channel:
+        masked_channels = parser_channels_opt(args.used_channels,True)
+        configurables["masked_channels"]=masked_channels
+    if args.masked_channels:
         # Extract the list of ranges:
-        used_channels = parser_channel_opt(configurables["used_channels"],True)
-        # convert it into a list of masked channels
-        masked_channels = []
-    if configurables["masked_channels"]:
-        # Extract the list of ranges:
-        masked_channels = parser_channel_opt(configurables["masked_channels"])
+        masked_channels = parser_channels_opt(args.masked_channels)
+        configurables["masked_channels"]=masked_channels
     
     # Masking channels automatically
-    if not configurables["noautomask"]:
-        if args.masked_channels != None:
-            raise RuntimeError("The '--masked_channels' option (masking channels "\
-                    "by the user) requires to activate '--no-automask' option")
-            # Prepare to do it later: left it empty
-        # configurables["masked_channels"] = []
-    else:
+    #if not configurables["noautomask"]:
+    #    if args.masked_channels != None:
+    #        raise RuntimeError("The '--masked_channels' option (masking channels "\
+    #                "by the user) requires to activate '--no-automask' option")
+    #        # Prepare to do it later: left it empty
+    #    # configurables["masked_channels"] = []
+    # Not masking automatically
+    if configurables["noautomask"]:
         # masking following user instructions
-        if not args.masked_channels: 
+        if not args.masked_channels and not args.used_channels: 
             raise RuntimeError("The '--no-automask' option requires "\
-                    " the '--masked_channels' option (masking channels "\
-                    "by the user)")
-        configurables["masked_channels"] = args.masked_channels
+                    " either the '--masked_channels' option (masking channels "\
+                    "by the user) or the '--used_channels'")
+        if args.masked_channels:
+            configurables["masked_channels"] = args.masked_channels
+        elif args.used_channels:
+            configurables["masked_channels"] = parser_channels_opt(args.used_channesl,True)
     # Polarity obtained from the metadata (if it is posible)
     if fnp:
         configurables["polarity"] = int(sensor_name_spec_map[standard_sensor_name_map[fnp.sensor_name]].polarity)
@@ -704,7 +730,7 @@ if __name__ == '__main__':
             "in pair of ranges, i.e. '-u 1-10 12-127' means that the "\
             "masked channels are the channels between the 1 and 10 and "\
             "the 12 and 127, both edges included. Remaining channels are selected")
-    an_parser.add_argument('-u',"--use-channels",nargs="+",dest='used_channels',type=str,
+    an_parser.add_argument('-u',"--used-channels",nargs="+",dest='used_channels',type=str,
             metavar="first-last",action='store',help="Channels to be "\
             "used (reciproc to '--masked-channel' option). The channels "\
             "must be introduced in pair of ranges, i.e. '-u 1-10 12-127' "\

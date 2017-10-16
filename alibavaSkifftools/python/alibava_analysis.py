@@ -81,6 +81,8 @@ class alibava_analysis(object):
         self._lib.aa_snr_seed_getter.restype = ctypes.c_float
         self._lib.aa_snr_neighbour_getter.argtypes = [ ctypes.c_void_p ]
         self._lib.aa_snr_neighbour_getter.restype = ctypes.c_float
+        # print configuration
+        self._lib.aa_print_configuration.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
 
         # -- modifiers
         self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
@@ -285,6 +287,12 @@ class alibava_analysis(object):
     
     # ==============================================
     # Main methods
+    def print_configuration(self):
+        """Print the current configuration of the AlibavaSensorAnalysis
+        class
+        """
+        self._lib.aa_print_configuration(self._sensor_analysis,self._ioft)
+
     def configure(self,**cfg):
         """Configure the ...
         
@@ -294,7 +302,7 @@ class alibava_analysis(object):
         for key,val in cfg.iteritems():
             if hasattr(self,key):
                 setattr(self,key,val)
-        #self.print_configuration()
+        self.print_configuration()
     
     def initialize(self):
         """Wrapper to the initialization of the data and

@@ -154,6 +154,11 @@ void IOFortythieves::initialize()
     }
 }
 
+const char * IOFortythieves::get_filename() const
+{
+    return _file->GetName();
+}
+
 void IOFortythieves::process(const int & i)
 {
     // Recall that the Events tree is friend of this,

@@ -12,6 +12,8 @@
 #include "AlibavaSensorAnalysis.h"
 #include "IOFortythieves.h"
 
+#include "ALIBAVA.h"
+
 // ROOT headers
 
 // System headers
@@ -78,6 +80,7 @@ namespace auxfunc
 
 AlibavaSensorAnalysis::AlibavaSensorAnalysis():
     _polarity(-1),
+    _automasking(true),
     _masked_channels(nullptr),
     _mask_criterium(2.5),
     _snr_seed(5),
@@ -85,6 +88,8 @@ AlibavaSensorAnalysis::AlibavaSensorAnalysis():
 {
     // Fix the size of the TDC cut vector
     _tdc_cut.resize(2);
+    _tdc_cut[0] = 0.0;
+    _tdc_cut[1] = 100.0;
 }
 
 AlibavaSensorAnalysis::~AlibavaSensorAnalysis()
@@ -96,25 +101,86 @@ AlibavaSensorAnalysis::~AlibavaSensorAnalysis()
     }
 }
 
+void AlibavaSensorAnalysis::print_configuration(IOFortythieves * ioft)
+{
+    std::string automasking_str("Yes");
+    if(!_automasking)
+    {
+        automasking_str = "No";
+    }
+    
+    // define columns for the channels
+    const int channelprintnum = 16;
+    
+    if(ioft != nullptr)
+    {
+        std::cout << "\033[1;32mCONFIGURATION\033[1;m Input filename  : " 
+            << ioft->get_filename() << std::endl;
+        std::cout << "\033[1;32mCONFIGURATION\033[1;m Processed Events: " 
+            << ioft->get_entries() << std::endl;
+        std::cout << "\033[1;32mCONFIGURATION\033[1;m Chip used (0|1) : " 
+            << ioft->get_chip_number() << std::endl;
+    }
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Sensor polarity : " 
+        << std::setw(2) << _polarity << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Allowed TDC time: [" 
+        << std::setw(2) << _tdc_cut[0] << "," << std::setw(3) << _tdc_cut[1] 
+        << "]" << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking activated : " 
+        << std::setw(3) << automasking_str << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking noisy channels if " 
+        << "|noise_{i} - <noise>| > " << std::setprecision(2) << std::setw(4) 
+        << _mask_criterium << " x sigma_{noise} " << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m *********** Channel Masking *********** " 
+        << std::endl;
+    for(int ichan=0; ichan<ALIBAVA::NOOFCHANNELS; ++ichan) 
+    {
+        if(ichan % channelprintnum ==0)
+        {
+            if(ichan !=0)
+            {
+                std::cout << std::endl;
+            }
+            std::cout << "\033[1;32mCONFIGURATION\033[1;m   Channels "<< std::setw(3) << ichan 
+                << " - "<< std::setw(3) << ichan+channelprintnum-1  << " : ";
+        }
+        std::cout << !this->is_channel_masked(ichan) << " ";
+        ++ichan;
+    }
+    std::cout << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m *********** Channel Masking *********** " 
+        << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Cluster Finding Algorithm : " << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m     SNR    seed   strip > " << _snr_seed << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m     SNR neighbour strip > " << _snr_neighbour << std::endl;
+}
+
 bool AlibavaSensorAnalysis::is_channel_masked(const int & ich)
 {
+    if(_masked_channels == nullptr)
+    {
+        return false;
+    }
     return (std::find(_masked_channels->begin(),_masked_channels->end(),ich) != _masked_channels->end());
 }
 
 void AlibavaSensorAnalysis::mask_channels(const IOFortythieves * ioft)
 {
-    // Asumming configuration XXX: Maybe a state flag stating that?
-    if(_masked_channels)
+    // Asumming configuration
+    if(not _automasking)
     {
+        std::cout << "\033[1;33mWARNING\033[1;m Automasking is de-activated " << std::endl;
         // The user decide to put this masking 
-        // XXX A warning message saying so?
-        // Do nothing, the list of channels are already present
         return;
     }
+    
     // Automatically mask algorithm  
     
-    // 0 -- Initialize the masked_channels vector
-    _masked_channels = new std::vector<int>;
+    // 0 -- Initialize the masked_channels vector if needed
+    if(_masked_channels == nullptr)
+    {
+        _masked_channels = new std::vector<int>;
+    }
 
     // 1. -- Define a map to keep only non-noisy channels
     // ichannel: noise
@@ -446,8 +512,11 @@ extern "C"
         // convert the vector to a pointer of ints
         return &(*ch_p)[0];
     }
+    void aa_configure_not_automasking(AlibavaSensorAnalysis * aa_inst) { aa_inst->configure_not_automasking(); }
     void aa_configure_mask_criterium(AlibavaSensorAnalysis * aa_inst, float sigma) { aa_inst->configure_mask_criterium(sigma); }
     float aa_mask_criterium_getter(AlibavaSensorAnalysis * aa_inst) { return aa_inst->get_mask_criterium(); }
+    // print all the configuration
+    void aa_print_configuration(AlibavaSensorAnalysis * aa_inst, IOFortythieves * ioft) { aa_inst->print_configuration(ioft); }    
     // --- The minimum SNR for the seeds of a clusters
     void aa_configure_snr_seed(AlibavaSensorAnalysis * aa_inst, float snr) { aa_inst->configure_snr_seed(snr); }
     float aa_snr_seed_getter(AlibavaSensorAnalysis * aa_inst) { return aa_inst->get_snr_seed(); }
