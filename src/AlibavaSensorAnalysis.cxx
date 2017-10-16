@@ -131,9 +131,9 @@ void AlibavaSensorAnalysis::print_configuration(IOFortythieves * ioft)
     std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking noisy channels if " 
         << "|noise_{i} - <noise>| > " << std::setprecision(2) << std::setw(4) 
         << _mask_criterium << " x sigma_{noise} " << std::endl;
-    std::cout << "\033[1;32mCONFIGURATION\033[1;m *********** Channel Masking *********** " 
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m ******************** Channel Masking ******************* " 
         << std::endl;
-    for(int ichan=0; ichan<ALIBAVA::NOOFCHANNELS; ++ichan) 
+    for(int ichan=0; ichan<ALIBAVA::NOOFCHANNELS; ) 
     {
         if(ichan % channelprintnum ==0)
         {
@@ -148,7 +148,7 @@ void AlibavaSensorAnalysis::print_configuration(IOFortythieves * ioft)
         ++ichan;
     }
     std::cout << std::endl;
-    std::cout << "\033[1;32mCONFIGURATION\033[1;m *********** Channel Masking *********** " 
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m ******************** Channel Masking ******************* " 
         << std::endl;
     std::cout << "\033[1;32mCONFIGURATION\033[1;m Cluster Finding Algorithm : " << std::endl;
     std::cout << "\033[1;32mCONFIGURATION\033[1;m     SNR    seed   strip > " << _snr_seed << std::endl;
