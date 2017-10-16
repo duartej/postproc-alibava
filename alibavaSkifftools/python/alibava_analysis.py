@@ -302,7 +302,7 @@ class alibava_analysis(object):
         for key,val in cfg.iteritems():
             if hasattr(self,key):
                 setattr(self,key,val)
-        self.print_configuration()
+        #self.print_configuration()
     
     def initialize(self):
         """Wrapper to the initialization of the data and
@@ -313,6 +313,8 @@ class alibava_analysis(object):
         self._lib.ioft_initialize(self._ioft)
         # And mask the noisy channels 
         self._lib.aa_mask_channels(self._sensor_analysis,self._ioft)
+        # Print the configuration now
+        self.print_configuration()
 
     def book_results(self,filename):
         """Wrapper to the storage manager to store the analized
