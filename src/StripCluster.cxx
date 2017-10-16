@@ -33,7 +33,7 @@ void StripCluster::add(const int & channel, const float & adc)
     // Re-evaluate the eta when ask for it
     _eta_calculated = false;
     // add the strip
-    _signal_map[channel]=adc;
+    _signal_map[channel]=_signal_polarity*adc;
     _channels.push_back(channel); 
     _element_index[_channels.size()-1] = channel;
 }
