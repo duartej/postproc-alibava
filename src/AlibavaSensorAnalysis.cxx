@@ -244,6 +244,17 @@ void AlibavaSensorAnalysis::mask_channels(const IOFortythieves * ioft)
     } while( non_noisy_map.size() != last_vec_size );
 }
 
+bool AlibavaSensorAnalysis::check_analysis_cuts(const IOFortythieves * ioft) const
+{
+    // Checking the defined analysis cuts, if any cut is not fulfill 
+    // the event is masked 
+    if( ioft->event_time() < _tdc_cut[0] || ioft->event_time() > _tdc_cut[1] )
+    {
+        return false;
+    }
+    return true;
+}
+
 
 std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters(const IOFortythieves * ioft)
 {

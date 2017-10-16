@@ -42,6 +42,7 @@ class IOASAResults
 
         // The variables to get attached the new branches:
         // -- Simple elements
+        int _event_masked;
         int _event_number;
         int _polarity;
         int _cluster_number;

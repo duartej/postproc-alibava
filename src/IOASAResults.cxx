@@ -111,6 +111,7 @@ IOASAResults::~IOASAResults()
 void IOASAResults::clear_variables()
 {
     // Plain variables
+    _event_masked = 0;
     _event_number = 0;
     _polarity = 0;
     _event_time = -1;
@@ -134,6 +135,7 @@ void IOASAResults::book_tree()
 {
     _tree = new TTree("alibava_clusters","Alibava cluster analysis");
 
+    _tree->Branch("eventMasked",&(_event_masked));
     _tree->Branch("eventNumber",&(_event_number));
     _tree->Branch("eventTime",&(_event_time));
     _tree->Branch("temperature",&(_temperature));
@@ -158,6 +160,7 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
     // getters at event-based, i.e., 
     
     // And fill event-based
+    _event_masked = static_cast<int>(!aa_inst->check_analysis_cuts(ioft_inst));
     _event_number = ioft_inst->event_number();
     _event_time   = ioft_inst->event_time();
     _temperature  = ioft_inst->temperature();

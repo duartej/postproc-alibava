@@ -63,6 +63,9 @@ class AlibavaSensorAnalysis
         // Automatic noisy channel masking
         void mask_channels(const IOFortythieves * ioft_inst);
 
+        // Masking event whenever a cut is not fulfill
+        bool check_analysis_cuts(const IOFortythieves * ioft_inst) const;
+
         // Finding algorithm
         std::vector<std::unique_ptr<StripCluster> > find_clusters(const IOFortythieves * ioft_inst);
 
