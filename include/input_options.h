@@ -13,6 +13,8 @@
 #define INPUT_OPTIONS_H
 
 #include <string>
+#include <map>
+#include <vector>
 
 struct input_options
 {
@@ -27,6 +29,10 @@ struct input_options
         cmndfile  = "";
         startEventNum = -1;
         stopEventNum  = -1;
+        no_automasking = false;
+        // Valid chip numbers
+        use_channels.insert( {0,{}} );
+        use_channels.insert( {1,{}} );
     }
     std::string cmndfile;
     std::string outputFilename;
@@ -36,6 +42,8 @@ struct input_options
     int startEventNum;
     int stopEventNum;
     bool storeHeaderPedestalNoise;
+    bool no_automasking;
+    std::map<int,std::vector<int> > use_channels;
 };
 
 #endif
