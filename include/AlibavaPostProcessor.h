@@ -18,7 +18,6 @@
 #include <vector>
 
 // forward declarations
-class TH3F;
 
 
 class AlibavaPostProcessor
