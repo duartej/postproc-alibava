@@ -55,6 +55,9 @@ the ```alibavaSkifftools/CMakeLists.txt``` file
 #### Dependencies
  * ROOT >= 6.0 (Note that some problems has been spotted when using 5.34)
  * CMAKE >= 2.8
+ * GCC compiler >= 4.7 
+     * otherwise change the corresponding ```CMAKE_CXX_FLAGS``` in the CMakeLists.txt files from ```-std=c++11``` to ```-std=c++0x``` (GCC > 4.3, though)
+     * Note that to change the default compiler found by cmake, use the ```-DCMAKE_C_COMPILER``` and ```-DCMAKE_CXX_COMPILER``` variables
 
 ### Usage
 After succesful compilation and the exportation of the environment
