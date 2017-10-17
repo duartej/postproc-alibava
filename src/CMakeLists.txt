@@ -15,7 +15,7 @@ include_directories(${ROOT_INCLUDE_DIRS})
 set(LIBS ${LIBS} ${ROOT_LIBRARIES})
 
 target_link_libraries(IOManagersAlibava ${LIBS})
-target_link_libraries(AlibavaSensorAnalysis ${LIBS})
+target_link_libraries(AlibavaSensorAnalysis IOManagersAlibava)
 # 
 install(
     TARGETS IOManagersAlibava 
