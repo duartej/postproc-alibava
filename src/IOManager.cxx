@@ -109,6 +109,8 @@ IOManager::IOManager(const std::string & rootfilename):
     _tree_header(nullptr),
     _tree_events(nullptr),
     _eventsProcessed(0),
+    _channel_mask({{0,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)},
+            {1,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)}}),
     _monitor_plots_booked(false),
     _cal_parameters(nullptr),
     _runheader(nullptr), 
@@ -118,6 +120,53 @@ IOManager::IOManager(const std::string & rootfilename):
 
     _monitor_plots = { {1,new AlibavaDiagnosis(1)}, {2,new AlibavaDiagnosis(2)} };
 }
+
+IOManager::IOManager(const std::string & rootfilename,const std::map<int,std::vector<int> > & channel_mask): 
+    _rootfilename(rootfilename),
+    _file(nullptr),
+    _tree_header(nullptr),
+    _tree_events(nullptr),
+    _eventsProcessed(0),
+    _channel_mask({{0,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)},
+            {1,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)}}),
+    _monitor_plots_booked(false),
+    _cal_parameters(nullptr),
+    _runheader(nullptr), 
+    _events(nullptr)
+{ 
+    _file = new TFile(_rootfilename.c_str(),"RECREATE");
+
+    _monitor_plots = { {1,new AlibavaDiagnosis(1)}, {2,new AlibavaDiagnosis(2)} };
+
+    // All channels initialize to 0 (masked)    
+    for(auto & chip_vect: channel_mask)
+    {
+        // Valid only chip 0 and 1
+        if(chip_vect.first != 0 && chip_vect.first != 1)
+        {
+            std::cerr << "[IOManager::IOManager ERROR] Invalid chip"
+                << " number [" << chip_vect.first << "] " << std::endl;
+            // Exception??
+            return;
+        }
+        // Be sure the user introduced the vector, then mask all channels
+        // so activate them only if requested
+        if(chip_vect.second.size() > 0)
+        {
+            std::fill(_channel_mask[chip_vect.first].begin(),_channel_mask[chip_vect.first].end(),0);
+        }
+        for(auto & ch: chip_vect.second)
+        {
+            if(ch >= static_cast<int>(_channel_mask[chip_vect.first].size()))
+            {
+                std::cerr << "[IOManager::IOManager WARNING] Invalid "
+                    << " channel number [" << ch << "] " << std::endl;
+            }
+            _channel_mask[chip_vect.first][ch]=1;
+        }
+    }
+}
+
 
 IOManager::~IOManager()
 {
@@ -236,6 +285,11 @@ void IOManager::fill_event(const AlibavaEvent * anEvent)
     *_events = *anEvent;
     _tree_events->Fill();
     ++_eventsProcessed;
+}
+
+bool IOManager::is_channel_masked(const int & chip, const int & channel) const
+{
+    return (_channel_mask.at(chip)[channel] == 0);
 }
 
 void IOManager::aux_store_friends(TTree * tree)

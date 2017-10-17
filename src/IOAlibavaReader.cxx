@@ -313,7 +313,14 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
 	    for(int ichan=0; ichan < ALIBAVA::NOOFCHANNELS; ichan++) 
             {
                 infile.read(reinterpret_cast< char *> (&tmp_short), sizeof(unsigned short));
-                beetles_data[ichip].push_back(float(tmp_short));
+                if(iomanager->is_channel_masked(ichip,ichan))
+                {
+                    beetles_data[ichip].push_back(0.0);
+                }
+                else
+                {
+                    beetles_data[ichip].push_back(float(tmp_short));
+                }
             }
         }
         // -- so far the event is read

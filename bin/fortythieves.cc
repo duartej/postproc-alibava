@@ -194,7 +194,7 @@ int main(int argc, char* argv[])
     }
 
     // Initialize and prepare the ROOT output
-    IOManager iomanager(opt.outputFilename);
+    IOManager iomanager(opt.outputFilename,opt.use_channels);
     iomanager.book_tree_header();
     iomanager.book_tree();
     // Monitor plots, booking
@@ -222,7 +222,7 @@ int main(int argc, char* argv[])
         std::string calfile(opt.outputFilename.replace(dotpos,5,"_cal.root"));
         
         // Initialize and prepare the output
-        IOManager iomanager_cal(calfile);
+        IOManager iomanager_cal(calfile,opt.use_channels);
         iomanager_cal.book_tree_header();
         iomanager_cal.book_tree();
         // process the pedestal file
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
         const auto dotpos = opt.outputFilename.find(".root");
         std::string pedfile(opt.outputFilename.replace(dotpos,5,"_ped.root"));
         // Initialize and prepare the output
-        IOManager iomanager_ped(pedfile);
+        IOManager iomanager_ped(pedfile,opt.use_channels);
         iomanager_ped.book_tree_header();
         iomanager_ped.book_tree();
         // process the pedestal file

@@ -29,11 +29,11 @@ class AlibavaDiagnosis;
 using PedestalNoiseBeetleMap = std::map<int,std::pair<std::vector<float>,std::vector<float>> >;
 using CalibrateBeetleMap = std::map<int,std::vector<int>>;
 
-
 class IOManager
 {
     public:
         IOManager(const std::string & rootfilename);
+        IOManager(const std::string & rootfilename,const std::map<int,std::vector<int> > & use_channel);
         ~IOManager();
 
         // Set the calibration parameters (if needed)
@@ -46,7 +46,10 @@ class IOManager
         
         void fill_header(const AlibavaRunHeader * aheader) const;
         void fill_event(const AlibavaEvent * anAlibavaEvent);
-    
+
+        // Check if a channel is masked
+        bool is_channel_masked(const int & chip, const int & channel) const;
+     
         // Book the generic predefined monitor plots (see AlibavaDiagnosis
         // class for a description)
         void book_monitor_plots();
@@ -90,6 +93,9 @@ class IOManager
         TTree * _tree_header;
         TTree * _tree_events;
         int     _eventsProcessed;
+
+        // Mask channels ( 0: masked, 1: to use)
+        std::map<int,std::vector<int> > _channel_mask;
 
         // The auxiliary data
         // Whether or not the monitor has been booked
