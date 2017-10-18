@@ -42,7 +42,7 @@ float StripCluster::charge() const
 {
     // -- Memorize it as well?
     return std::accumulate(_signal_map.begin(),_signal_map.end(),0.0, 
-            [this] (int previous, const std::map<int,float>::value_type & p) { return _signal_polarity*(previous+p.second); }) ;
+            [this] (const float & previous, const std::map<int,float>::value_type & p) { return previous+_signal_polarity*p.second; }) ;
 }
 
 float StripCluster::eta()
