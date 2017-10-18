@@ -626,8 +626,11 @@ class processor(object):
         # -- histograms DUTS/REF
         self.hmap = { minst.dut_plane: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
                 minst.ref_plane: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
-        self.hcharge = { minst.dut_plane: ROOT.TH2F("charge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
+        self.hcharge = { minst.dut_plane: ROOT.TH2F("precharge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("precharge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM) }
+        # Keep the number of entries used in each bin
+        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM) }
         # Correlations
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
                 minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
@@ -638,7 +641,7 @@ class processor(object):
         self.htotal = ROOT.TH2F("total_map",";x [mm]; y [mm]; #varepsilon",130,-10.0,10.0,100,-10.0,10.0)
 
         self._allhistograms = self.residual_projection.values()+self.hmap.values()+\
-                self.hcharge.values()+self.hcorr_trkX.values()+\
+                self.hcharge.values()+self.haux_charge.values()+self.hcorr_trkX.values()+\
                 [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
@@ -654,7 +657,20 @@ class processor(object):
         self.eff = ROOT.TEfficiency(self.hpass,self.htotal)
         self.eff.SetName("sensor_efficiency")
         self.eff.SetDirectory(0)
-        self._allhistograms.append(self.eff)        
+        self._allhistograms.append(self.eff)
+
+    def create_charge_map(self):
+        """Create the charge map using the two auxiliary histograms,
+        one containing the entries for a x,y position and the other
+        the total charge of all the entries
+        """
+        import ROOT
+        self.hcharge_average = dict([(s,h.Clone(h.GetName().replace("pre",""))) \
+                for s,h in self.hcharge.iteritems()])
+        for s,h in self.hcharge_average.iteritems():
+            h.GetZaxis().SetTitle("<charge cluster> [ADC]")
+            h.Divide(self.haux_charge[s])
+            self._allhistograms.append(h)
 
     def store_histos(self,filename):
         """
@@ -662,6 +678,8 @@ class processor(object):
         import ROOT
         # Create the efficiency before recording them
         self.create_efficiency()
+        # Create the map of average charges
+        self.create_charge_map()
         # Store all the histograms
         f=ROOT.TFile.Open(filename,"RECREATE")
         for h in self._allhistograms:
@@ -728,6 +746,7 @@ class processor(object):
                 # Event and charge maps (using track predictions)
                 self.hmap[sensorID].Fill(xpred,ypred)
                 self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
+                self.haux_charge[sensorID].Fill(xpred,ypred)
         # Matching beetwen DUT and REF: hits with the same track ID
         for ihit_ref,itrk in matched_hits[refhits.id]:
             # Fill the total histogram (using the prediction in DUT)
