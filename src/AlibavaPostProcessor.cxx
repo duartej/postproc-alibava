@@ -334,42 +334,64 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
     pedestal.set_events_tree_branch_address("data_beetle1",&(thedata[0]));
     pedestal.set_events_tree_branch_address("data_beetle2",&(thedata[1]));
 
-    // Helper map 
+    // Helper maps 
     std::map<int,std::vector<float>*> postproc_thedata = { {0,nullptr}, {1,nullptr} };
+    std::map<int,std::vector<float>*> postproc_nullsignal = { {0,nullptr}, {1,nullptr} };
+
     // The new tree 
     TTree * t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
     // Create the new branches
+    // PEdestal with the common mode subtracted
     t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
     t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
+    // Nullsignal: S_k^{notcmmd} = S_k - <P_k> 
+    t->Branch("postproc_nullsignal_beetle1",&(postproc_nullsignal[0]));
+    t->Branch("postproc_nullsignal_beetle2",&(postproc_nullsignal[1]));
     
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();
     for(int k = 0; k < nentries; ++k)
     {
-        if( postproc_thedata[0] != nullptr )
+        for(auto & chip_v: postproc_thedata)
+        {
+            if(chip_v.second != nullptr)
+            {
+                chip_v.second->clear();
+            }
+        }
+        for(auto & chip_v: postproc_nullsignal)
+        {
+            if(chip_v.second != nullptr)
+            {
+                chip_v.second->clear();
+            }
+        }
+        /*if( postproc_thedata[0] != nullptr )
         {
             postproc_thedata[0]->clear();
         }
         if( postproc_thedata[1] != nullptr )
         {
             postproc_thedata[1]->clear();
-        }
+        }*/
 
         pedestal.get_events_entry(k);
         
-        std::vector<float> nullsignal;
-        nullsignal.reserve(ALIBAVA::NOOFCHANNELS);
+        //std::vector<float> nullsignal;
+        //nullsignal.reserve(ALIBAVA::NOOFCHANNELS);
         for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
         {
-            nullsignal.clear();
+            //nullsignal.clear();
             for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
             {
                 // Obtain the null-signal ADCs, i.e subtract to each pedestal 
                 // the calculated <pedestal>_evts for this channel)
-                nullsignal.push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
+                //nullsignal.push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
+                postproc_nullsignal[chip]->push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
             }
             // Now calculate the common noise over the null-signal ADCs
-            std::pair<float,float> cmmd_cerr= this->calculate_common_noise(nullsignal);
+            //std::pair<float,float> cmmd_cerr= this->calculate_common_noise(nullsignal);
+            std::pair<float,float> cmmd_cerr= this->calculate_common_noise(*postproc_nullsignal[chip]);
             // And Subtract the common noise to the pedestals: 
             // pedestals without the common noise
             for(int ichan=0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
@@ -393,6 +415,7 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
     // deallocate memory
     auxmem::deallocate_memory(thedata);
     auxmem::deallocate_memory(postproc_thedata);
+    auxmem::deallocate_memory(postproc_nullsignal);
 }
 
 std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::vector<float> & nullsignal)
