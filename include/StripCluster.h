@@ -41,6 +41,9 @@ class StripCluster
         float eta();
         // -- The eta of the seed (see details in the implementation)
         inline float eta_seed() const { return _eta_seed; }
+        // -- The position (in channel coordinates) estimated with 
+        //    the Center of Gravity algorithm
+        float position_cog();
 
     private:
         int _signal_polarity;

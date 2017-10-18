@@ -58,6 +58,7 @@ class IOASAResults
         std::vector<float> * _cluster_seed_charge;
         std::vector<float> * _cluster_eta_seed;
         std::vector<float> * _cluster_eta;
+        std::vector<float> * _cluster_position_cog;
         // -- maps for cluster-dependent variable
         //    cluster Id: vector
         std::map<int,std::vector<float> > * _cluster_channels;

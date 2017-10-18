@@ -95,3 +95,23 @@ float StripCluster::eta()
 
     return _eta_cluster;
 }
+
+float StripCluster::position_cog()
+{
+    if(this->size() == 1)
+    {
+        // The unique member, therefore its position  
+        return _channels[0];
+    }
+
+    float total_signal = 0;
+    float weighted_sum = 0;
+    for(int i=0; i < static_cast<int>(this->size()) ; ++i) 
+    {
+        total_signal += this->charge(i);
+        weighted_sum += this->charge(i)*_channels[i];
+    }
+	
+    return weighted_sum/total_signal;
+}
+

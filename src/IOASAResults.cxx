@@ -38,6 +38,7 @@ IOASAResults::IOASAResults(const std::string & filename):
     _cluster_seed_charge(nullptr),
     _cluster_eta_seed(nullptr),
     _cluster_eta(nullptr),
+    _cluster_position_cog(nullptr),
     _cluster_channels(nullptr)
 {
     // Initialize the file 
@@ -51,6 +52,7 @@ IOASAResults::IOASAResults(const std::string & filename):
     _branches_float.push_back(&_cluster_seed_charge);
     _branches_float.push_back(&_cluster_eta_seed);
     _branches_float.push_back(&_cluster_eta);
+    _branches_float.push_back(&_cluster_position_cog);
 
     // Allocate memory
     for(auto & el: _branches_int)
@@ -149,6 +151,7 @@ void IOASAResults::book_tree()
     _tree->Branch("cluster_seed_charge",&(_cluster_seed_charge));
     _tree->Branch("cluster_eta_seed",&(_cluster_eta_seed));
     _tree->Branch("cluster_eta",&(_cluster_eta));
+    _tree->Branch("cluster_position_cog",&(_cluster_position_cog));
 
     clear_variables();
 }
@@ -182,6 +185,7 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
         _cluster_seed_charge->push_back(cl->charge(0));
         _cluster_eta_seed->push_back(cl->eta_seed()); 
         _cluster_eta->push_back(cl->eta()); 
+        _cluster_position_cog->push_back(cl->position_cog()); 
     }
     _tree->Fill();
     
