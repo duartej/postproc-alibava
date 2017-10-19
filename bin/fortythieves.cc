@@ -194,7 +194,7 @@ int main(int argc, char* argv[])
     }
 
     // Initialize and prepare the ROOT output
-    IOManager iomanager(opt.outputFilename,opt.use_channels);
+    IOManager iomanager(opt.outputFilename);
     iomanager.book_tree_header();
     iomanager.book_tree();
     // Monitor plots, booking
@@ -222,7 +222,7 @@ int main(int argc, char* argv[])
         std::string calfile(opt.outputFilename.replace(dotpos,5,"_cal.root"));
         
         // Initialize and prepare the output
-        IOManager iomanager_cal(calfile,opt.use_channels);
+        IOManager iomanager_cal(calfile);
         iomanager_cal.book_tree_header();
         iomanager_cal.book_tree();
         // process the pedestal file
@@ -257,7 +257,7 @@ int main(int argc, char* argv[])
         const auto dotpos = opt.outputFilename.find(".root");
         std::string pedfile(opt.outputFilename.replace(dotpos,5,"_ped.root"));
         // Initialize and prepare the output
-        IOManager iomanager_ped(pedfile,opt.use_channels);
+        IOManager iomanager_ped(pedfile);
         iomanager_ped.book_tree_header();
         iomanager_ped.book_tree();
         // process the pedestal file
@@ -272,9 +272,10 @@ int main(int argc, char* argv[])
     
         // calculate pedestals and common noise: { bettle: { channels ,,, } }
         // XXX: Create an unique postproc
-        AlibavaPostProcessor postproc;
+        AlibavaPostProcessor postproc(opt.use_channels);
         std::cout << " - Calculating <pedestals>" << std::endl;
         PedestalNoiseBeetleMap pednoise_cmmdnot = postproc.calculate_pedestal_noise(iomanager_ped);
+        postproc.print_channels_mask();
         
         std::cout << " - Re-evaluating pedestals (noise extracted) and common mode" << std::endl;
         postproc.get_pedestal_noise_free(iomanager_ped,pednoise_cmmdnot);

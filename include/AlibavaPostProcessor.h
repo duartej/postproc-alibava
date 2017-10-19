@@ -24,8 +24,15 @@ class AlibavaPostProcessor
 {
     public:
         AlibavaPostProcessor();
+        AlibavaPostProcessor(const std::map<int,std::vector<int> > & use_channel);
         ~AlibavaPostProcessor() { ; }
 
+        // Check if a channel is masked
+        inline bool is_channel_masked(const int & chip, const int & channel) const 
+            {  return (_channel_mask.at(chip)[channel] == 0); }
+        void print_channels_mask() const;
+
+     
         // Obtain the equivalent electrons per ADC counts
         CalibrateBeetleMap calibrate(IOManager & gauge);
 
@@ -49,15 +56,25 @@ class AlibavaPostProcessor
         static float get_std_dev(const std::map<int,float> & v, const float & mean);
         
         // Evaluate the common noise of a set of signals
+        static std::pair<float,float> calculate_common_noise(const std::vector<float> & signal, const std::vector<int> & channel_mask);
+        // Overloaded version with no channels masked
         static std::pair<float,float> calculate_common_noise(const std::vector<float> & signal);
 
     private:
         bool _pedestal_subtracted;
         std::string _postproc_treename;
+        // The channel mask : 0-masked 1-use it
+        std::map<int,std::vector<int> > _channel_mask;
+        // Whether or not to automask noisy channels
+        bool _automasking;
+        // Criteria of automasking
+        float _mask_criterium;
 
         // Function to convert a map mimicking a vector list into a 
         // pure vector
         static std::vector<float> convert_map_in_vector(const std::map<int,float> & m);
+        // -- Auto-mask noisy channels
+        void mask_channels(const PedestalNoiseBeetleMap & ped_noise);
 };
 
 #endif

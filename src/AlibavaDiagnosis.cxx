@@ -254,6 +254,9 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
     // from the header contains all the values for all the chips
     std::vector<float> pedestal(ALIBAVA::NOOFCHANNELS);
     std::vector<float> noise(ALIBAVA::NOOFCHANNELS);
+
+    // The mask in the channels
+    std::vector<int> channel_mask(ALIBAVA::NOOFCHANNELS,1);
     
     // Go back to the previous position, move up 2 line, and set 
     // the 80 column
@@ -286,6 +289,11 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
                     pedestal[ichan] = (*vec_float_obj[br_map["pedestal"]])[el];
                     noise[ichan] = (*vec_float_obj[br_map["noise"]])[el];
                     ++el;
+                    // Check that the channels are not masked, if so, masked back
+                    if(pedestal[ichan] < 1e-9 && noise[ichan] < 1e-9)
+                    {
+                        channel_mask[ichan]=0;
+                    }
                 }
 
             }
@@ -295,6 +303,11 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
                 {
                     pedestal[ichan] = (*vec_float_obj[br_map["pedestal"]])[ichan];
                     noise[ichan] = (*vec_float_obj[br_map["noise"]])[ichan];
+                    // Check that the channels are not masked, if so, masked back
+                    if(pedestal[ichan] < 1e-9 && noise[ichan] < 1e-9)
+                    {
+                        channel_mask[ichan]=0;
+                    }
                 }
             }
             // And fill the corresponding graphs
@@ -332,6 +345,10 @@ void AlibavaDiagnosis::fill_diagnostic_plots(TTree * event_tree, TTree * header_
         // -- per channel plots
         for(int ich = 0; ich < ALIBAVA::NOOFCHANNELS; ++ich)
         {
+            if(channel_mask[ich] == 0)
+            {
+                continue;
+            }
             // subtract the common mode if needed
             if(!was_pedfile_proc)
             {
