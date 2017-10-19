@@ -124,10 +124,18 @@ void IOFortythieves::initialize()
     const std::string noise_str("noise_cmmd_beetle"+std::to_string(_chip+1));
     const std::string pedes_str("pedestal_cmmd_beetle"+std::to_string(_chip+1));
     const std::string calib_str("electronADC_beetle"+std::to_string(_chip+1));
+    const std::string mask_str("channel_mask_beetle"+std::to_string(_chip+1));
     // helper map 
     std::map<std::string,std::vector<float>* > br_names = { {noise_str,nullptr}, 
         {pedes_str,nullptr}, {calib_str,nullptr} };
     for(auto & name_vector: br_names)
+    {
+        _trees["postproc_runHeader"]->SetBranchStatus(std::string(name_vector.first+"*").c_str(),1);
+        _trees["postproc_runHeader"]->SetBranchAddress(name_vector.first.c_str(),&(name_vector.second));
+    }
+    // helper map for std::vector<int>
+    std::map<std::string,std::vector<int>* > br_int_names = { {mask_str,nullptr} };
+    for(auto & name_vector: br_int_names)
     {
         _trees["postproc_runHeader"]->SetBranchStatus(std::string(name_vector.first+"*").c_str(),1);
         _trees["postproc_runHeader"]->SetBranchAddress(name_vector.first.c_str(),&(name_vector.second));
@@ -140,6 +148,7 @@ void IOFortythieves::initialize()
     _noise = *(br_names[noise_str]);
     _pedestal = *(br_names[pedes_str]);
     _calibration = *(br_names[calib_str]);
+    _mask = *(br_int_names[mask_str]);
     
     // 4. De-activate the tree again, not needed anymore
     _trees["postproc_runHeader"]->ResetBranchAddresses();

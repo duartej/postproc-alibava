@@ -117,8 +117,8 @@ void display_usage()
       << " -p alibava raw-binary containing the pedestal run\n"
       << " -c alibava raw-binary containing the calibration run\n"
       << " -r run number [-1]\n"
-      << " -u use channels introduced as <chip>:ch0-ch1,<chip>:ch2-ch3,... "
-      << "    Those channels not in the list are masked\n"
+      << " -u use channels introduced as <chip>:ch0-ch1,<chip>:ch2-ch3,...\n "
+      << "   Those channels not in the list are masked\n"
       << " -n no automask noisy channels\n"
       << " -h show this help" << std::endl;
 }
