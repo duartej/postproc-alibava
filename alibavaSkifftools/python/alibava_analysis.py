@@ -359,7 +359,7 @@ class alibava_analysis(object):
         for k in evts:
             # Progress bar 
             sys.stdout.write("\r\033[1;34mINFO\033[1;m Alibava cluster analysis "+\
-                    "[ "+"\b"+str(int(float(k)/point)).rjust(3)+"%]")
+                    "[ "+"\b"+str(int(float(k+1)/point)).rjust(3)+"%]")
             sys.stdout.flush()
             self.process_event(k)
             analyze_event()

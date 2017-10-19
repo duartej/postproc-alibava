@@ -27,6 +27,7 @@
 #include <functional>
 #include <cmath>
 #include <algorithm>
+#include <ios>
 
 // Some auxiliary functions ----------------------------
 std::string trim_right(const std::string & s)
@@ -518,7 +519,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     // the event loop
     for(int k=0; k < this->get_events_number_entries(); ++k)
     {
-        std::cout << "\r\033[45C[" << std::setfill('0') << std::setw(3) 
+        std::cout << std::fixed << std::setprecision(0) << "\r\033[45C[" << std::setfill('0') << std::setw(3) 
             << std::round(float(k)/point) << "%]" << std::flush;
         clear_and_reserve_channels(data);
         clear_and_reserve_channels(out_cal);
