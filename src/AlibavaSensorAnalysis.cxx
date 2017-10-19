@@ -126,11 +126,7 @@ void AlibavaSensorAnalysis::print_configuration(IOFortythieves * ioft)
     std::cout << "\033[1;32mCONFIGURATION\033[1;m Allowed TDC time: [" 
         << std::setw(2) << _tdc_cut[0] << "," << std::setw(3) << _tdc_cut[1] 
         << "]" << std::endl;
-    std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking activated : " 
-        << std::setw(3) << automasking_str << std::endl;
-    std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking noisy channels if " 
-        << "|noise_{i} - <noise>| > " << std::setprecision(2) << std::setw(4) 
-        << _mask_criterium << " x sigma_{noise} " << std::endl;
+    std::cout << "\033[1;32mCONFIGURATION\033[1;m Automasking/masking propagated from fortythieves" << std::endl;
     std::cout << "\033[1;32mCONFIGURATION\033[1;m ******************** Channel Masking ******************* " 
         << std::endl;
     for(int ichan=0; ichan<ALIBAVA::NOOFCHANNELS; ) 
@@ -174,74 +170,21 @@ void AlibavaSensorAnalysis::mask_channels(const IOFortythieves * ioft)
         return;
     }
     
-    // Automatically mask algorithm  
-    
     // 0 -- Initialize the masked_channels vector if needed
     if(_masked_channels == nullptr)
     {
         _masked_channels = new std::vector<int>;
     }
-
-    // 1. -- Define a map to keep only non-noisy channels
-    // ichannel: noise
-    std::map<int,float> non_noisy_map;
     
-    // Get the noise vector and check the noisy channel condition
-    // which is given by:
-    //    i-strip is noisy if |N_{i} - <Noise> > Xsigma
-    for(int ch=0; ch < static_cast<int>(ioft->noise().size()); ++ch)
+    // Automatically mask algorithm --> DEPRECATED
+    // NOW is fortythieves in charge to auto-mask
+    for(int ch=0; ch < static_cast<int>(ioft->mask().size()); ++ch)
     {
-        // Not using already masked channels
-        if(this->is_channel_masked(ch))
+        if(ioft->mask()[ch] == 0)
         {
-            continue;
+            _masked_channels->push_back(ch);
         }
-        non_noisy_map.emplace(ch,ioft->noise()[ch]);
     }
-
-    // 1. Obtain the mean and the standard deviation for the noise
-    float mean_noise = auxfunc::get_mean(non_noisy_map);
-    float stddev_noise= auxfunc::get_std_dev(non_noisy_map,mean_noise);
-    
-    // 2. Use the mean and std. dev to find noise channels
-    //    while using criteria defined by the user, by
-    //    removing iteratively noisy channels until converge, i.e
-    //    the non_noisy_map will not loose any element anymore
-    unsigned int last_vec_size = ioft->noise().size();
-    do
-    {
-        // after the check from the 'while' statement, update
-        // the last know vector size
-        last_vec_size = non_noisy_map.size();
-        for(auto it = non_noisy_map.cbegin(); it != non_noisy_map.cend(); /* no increment*/)
-        {
-            if(this->is_channel_masked(it->first))
-            {
-                ++it;
-                continue;
-            }
-            // Remove the noisy channels and tag it as masked channel
-            if( std::abs(it->second-mean_noise)/stddev_noise > _mask_criterium )
-            {
-                std::cout << "\033[1;34mINFO [AUTO-MASKING]\033[1;m noisy channel: " 
-                    << std::setw(3) << it->first << " with noise: " << std::setprecision(3) 
-                    << std::setw(5) << it->second << " (<noise>_{all}: " 
-                    << std::setprecision(3) << std::setw(5) << mean_noise 
-                    << ", st. dev.: " << std::setprecision(3) << std::setw(5) << stddev_noise << ")" 
-                    << std::endl;
-                _masked_channels->push_back(it->first);
-                non_noisy_map.erase(it++);
-            }
-            else
-            {
-                // or keep it
-                ++it;
-            }
-        }
-        // 3. Recalculate the mean with the excluded signal channels
-        mean_noise = auxfunc::get_mean(non_noisy_map);
-        stddev_noise= auxfunc::get_std_dev(non_noisy_map,mean_noise);
-    } while( non_noisy_map.size() != last_vec_size );
 }
 
 bool AlibavaSensorAnalysis::check_analysis_cuts(const IOFortythieves * ioft) const

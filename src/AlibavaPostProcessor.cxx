@@ -62,10 +62,50 @@ namespace auxmem
 
 AlibavaPostProcessor::AlibavaPostProcessor():
     _pedestal_subtracted(false),
-    _postproc_treename("postproc_Events")
+    _postproc_treename("postproc_Events"),
+    _channel_mask({{0,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)},
+            {1,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)}}),
+    _automasking(true),
+    _mask_criterium(2.5)
 {
 }
 
+AlibavaPostProcessor::AlibavaPostProcessor(const std::map<int,std::vector<int> > & channel_mask):
+    _pedestal_subtracted(false),
+    _postproc_treename("postproc_Events"),
+    _channel_mask({{0,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)},
+            {1,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)}}),
+    _automasking(true),
+    _mask_criterium(2.5)
+{
+    // All channels initialize to 0 (masked)    
+    for(auto & chip_vect: channel_mask)
+    {
+        // Valid only chip 0 and 1
+        if(chip_vect.first != 0 && chip_vect.first != 1)
+        {
+            std::cerr << "[AlibavaPostProcessor::AlibavaPostProcessor ERROR] Invalid chip"
+                << " number [" << chip_vect.first << "] " << std::endl;
+            // Exception??
+            return;
+        }
+        // Be sure the user introduced the vector, then mask all channels
+        // so activate them only if requested
+        if(chip_vect.second.size() > 0)
+        {
+            std::fill(_channel_mask[chip_vect.first].begin(),_channel_mask[chip_vect.first].end(),0);
+        }
+        for(auto & ch: chip_vect.second)
+        {
+            if(ch >= static_cast<int>(_channel_mask[chip_vect.first].size()))
+            {
+                std::cerr << "[AlibavaPostProcessor::AlibavaPostProcessor WARNING] Invalid "
+                    << " channel number [" << ch << "] " << std::endl;
+            }
+            _channel_mask[chip_vect.first][ch]=1;
+        }
+    }
+}
 
 // Alternative algorithm using the calibration_charge from the Events tree
 CalibrateBeetleMap AlibavaPostProcessor::calibrate(IOManager & gauge)
@@ -211,6 +251,125 @@ CalibrateBeetleMap AlibavaPostProcessor::calibrate(IOManager & gauge)
     return output;
 }
 
+void AlibavaPostProcessor::mask_channels(const PedestalNoiseBeetleMap & ped_noise)
+{
+    // Asumming configuration
+    if(not _automasking)
+    {
+        std::cout << "\033[1;33mWARNING\033[1;m Automasking is de-activated " << std::endl;
+        // The user decide to put this masking 
+        // As this algorithm needs to be run (in order to include the channels masked 
+        // by the user), just put a never-filled criterium
+        _mask_criterium = -99999.9;
+    }
+    
+    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        // 1. -- Define a map to keep only non-noisy channels
+        // ichannel: noise
+        std::map<int,float> non_noisy_map;
+        
+        // Get the noise vector and check the noisy channel condition
+        // which is given by:
+        //    i-strip is noisy if |N_{i} - <Noise> > Xsigma
+        for(int ch=0; ch < static_cast<int>(ped_noise.at(chip).second.size()); ++ch)
+        {
+            // Not using already masked channels
+            if(this->is_channel_masked(chip,ch))
+            {
+                continue;
+            }
+            non_noisy_map.emplace(ch,ped_noise.at(chip).second[ch]);
+        }
+
+        // 1. Obtain the mean and the standard deviation for the noise
+        float mean_noise  = get_mean(non_noisy_map);
+        float stddev_noise= get_std_dev(non_noisy_map,mean_noise);
+        
+        // 2. Use the mean and std. dev to find noise channels
+        //    while using criteria defined by the user, by
+        //    removing iteratively noisy channels until converge, i.e
+        //    the non_noisy_map will not loose any element anymore
+        unsigned int last_vec_size = ped_noise.at(chip).second.size();
+        std::cout << "\033[1;34mINFO [AUTO-MASKING]\033[1;m CHIP: " << chip << std::endl;
+        do
+        {
+            // after the check from the 'while' statement, update
+            // the last know vector size
+            last_vec_size = non_noisy_map.size();
+            for(auto it = non_noisy_map.cbegin(); it != non_noisy_map.cend(); /* no increment*/)
+            {
+                if(this->is_channel_masked(chip,it->first))
+                {
+                    ++it;
+                    continue;
+                }
+                // Remove the noisy channels and tag it as masked channel
+                if( std::abs(it->second-mean_noise)/stddev_noise > _mask_criterium )
+                {
+                    std::cout << "\033[1;34mINFO [AUTO-MASKING]\033[1;m noisy channel: " 
+                        << std::setw(3) << it->first << " with noise: " << std::setprecision(3) 
+                        << std::setw(5) << it->second << " (<noise>_{all}: " 
+                        << std::setprecision(3) << std::setw(5) << mean_noise 
+                        << ", st. dev.: " << std::setprecision(3) << std::setw(5) << stddev_noise << ")" 
+                        << std::endl;
+                    _channel_mask[chip][it->first] = 0;
+                    non_noisy_map.erase(it++);
+                }
+                else
+                {
+                    // or keep it
+                    ++it;
+                }
+            }
+            // 3. Recalculate the mean with the excluded signal channels
+            mean_noise = get_mean(non_noisy_map);
+            stddev_noise= get_std_dev(non_noisy_map,mean_noise);
+        } while( non_noisy_map.size() != last_vec_size );
+    }
+}
+
+void AlibavaPostProcessor::print_channels_mask() const
+{
+    std::string automasking_str("Yes");
+    if(!_automasking)
+    {
+        automasking_str = "No";
+    }
+    // define columns for the channels
+    const int channelprintnum = 16;
+    
+    std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m Automasking activated : " 
+        << std::setw(3) << automasking_str << std::endl;
+    std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m Automasking noisy channels if " 
+        << "|noise_{i} - <noise>| > " << std::setprecision(2) << std::setw(4) 
+        << _mask_criterium << " x sigma_{noise} " << std::endl;
+    std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m ******************** Channel Masking ******************* " 
+        << std::endl;
+    for(int chip=0; chip < ALIBAVA::NOOFCHIPS; ++chip)
+    {
+        std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m CHIP: " << chip << std::endl;
+        for(int ichan=0; ichan<ALIBAVA::NOOFCHANNELS; ) 
+        {
+            if(ichan % channelprintnum ==0)
+            {
+                if(ichan !=0)
+                {
+                    std::cout << std::endl;
+                }
+                std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m   Channels "<< std::setw(3) << ichan 
+                    << " - "<< std::setw(3) << ichan+channelprintnum-1  << " : ";
+            }
+            std::cout << !this->is_channel_masked(chip,ichan) << " ";
+            ++ichan;
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "\033[1;34mINFO [CHANNEL MASK]\033[1;m ******************** Channel Masking ******************* " 
+        << std::endl;
+}
+
+
 PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOManager & pedestal)
 {
     std::string data_b1_brname("data_beetle1");
@@ -289,8 +448,19 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
         {
             const int fit_status = histos[chip][ichan]->Fit(gausfunc[chip][ichan],"Q");
             fitstatus_m[chip].push_back(fit_status);
-            output[chip].first.push_back( (gausfunc[chip][ichan])->GetParameter(1) );
-            output[chip].second.push_back( (gausfunc[chip][ichan])->GetParameter(2) );
+            // Note this will be active after the pedestal is subtracted
+            if(this->is_channel_masked(chip,ichan))
+            {
+                output[chip].first.push_back(0.0);
+                output[chip].second.push_back(0.0);
+                // doesn't matter the fit
+                fitstatus_m[chip][ichan] = 0;
+            }
+            else
+            {
+                output[chip].first.push_back( (gausfunc[chip][ichan])->GetParameter(1) );
+                output[chip].second.push_back( (gausfunc[chip][ichan])->GetParameter(2) );
+            }
         }
     }
     // Check if anything went wrong, 
@@ -319,6 +489,13 @@ PedestalNoiseBeetleMap AlibavaPostProcessor::calculate_pedestal_noise(const IOMa
     // RE-activate all branches (and reset their object addresses)
     pedestal.reset_events_tree();
 
+    // Mask noisy channels only if this is the first call of this
+    // function, before do the subtraction
+    if(!this->_pedestal_subtracted)
+    {
+        this->mask_channels(output);
+    }
+
     return output;
 }
 
@@ -336,7 +513,6 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
 
     // Helper maps 
     std::map<int,std::vector<float>*> postproc_thedata = { {0,nullptr}, {1,nullptr} };
-    std::map<int,std::vector<float>*> postproc_nullsignal = { {0,nullptr}, {1,nullptr} };
 
     // The new tree 
     TTree * t = new TTree(this->_postproc_treename.c_str(),"Post-processed Events");
@@ -344,22 +520,12 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
     // PEdestal with the common mode subtracted
     t->Branch("postproc_data_beetle1",&(postproc_thedata[0]));
     t->Branch("postproc_data_beetle2",&(postproc_thedata[1]));
-    // Nullsignal: S_k^{notcmmd} = S_k - <P_k> 
-    t->Branch("postproc_nullsignal_beetle1",&(postproc_nullsignal[0]));
-    t->Branch("postproc_nullsignal_beetle2",&(postproc_nullsignal[1]));
     
     // loop over the tree to fill the histograms
     const int nentries = pedestal.get_events_number_entries();
     for(int k = 0; k < nentries; ++k)
     {
         for(auto & chip_v: postproc_thedata)
-        {
-            if(chip_v.second != nullptr)
-            {
-                chip_v.second->clear();
-            }
-        }
-        for(auto & chip_v: postproc_nullsignal)
         {
             if(chip_v.second != nullptr)
             {
@@ -377,26 +543,38 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
 
         pedestal.get_events_entry(k);
         
-        //std::vector<float> nullsignal;
-        //nullsignal.reserve(ALIBAVA::NOOFCHANNELS);
+        std::vector<float> nullsignal;
+        nullsignal.reserve(ALIBAVA::NOOFCHANNELS);
         for(int chip = 0; chip < ALIBAVA::NOOFCHIPS; ++chip)
         {
-            //nullsignal.clear();
+            nullsignal.clear();
             for(int ichan = 0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
             {
                 // Obtain the null-signal ADCs, i.e subtract to each pedestal 
                 // the calculated <pedestal>_evts for this channel)
-                //nullsignal.push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
-                postproc_nullsignal[chip]->push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
+                if(this->is_channel_masked(chip,ichan))
+                {
+                    nullsignal.push_back(0.0);
+                }
+                else
+                {
+                    nullsignal.push_back( (*(thedata[chip]))[ichan]-mean_ped_map.at(chip).first[ichan] );
+                }
             }
             // Now calculate the common noise over the null-signal ADCs
-            //std::pair<float,float> cmmd_cerr= this->calculate_common_noise(nullsignal);
-            std::pair<float,float> cmmd_cerr= this->calculate_common_noise(*postproc_nullsignal[chip]);
+            std::pair<float,float> cmmd_cerr= this->calculate_common_noise(nullsignal,this->_channel_mask[chip]);
             // And Subtract the common noise to the pedestals: 
             // pedestals without the common noise
             for(int ichan=0; ichan < ALIBAVA::NOOFCHANNELS; ++ichan)
             {
-                postproc_thedata[chip]->push_back((*(thedata[chip]))[ichan]-cmmd_cerr.first);
+                if(this->is_channel_masked(chip,ichan))
+                {
+                    postproc_thedata[chip]->push_back(0.0);
+                }
+                else
+                {
+                    postproc_thedata[chip]->push_back((*(thedata[chip]))[ichan]-cmmd_cerr.first);
+                }
             }
         }
         t->Fill();
@@ -415,10 +593,16 @@ void AlibavaPostProcessor::get_pedestal_noise_free(const IOManager & pedestal, c
     // deallocate memory
     auxmem::deallocate_memory(thedata);
     auxmem::deallocate_memory(postproc_thedata);
-    auxmem::deallocate_memory(postproc_nullsignal);
 }
 
+// Overloaded with no masked channels
 std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::vector<float> & nullsignal)
+{
+    std::vector<int> ch_m(ALIBAVA::NOOFCHANNELS,1);
+    return AlibavaPostProcessor::calculate_common_noise(nullsignal,ch_m);
+}
+
+std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::vector<float> & nullsignal,const std::vector<int> & channel_mask)
 {
     // The criteria to discard signal ADC entries
     const float _NoiseDeviation = 2.5;
@@ -426,11 +610,14 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
     // Map to keep only non-signal ADCs 
     // ichannel: ADC
     std::map<int,float> non_signal_map;
-    // XXX: Mask them ?
-    // std::vector<int> masked_channels;
+    
     // initialize the map
     for(int i=0; i < static_cast<int>(nullsignal.size()); ++i)
     {
+        if(channel_mask[i] == 0)
+        {
+            continue;
+        }
         non_signal_map.emplace(i,nullsignal[i]);
     }
     
@@ -450,6 +637,11 @@ std::pair<float,float> AlibavaPostProcessor::calculate_common_noise(const std::v
         //    is considered signal
         for(auto it = non_signal_map.cbegin(); it != non_signal_map.cend(); /* no increment*/)
         {
+            if(channel_mask[it->first] == 0)
+            {
+                ++it;
+                continue;
+            }
             // Remove the signal channels 
             if( std::abs(it->second-mean_signal)/stddev_signal > _NoiseDeviation )
             {

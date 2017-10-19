@@ -47,10 +47,12 @@ class IOFortythieves
         // Get the total entries for the Events tree
         inline int get_entries() const { return _entries; }
 
-        // Getter for the noise vector 
+        // Getter for the noise vector, pedestal and calibration
         inline const std::vector<float> & noise() const { return _noise; }
         inline const std::vector<float> & pedestal() const { return _pedestal; }
         inline const std::vector<float> & calibration() const { return _calibration; }
+        // Getter for the applied mask propagated from fortythieves
+        inline const std::vector<int>   & mask() const { return _mask; }
 
         // Getters for event-related 
         inline int event_number() const { return _event_number; }
@@ -95,6 +97,8 @@ class IOFortythieves
         // Note that this vector provides the number of electrons
         // which corresponds to a ADC (per channel)
         std::vector<float> _calibration;
+        // Mask applied in the fortythieves
+        std::vector<int> _mask;
 };
 
 

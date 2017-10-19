@@ -109,6 +109,8 @@ IOManager::IOManager(const std::string & rootfilename):
     _tree_header(nullptr),
     _tree_events(nullptr),
     _eventsProcessed(0),
+    _channel_mask({{0,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)},
+            {1,std::vector<int>(ALIBAVA::NOOFCHANNELS,1)}}),
     _monitor_plots_booked(false),
     _cal_parameters(nullptr),
     _runheader(nullptr), 
@@ -118,6 +120,7 @@ IOManager::IOManager(const std::string & rootfilename):
 
     _monitor_plots = { {1,new AlibavaDiagnosis(1)}, {2,new AlibavaDiagnosis(2)} };
 }
+
 
 IOManager::~IOManager()
 {
@@ -411,6 +414,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     
     std::map<int,std::vector<float>*> pedestal = { {0, nullptr}, { 1, nullptr} }; 
     std::map<int,std::vector<float>*> noise = { {0,nullptr}, {1,nullptr} }; 
+    std::map<int,std::vector<int>*> channel_mask = { {0,nullptr}, {1,nullptr} }; 
     // Filling it as branches: 
     // XXX: BE CAREFUL though. If storage problems show up maybe change the approach to
     // create a new tree
@@ -418,18 +422,30 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
     std::vector<TBranch*> newbranches;
     newbranches.push_back(t->Branch("pedestal_cmmd_beetle1",&(pedestal[0])));
     newbranches.push_back(t->Branch("noise_cmmd_beetle1",&(noise[0])));
+    newbranches.push_back(t->Branch("channel_mask_beetle1",&(channel_mask[0])));
     newbranches.push_back(t->Branch("pedestal_cmmd_beetle2",&(pedestal[1])));
     newbranches.push_back(t->Branch("noise_cmmd_beetle2",&(noise[1])));
+    newbranches.push_back(t->Branch("channel_mask_beetle2",&(channel_mask[1])));
 
     // The loop (clear the vectors, and reserve memory)
-    clear_and_reserve_channels(pedestal);
-    clear_and_reserve_channels(noise);
+    clear_and_reserve_channels<float>(pedestal);
+    clear_and_reserve_channels<float>(noise);
+    clear_and_reserve_channels<int>(channel_mask);
     for(const auto & chip_p: pednoise_m)
     {
         for(int i = 0; i < static_cast<int>(chip_p.second.first.size()); ++i)
         {
             pedestal[chip_p.first]->push_back(chip_p.second.first[i]);
             noise[chip_p.first]->push_back(chip_p.second.second[i]);
+            // if pedestal and noise are 0 --> the channel is masked
+            if(chip_p.second.first[i] < 1e-9 && chip_p.second.second[i] < 1e-9)
+            {
+                channel_mask[chip_p.first]->push_back(0);
+            }
+            else
+            {
+                channel_mask[chip_p.first]->push_back(1);
+            }
         }
     }
     // fill all branches
@@ -521,7 +537,7 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
             {
                 pedestal_free.push_back( (*chip_rawdata.second)[ch]-(*pedestal[chip_rawdata.first])[ch] );
             }
-            const auto cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(pedestal_free);
+            const auto cmmd_and_noise = AlibavaPostProcessor::calculate_common_noise(pedestal_free,*(channel_mask[chip_rawdata.first]));
             // And also store it
             common_mode[chip_rawdata.first]=cmmd_and_noise.first;
             noise_cmmd[chip_rawdata.first] =cmmd_and_noise.second;
@@ -529,8 +545,16 @@ void IOManager::update(const PedestalNoiseBeetleMap & pednoise_m)
             for(int ichan = 0 ; ichan < static_cast<int>(chip_rawdata.second->size()); ++ichan)
             {
                 // Signal
-                data[chip_rawdata.first]->push_back( pedestal_free[ichan] - cmmd_and_noise.first );
-                fill_calibrated_branches(chip_rawdata.first,ichan);
+                if((*channel_mask[chip_rawdata.first])[ichan] == 0)
+                {
+                    data[chip_rawdata.first]->push_back( 0.0 );
+                    //fill_calibrated_branches(chip_rawdata.first,ichan);
+                }
+                else
+                {
+                    data[chip_rawdata.first]->push_back( pedestal_free[ichan] - cmmd_and_noise.first );
+                    fill_calibrated_branches(chip_rawdata.first,ichan);
+                }
             }
         }
         tevt->Fill();
