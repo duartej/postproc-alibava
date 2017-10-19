@@ -34,11 +34,13 @@ class IOASAResults
         void book_tree();
 
         // Tree filling
+        void book_fill_header(const IOFortythieves * ioft_inst);
         void fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnalysis * aa_inst);
 
     private:
         TFile *_file; 
         TTree *_tree;
+        TTree *_tree_header;
 
         // The variables to get attached the new branches:
         // -- Simple elements
@@ -55,6 +57,8 @@ class IOASAResults
         std::vector<int> * _cluster_seed_channel;
         // -- float vectors
         std::vector<float> * _cluster_charge;
+        std::vector<float> * _cluster_cal_charge;
+        std::vector<float> * _cluster_snr;
         std::vector<float> * _cluster_seed_charge;
         std::vector<float> * _cluster_eta_seed;
         std::vector<float> * _cluster_eta;

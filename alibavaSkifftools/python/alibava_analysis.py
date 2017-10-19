@@ -58,6 +58,7 @@ class alibava_analysis(object):
         self._lib.ioresults_new.argtypes = [ ctypes.c_char_p ]
         self._lib.ioresults_delete.argtypes = [ ctypes.c_void_p ]
         self._lib.ioresults_book_tree.argtypes = [ ctypes.c_void_p ]
+        self._lib.ioresults_fill_header.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
         self._lib.ioresults_fill_tree.argtypes = [ ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p ]
         # -- some setters
         self._lib.aa_configure_polarity.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
@@ -346,6 +347,8 @@ class alibava_analysis(object):
 
         # If there is a results instance booked
         if self._store_results:
+            # the header
+            self._lib.ioresults_fill_header(self._results,self._ioft)
             analyze_event=lambda: self._lib.ioresults_fill_tree(self._results,self._ioft,self._sensor_analysis)
         else:
             analyze_event=lambda: self._lib.aa_find_clusters(self._sensor_analysis,self._ioft)

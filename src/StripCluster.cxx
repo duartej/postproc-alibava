@@ -45,6 +45,34 @@ float StripCluster::charge() const
             [this] (const float & previous, const std::map<int,float>::value_type & p) { return previous+_signal_polarity*p.second; }) ;
 }
 
+float StripCluster::calibrated_charge(const std::vector<float> & calibration) 
+{
+    float total_charge = 0.0;
+    for(int ch=0; ch < static_cast<int>(calibration.size()); ++ch)
+    {
+        if(std::find(_channels.begin(),_channels.end(),ch) != _channels.end())
+        {
+            total_charge += _signal_polarity*_signal_map[ch]*calibration[ch];
+        }
+        
+    }
+    return total_charge;
+}
+
+float StripCluster::snr(const std::vector<float> & noise)
+{
+    float cluster_noise = 0.0;
+    for(int ch=0; ch < static_cast<int>(noise.size()); ++ch)
+    {
+        if(std::find(_channels.begin(),_channels.end(),ch) != _channels.end())
+        {
+            cluster_noise += noise[ch];
+        }
+        
+    }
+    return this->charge()/cluster_noise;
+}
+
 float StripCluster::eta()
 {
     // First check if the data was already calculated, not

@@ -37,6 +37,10 @@ class StripCluster
         inline float charge(const int & element_index) { return _signal_polarity*_signal_map[_element_index[element_index]]; }
         // -- The total charge of the cluster
         float charge() const;
+        // The calibrated charge
+        float calibrated_charge(const std::vector<float> & calibration); 
+        // The cluster signal to noise
+        float snr(const std::vector<float> & noise) ;
         // -- The eta of the cluster (see details in the implementation)
         float eta();
         // -- The eta of the seed (see details in the implementation)

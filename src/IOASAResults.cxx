@@ -25,6 +25,7 @@
 IOASAResults::IOASAResults(const std::string & filename):
     _file(nullptr),
     _tree(nullptr),
+    _tree_header(nullptr),
     _event_number(-1),
     _polarity(0),
     _cluster_number(-1),
@@ -35,6 +36,8 @@ IOASAResults::IOASAResults(const std::string & filename):
     _cluster_size(nullptr),
     _cluster_seed_channel(nullptr),
     _cluster_charge(nullptr),
+    _cluster_cal_charge(nullptr),
+    _cluster_snr(nullptr),
     _cluster_seed_charge(nullptr),
     _cluster_eta_seed(nullptr),
     _cluster_eta(nullptr),
@@ -49,6 +52,8 @@ IOASAResults::IOASAResults(const std::string & filename):
     _branches_int.push_back(&_cluster_seed_channel);
 
     _branches_float.push_back(&_cluster_charge);
+    _branches_float.push_back(&_cluster_cal_charge);
+    _branches_float.push_back(&_cluster_snr);
     _branches_float.push_back(&_cluster_seed_charge);
     _branches_float.push_back(&_cluster_eta_seed);
     _branches_float.push_back(&_cluster_eta);
@@ -70,42 +75,22 @@ IOASAResults::~IOASAResults()
     // Storing results at the file
     _file->Write(nullptr,TObject::kOverwrite);
     _file->Close();
-    // deallocating memory
-    /*if(_file != nullptr)
-    {
-        delete _file;
-        _file = nullptr;
-    }
-    if(_tree != nullptr)
-    {
-        delete _tree;
-        _tree = nullptr;
-    }
     
-    // Freeing memory
-    for(auto & el: _branches_int)
+    // de-allocate memory
+    /*for(auto & el: _branches_int)
     {
-        if(el != nullptr)
+        if( *el ==  nullptr)
         {
-            delete el;
-            el = nullptr;
+            delete *el;
+            *el = nullptr;
         }
     }
     for(auto & el: _branches_float)
     {
-        if(el != nullptr)
+        if( *el ==  nullptr)
         {
-            delete el;
-            el = nullptr;
-        }
-    }*/
-    
-    /*for(auto & h: _histos)
-    {
-        if(h.second != nullptr)
-        {
-            delete h.second;
-            h.second = nullptr;
+            delete *el;
+            *el = nullptr;
         }
     }*/
 }
@@ -147,6 +132,8 @@ void IOASAResults::book_tree()
     _tree->Branch("cluster_number",&(_cluster_number));
     _tree->Branch("cluster_size",&(_cluster_size));
     _tree->Branch("cluster_charge",&(_cluster_charge));
+    _tree->Branch("cluster_calibrated_charge",&(_cluster_cal_charge));
+    _tree->Branch("cluster_snr",&(_cluster_snr));
     _tree->Branch("cluster_seed_channel",&(_cluster_seed_channel));
     _tree->Branch("cluster_seed_charge",&(_cluster_seed_charge));
     _tree->Branch("cluster_eta_seed",&(_cluster_eta_seed));
@@ -154,6 +141,32 @@ void IOASAResults::book_tree()
     _tree->Branch("cluster_position_cog",&(_cluster_position_cog));
 
     clear_variables();
+}
+
+// XXX Probably not needed!!?? TO BE DEPRECATED?
+void IOASAResults::book_fill_header(const IOFortythieves * ioft_inst)
+{
+    _tree_header = new TTree("header","Common for all the events");
+
+    std::vector<int> * mask = new std::vector<int>;
+    std::vector<float> * pedestal = new std::vector<float>;
+    std::vector<float> * noise = new std::vector<float>;
+    std::vector<float> * calibration = new std::vector<float>;
+    
+    // Note that the ownership is desplaced to the tree, 
+    // after the use of the branch method
+    _tree_header->Branch("pedestal",&(pedestal));
+    _tree_header->Branch("noise",&(noise));
+    _tree_header->Branch("calibration",&(calibration));
+    _tree_header->Branch("mask",&(mask));
+
+    // Set the values
+    pedestal = const_cast<std::vector<float>*>(&(ioft_inst->pedestal()));
+    noise    = const_cast<std::vector<float>*>(&(ioft_inst->noise()));
+    calibration   = const_cast<std::vector<float>*>(&(ioft_inst->calibration()));
+    mask     = const_cast<std::vector<int>*>(&(ioft_inst->mask()));
+
+    _tree_header->Fill();
 }
 
 void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnalysis * aa_inst)
@@ -181,6 +194,8 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
     {
         _cluster_size->push_back(cl->size());
         _cluster_charge->push_back(cl->charge());
+        _cluster_cal_charge->push_back(cl->calibrated_charge(ioft_inst->calibration()));
+        _cluster_snr->push_back(cl->snr(ioft_inst->noise()));
         _cluster_seed_channel->push_back(cl->channels(0));
         _cluster_seed_charge->push_back(cl->charge(0));
         _cluster_eta_seed->push_back(cl->eta_seed()); 
@@ -204,6 +219,7 @@ extern "C"
     void ioresults_delete(IOASAResults * ioresults_inst) { ioresults_inst->~IOASAResults(); }
     // Book and fill
     void ioresults_book_tree(IOASAResults * ioresults_inst) { ioresults_inst->book_tree(); }
+    void ioresults_fill_header(IOASAResults * ioresults_inst, IOFortythieves * ioft) { ioresults_inst->book_fill_header(ioft); }
     void ioresults_fill_tree(IOASAResults * iores, IOFortythieves * ioft, AlibavaSensorAnalysis * aa) { iores->fill_tree(ioft,aa); }
 #ifdef __cplusplus
 }
