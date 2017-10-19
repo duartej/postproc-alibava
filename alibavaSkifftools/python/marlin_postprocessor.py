@@ -176,7 +176,7 @@ class hits_plane_accessor(object):
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
 
-    def matched_hits(self,track_acc,histo):
+    def matched_hits(self,track_acc,histo,hres):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event
 
@@ -186,6 +186,9 @@ class hits_plane_accessor(object):
             The accessor to the telescope tracks branches
         histo: ROOT.TH2
             The histogram to store correlation between the 
+            hit in the sensor and the hit in the track
+        hres: ROOT.TH1
+            The histogram to store residuals between the 
             hit in the sensor and the hit in the track
 
         Return
@@ -208,9 +211,12 @@ class hits_plane_accessor(object):
 
             # Fill correlation histograms
             histo.Fill(x_in_hit,xpredicted)
+            hres.Fill(xpredicted-x_in_hit)
             # define resolution (an input maybe?)
             # and olny add the track matched within the 
             # resolution
+            # XXX Resolution MUST be related with the sensor 
+            # resolution \otimes track resolution (maybe any other effect?)
             res = RESOLUTION[self.id]
             if res > distance:
                 matched_hits.append( (ihit,trk_el) )
@@ -621,16 +627,17 @@ class processor(object):
         self.events_with_ref_no_tracks = 0
         self.events_with_ref_dut_tracks = 0
         # Some statistic histograms
-        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-0.5*MM,0.5*MM),
-                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-0.5*MM,0.5*MM) }
+        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
+                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
         # -- histograms DUTS/REF
+        # XXX: binning should be related with the pitch 
         self.hmap = { minst.dut_plane: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
                 minst.ref_plane: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
-        self.hcharge = { minst.dut_plane: ROOT.TH2F("precharge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("precharge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM) }
+        self.hcharge = { minst.dut_plane: ROOT.TH2F("precharge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("precharge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM) }
         # Keep the number of entries used in each bin
-        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",250,-10.0*MM,10.0*MM,250,-10.0*MM,10.0*MM) }
+        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM) }
         # Correlations
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
                 minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
@@ -733,8 +740,8 @@ class processor(object):
 
         # Get the matched hits { sensorID: [ (hit_index,track_index,. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
-        matched_hits = { duthits.id: duthits.matched_hits(trks,self.hcorr_trkX[duthits.id]),
-                refhits.id: refhits.matched_hits(trks,self.hcorr_trkX[refhits.id]) }
+        matched_hits = { duthits.id: duthits.matched_hits(trks,self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id]),
+                refhits.id: refhits.matched_hits(trks,self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id]) }
         predictions = {}
         # Filling histograms
         for sensorID,pointlist in matched_hits.iteritems():
@@ -742,7 +749,7 @@ class processor(object):
             for hit_el,trk_index in pointlist:
                 xpred,ypred = trks.get_point(trk_index,hits.z[hit_el])
                 # Residuals
-                self.residual_projection[sensorID].Fill(xpred-hits.x[hit_el])
+                ##self.residual_projection[sensorID].Fill(xpred-hits.x[hit_el])
                 # Event and charge maps (using track predictions)
                 self.hmap[sensorID].Fill(xpred,ypred)
                 self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
