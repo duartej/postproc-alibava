@@ -19,7 +19,7 @@ __status__ = "Development"
 # Incluir covariance en los hits fitted
 # TODO OBTAIN FROM SPS
 REFPLANE=7
-DUTPLANE=6
+DUTPLANE=5
 RESOLUTION= { DUTPLANE: 0.2, REFPLANE : 0.1 } # in mm
 SENSOR_NAME = { REFPLANE: "REF", DUTPLANE: "DUT" }
 
@@ -821,6 +821,10 @@ def sensor_map_production(fname):
     # And obtain some metadata (ID of the sensors and sensors
     # resolutions)
     metadata = metadata_container(t,name_converter[fp.sensor_name])
+
+    # FIXME provisional XXX
+    RESOLUTION= { metadata.dut_plane: 0.2, metadata.ref_plane : 0.1 } # in mm
+    SENSOR_NAME = { metadata.ref_plane: "REF", metadata.dut_plane: "DUT" }
 
     # Set some globals
     #tree_inspector(t)
