@@ -1882,7 +1882,7 @@ class prealignment(marlin_step):
         from .SPS2017TB_metadata import get_beetle
         
         if not kwd.has_key('PREALIGN_DUMP_GEAR'):
-            raise RuntimeError("Needed 'PREALIGNED_DUMP_GEAR', argument not present")
+            raise RuntimeError("Needed 'PREALIGN_DUMP_GEAR', argument not present")
         if kwd['PREALIGN_DUMP_GEAR'] == True:
             kwd['PREALIGN_DUMP_GEAR'] ='true'
         else:
@@ -1901,10 +1901,10 @@ class prealignment(marlin_step):
         return kwd
 
 class sensors_update_gear(telescope_update_gear):
-    def __init__(self):
+    def __init__(self,in_full_reco_mode=False):
         import os
         import shutil
-        super(sensors_update_gear,self).__init__(False)
+        super(sensors_update_gear,self).__init__(in_full_reco_mode)
         super(telescope_update_gear,self).__init__('sensors_update_gear')
 
         self.devices = ['Telescope','DUT']
@@ -1915,6 +1915,11 @@ class sensors_update_gear(telescope_update_gear):
         # Just using the Pre alignment
         self.argument_values['GEAR_SUFFIX_INPUT'] = "_aligned_DUTREF"
         self.argument_values['GEAR_SUFFIX'] = "_PreAlign"
+        # Auxiliary member to take into account if the step is run
+        # within the merge_full_reco metaclass, in that case 
+        # the extraction of the iteration in the special_preprocesing
+        # method is performed in a different approach
+        self._embebbed_metaclass = in_full_reco_mode
         
         # A dummy lcio with one event to enter in the processEvent
         self.auxiliary_files.append('dummy_lcio.slcio')
@@ -2015,6 +2020,170 @@ class simple_coordinate_finder_DUT(marlin_step):
         #'Simple coordinate finder for the DUTs: a line extrapolation from Telescope planes
         return '\033[1;31mTO BE DEPRECATED\033[1;m'  
 
+# Metaclass to deal with the the ALIBAVA-Telescope MERGING
+class merge_full_reco(marlin_step):
+    """Class to gather a set of marlin_step instances to be run serialized, 
+    where the inputs and outputs are related between them. 
+    The 'step_chain' data-member (A,B,C) is a 3-tuple where A is the 
+    marlin_step instance, B is a dictionary with the arguments and values
+    to be used by the instance, and C is the needed functor to be called 
+    when use the 3-tuple (at the 'publish_steering_file' method)
+
+    This class deals with the last step of the processing, after the 
+    ALIBAVA and the TELESCOPE data are processed, they are merged to
+    obtain telescope tracks and DUT and REF sensors hit at the same 
+    events    
+    """
+    def __init__(self):
+        import os
+        super(merge_full_reco,self).__init__('merge_full_reco')
+        self.devices = ['Telescope','DUT']
+        
+        # -- Dummy 
+        self.required_arguments = () 
+
+        # The list of steps with their needed arguments
+        self.step_chain = ( 
+                (merger(), { 'TELESCOPE_INPUT_FILENAME': self.telescope_raw_file, \
+                        'ALIBAVA_INPUT_FILENAME': self.alibava_raw_file, \
+                        'ALIBAVA_REF_INPUT_FILENAME': self.ref_raw_file},self.update_output),
+                (hitmaker(), {'INPUT_FILENAMES':self.last_output_filename},self.update_output),
+                # Don't update the output
+                (prealignment(), {'INPUT_FILENAMES': self.last_output_filename,\
+                        'PREALIGN_DUMP_GEAR':self.prealign_dump_gear},self.dummy),
+                (sensors_update_gear(True),{'RUN_NUMBER':self.get_run_number},self.dummy),
+                (fitter(),{'INPUT_FILENAMES': self.last_output_filename},self.update_output),
+                (create_ntuple(),{'INPUT_FILENAMES': self.last_output_filename},self.dummy)
+                )
+
+    # Some datamembers used in the step_chain are not going to be 
+    # populated until the call to the step is performed, using them
+    # as properties. Note the use of the updaters (like the setters of
+    # a property) methods (defined below, are the mechanism to update
+    # this elements)
+    def telescope_raw_file(self):
+        return self._telescope_raw_file
+    
+    def alibava_raw_file(self):
+        return self._alibava_raw_file
+    
+    def ref_raw_file(self):
+        return self._ref_raw_file
+
+    def prealign_dump_gear(self):
+        return self._prealign_dump_gear
+
+    def last_output_filename(self):
+        return self._last_output_filename
+    
+    # Updaters
+    def update_output(self,step_inst):
+        """Update the last_output_filename data member using the value
+        from the last step
+        """
+        self._last_output_filename = step_inst.argument_values['OUTPUT_FILENAME']
+
+    def dummy(self,step_inst):
+        pass
+    
+    def get_run_number(self):
+        """Obtain the run number from the current output filename (which should be
+        the corresponding to the hitmaker step)
+        """
+        import os
+
+        #if os.path.basename(self._last_output_filename).find('run000') != 0:
+        #    raise RuntimeError("The file created by the 'telescope_filter'"\
+        #            " step does not follow the name convection: '{0}'".format(self._last_output_filename))
+        rawnumber = os.path.basename(self._last_output_filename).split("_")[0]
+        return int(rawnumber)
+
+    @staticmethod
+    def get_description():
+        return '\033[1;32mMetaclass\033[1;m to perform the merging of the'+\
+                'Telescope data with the Alibava data'
+
+    def publish_steering_file(self,**kwd):
+        """Creates every steering file needed to merge
+        the TELESCOPE with the Alibava data using only the RAW 
+        telescope and alibava data filenames. 
+        Note that the other values should be change manually later in 
+        the created steering files
+
+        Parameters
+        ----------
+        TELESCOPE_INPUT_FILENAME: str
+            the name of the raw telescope file
+        ALIBAVA_INPUT_FILENAME: str
+            the name of the raw alibava data beam file corresponding
+            to the DUT sensors
+        ALIBAVA_REF_INPUT_FILENAME: str
+            the name of the raw alibava data beam file corresponding
+            to the reference sensor
+
+        Raises
+        ------
+        NotImplementedError
+            If any of the introduced arguments is not defined in 
+            the _ARGUMENTS static dictionary
+        """
+        import time
+        import datetime
+        import os
+        import stat
+        import shutil
+    
+        # Check for inconsistencies
+        for key in ['TELESCOPE_INPUT_FILENAME','ALIBAVA_INPUT_FILENAME',\
+                'ALIBAVA_REF_INPUT_FILENAME','PREALIGN_DUMP_GEAR']:
+            if key not in kwd.keys():
+                raise NotImplementedError("Relevant argument '{0}' not present!".format(key))
+        # The input files, initialization
+        self._telescope_raw_file = kwd['TELESCOPE_INPUT_FILENAME']
+        self._alibava_raw_file   = kwd['ALIBAVA_INPUT_FILENAME']
+        self._ref_raw_file       = kwd['ALIBAVA_REF_INPUT_FILENAME']
+        self._prealign_dump_gear = kwd['PREALIGN_DUMP_GEAR']
+
+        # remove all the lcio files except the last one...
+        toremove = set([])
+        # The bash file to concatenate all the process
+        thebash = '#!/bin/bash\n\n'
+        ts = time.time()
+        st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d %H:%M:%S')
+        thebash += '# Automaticaly created by open_sesame script at {0}\n'.format(st)
+        thebash += '# TELESCOPE and ALIBAVA data merge\n\n'.format(st)
+        # Setting the values provided by the user
+        for (step,args,action) in self.step_chain:
+            # Redefine the args dict, activating the values of the dict
+            newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
+            # Create the steering file for this step
+            step.publish_steering_file(**newargs)
+            #if isinstance(step,telescope_alignment):
+            #    old_steering_filename = step.steering_file
+            #    step.steering_file = old_steering_filename.replace(".xml","_{0}.xml".format(self.get_iteration_without_modification()))
+            #    shutil.move(old_steering_filename,step.steering_file)
+            # The particular action defined: it will update file names...
+            # See the properties and updaters defined above
+            action(step)
+            thebash += 'echo "\033[1;34mRUNNING\033[1;m: \033[1;29mMarlin {0}\033[1;m"\n'.format(step.steering_file)
+            thebash += 'time Marlin {0}\n'.format(step.steering_file)
+            # remove the intermediate created files
+            toremove.add(self.last_output_filename())
+        thebash += "\nrm "
+        for i in filter(lambda x: x not in [self.last_output_filename()],toremove):
+            thebash += i+" "
+        thebash+='\n\necho "TELESCOPE and ALIBAVA marlin data merge-fit DONE"\n'
+        thebash+='\n\necho "\033[1;31mSOME STEPS ARE VERY DEMANDING, CONSIDER TO SEND THEM THE CLUSTER\033[1;m"\n'
+        bashname = "merge_full_reconstruction.sh"
+        print "Created '{0}' script".format(bashname)
+        # create the file
+        with open(bashname,"w") as f:
+            f.write(thebash)
+        # get the mode
+        bash_st = os.stat(bashname)
+        os.chmod(bashname, bash_st.st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+
+
 # ==================================================================================================
 # The available marlin_steps classes (ordered)
 available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,pedestal_evaluation,\
@@ -2031,7 +2200,8 @@ available_steps = (pedestal_conversion,pedestal_preevaluation,cmmd_calculation,p
         # Join both 
         merger, hitmaker,prealignment,sensors_update_gear,fitter,
         create_ntuple,
-        simple_coordinate_finder_DUT
+        merge_full_reco,
+        simple_coordinate_finder_DUT # TO BE DEPRECATED
         )
 # ==================================================================================================
 
