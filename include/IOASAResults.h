@@ -55,6 +55,8 @@ class IOASAResults
         // -- int vectors
         std::vector<int> * _cluster_size;
         std::vector<int> * _cluster_seed_channel;
+        std::vector<int> * _cluster_left_channel;
+        std::vector<int> * _cluster_right_channel;
         // -- float vectors
         std::vector<float> * _cluster_charge;
         std::vector<float> * _cluster_cal_charge;

@@ -35,6 +35,8 @@ IOASAResults::IOASAResults(const std::string & filename):
     _event_noise(-99999.9),
     _cluster_size(nullptr),
     _cluster_seed_channel(nullptr),
+    _cluster_left_channel(nullptr),
+    _cluster_right_channel(nullptr),
     _cluster_charge(nullptr),
     _cluster_cal_charge(nullptr),
     _cluster_snr(nullptr),
@@ -50,6 +52,8 @@ IOASAResults::IOASAResults(const std::string & filename):
     // Associate all the vectors to some helper containers
     _branches_int.push_back(&_cluster_size);
     _branches_int.push_back(&_cluster_seed_channel);
+    _branches_int.push_back(&_cluster_right_channel);
+    _branches_int.push_back(&_cluster_left_channel);
 
     _branches_float.push_back(&_cluster_charge);
     _branches_float.push_back(&_cluster_cal_charge);
@@ -135,6 +139,8 @@ void IOASAResults::book_tree()
     _tree->Branch("cluster_calibrated_charge",&(_cluster_cal_charge));
     _tree->Branch("cluster_snr",&(_cluster_snr));
     _tree->Branch("cluster_seed_channel",&(_cluster_seed_channel));
+    _tree->Branch("cluster_left_channel",&(_cluster_left_channel));
+    _tree->Branch("cluster_right_channel",&(_cluster_right_channel));
     _tree->Branch("cluster_seed_charge",&(_cluster_seed_charge));
     _tree->Branch("cluster_eta_seed",&(_cluster_eta_seed));
     _tree->Branch("cluster_eta",&(_cluster_eta));
@@ -197,6 +203,8 @@ void IOASAResults::fill_tree(const IOFortythieves * ioft_inst, AlibavaSensorAnal
         _cluster_cal_charge->push_back(cl->calibrated_charge(ioft_inst->calibration()));
         _cluster_snr->push_back(cl->snr(ioft_inst->noise()));
         _cluster_seed_channel->push_back(cl->channels(0));
+        _cluster_left_channel->push_back(cl->left_channel());
+        _cluster_right_channel->push_back(cl->right_channel());
         _cluster_seed_charge->push_back(cl->charge(0));
         _cluster_eta_seed->push_back(cl->eta_seed()); 
         _cluster_eta->push_back(cl->eta()); 

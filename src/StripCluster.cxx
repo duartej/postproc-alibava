@@ -38,6 +38,16 @@ void StripCluster::add(const int & channel, const float & adc)
     _element_index[_channels.size()-1] = channel;
 }
 
+int StripCluster::left_channel() const
+{
+    return *std::min_element(_channels.begin(),_channels.end());
+}
+
+int StripCluster::right_channel() const
+{
+    return *std::max_element(_channels.begin(),_channels.end());
+}
+
 float StripCluster::charge() const
 {
     // -- Memorize it as well?

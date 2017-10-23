@@ -32,7 +32,11 @@ class StripCluster
         inline unsigned int size() const { return _channels.size(); }
         // -- The number of channels given the element index 
         //    Note that the seed is always the element 0
-        inline float channels(const int & element_index) { return _channels[element_index]; }
+        inline int channels(const int & element_index) { return _channels[element_index]; }
+        // -- Get the leftest channel in the cluster
+        int left_channel() const;
+        // -- Get the rightest channel in the cluster
+        int right_channel() const;
         // -- The charge of the channel 
         inline float charge(const int & element_index) { return _signal_polarity*_signal_map[_element_index[element_index]]; }
         // -- The total charge of the cluster
