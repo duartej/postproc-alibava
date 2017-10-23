@@ -47,7 +47,8 @@ class TestProcessingModule(unittest.TestCase):
         for _step in steering_processing.available_steps:
             a = _step()
             if isinstance(a,steering_processing.alibava_full_reco) \
-                or isinstance(a,steering_processing.telescope_full_reco):
+                or isinstance(a,steering_processing.telescope_full_reco) \
+                or isinstance(a,steering_processing.merge_full_reco):
                 # No sense for the metaclass alibava/telescope full reco
                 continue
             # Extract the arguments to be substituted present in the templates
