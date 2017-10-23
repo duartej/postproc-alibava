@@ -403,16 +403,23 @@ float AlibavaSensorAnalysis::calculate_seed_eta(const int & seed_channel,const s
     // if one of the channel is masked, since it will be 
     // set to unrealisticSignal other signal will always 
     // be higher then the masked one.
-    // Eta calculation: chargeOnLeftChannel / (chargeOnLeftChannel + chargeOnRightChannel)
+    // XXX DEPRECATED -> Eta calculation: chargeOnLeftChannel / (chargeOnLeftChannel + chargeOnRightChannel)
+    // This calculation allows to identify the  eta-distribution 
+    // histogram with the real Left and Right position, i.e. A peak at 
+    // zero (left of the histogram) means that most of the charge can be
+    // assigned to the strip of the left and equivalent for the right
+    // Eta calculation: chargeOnRightChannel / (chargeOnLeftChannel + chargeOnRightChannel)
     if( left_signal > right_signal) 
     {
         // then seed channel is on the right
-	eta = left_signal/(left_signal+seed_signal);
+	//eta = left_signal/(left_signal+seed_signal); <-- deprecated
+        eta = seed_signal/(left_signal+seed_signal);
     }
     else 
     {
         // seed channel is on the left
-	eta = seed_signal/(seed_signal+right_signal);
+	//eta = seed_signal/(seed_signal+right_signal);
+        eta = right_signal/(seed_signal+right_signal);
     }
     return eta;	
 }

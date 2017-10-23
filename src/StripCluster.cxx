@@ -128,7 +128,8 @@ float StripCluster::eta()
         right_signal= highest_signal;
     }
     // Update the data-member and memorize 
-    _eta_cluster = left_signal->first/(left_signal->first+right_signal->first);
+    //_eta_cluster = left_signal->first/(left_signal->first+right_signal->first); --> DEPRECATED
+    _eta_cluster = right_signal->first/(left_signal->first+right_signal->first);
     _eta_calculated = true;
 
     return _eta_cluster;
