@@ -9,19 +9,15 @@ __version__ = "0.1"
 __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
-# XXX:
-# 2. improve doc
 # 3. Get all the metadata from SPS2017TB class
 # 4. Be sure plots are in the LOCAL coordinates of the plane as well, i.e. channel (see the formula to convert in biblio)
-# 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so)
+# 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so) ??
 
-# Resolution of the DUT plus the error in the fit (?) 0.04 mm 
-# Incluir covariance en los hits fitted
-# TODO OBTAIN FROM SPS
-REFPLANE=7
-DUTPLANE=5
-RESOLUTION= { DUTPLANE: 0.2, REFPLANE : 0.1 } # in mm
-SENSOR_NAME = { REFPLANE: "REF", DUTPLANE: "DUT" }
+# XXX
+# Not sure yet how to deal with that. So far see
+# see declaration at sensor_map_production function
+# XXX 
+RESOLUTION= {} # in mm
 
 # UNITS
 MM = 1.0
@@ -176,7 +172,7 @@ class hits_plane_accessor(object):
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
 
-    def matched_hits(self,track_acc,histo,hres):
+    def matched_hits(self,track_acc,histo,hres,res=None):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event
 
@@ -190,12 +186,17 @@ class hits_plane_accessor(object):
         hres: ROOT.TH1
             The histogram to store residuals between the 
             hit in the sensor and the hit in the track
+        res: float (optional)
+            The maximum distance to consider a hit matched
 
         Return
         ------
         hitlist: dict(int,list(int))
             The list of indices of the hits matched with a track 
         """
+        if not res:
+            res=RESOLUTION[self.id]
+
         matched_hits = []
         # Given the hits in that sensor,
         for ihit in xrange(self.n):
@@ -217,7 +218,7 @@ class hits_plane_accessor(object):
             # resolution
             # XXX Resolution MUST be related with the sensor 
             # resolution \otimes track resolution (maybe any other effect?)
-            res = RESOLUTION[self.id]
+            #res = RESOLUTION[self.id]
             if res > distance:
                 matched_hits.append( (ihit,trk_el) )
 
@@ -606,8 +607,57 @@ class tracks_accessor(object):
         return (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t)
 
 class processor(object):
-    """Results extractor. Histograms are defined and filled here
-    XXX MISSING DOC
+    """Results extractor. Main class where statistics and histograms 
+    are defined and filled. 
+
+    Attributes
+    ----------
+    total_events: int
+        The number of processed events
+    events_with_dut: int
+        The number of processed events containing at least a 
+        hit in the DUT plane
+    dut_hits: int
+        The number of hits measured at the DUT sensor
+    events_with_ref: int
+        The number of processed events containing at least a 
+        hit in the REF plane
+    ref_hits: int
+        The number of hits measured at the REF sensor
+    events_with_dut_no_tracks: int
+        The number of processed events containing at least a 
+        hit in the DUT plane but with 0 reconstructed tracks
+    events_with_ref_no_tracks: int
+        The number of processed events containing at least a 
+        hit in the REF plane but with 0 reconstructed tracks
+    events_with_ref_dut_tracks: int
+        The number of processed events containing at least a 
+        hit in the REF, and at least a hit in the DUT and 
+        at least a reconstructed track
+    residual_projection: dict(int,ROOT.TH1F)
+        Histograms of the difference between the hit measured at the REF/DUT 
+        and the predicted point at the REF/DUT plane by a 
+        telescope track. If an event has more than one track, the one used is
+        the one with minimum difference between the prediction and the measurement
+    residual_sensor: ROOT.TH2F
+        Histogram of the difference between the hit predicted at the DUT and the
+        hit predicted at the REF by the same, and matched to both sensors, track
+    hmap: ditc(int, ROOT.TH2F)
+        Histograms, per sensor, of the deposited charge in the track predicted 
+        position at the plane of the sensor
+    hcharge: dict(int, ROOT.TH2F)
+        Histograms, per sensor, of the deposited charge in the track predicted 
+        position at the plane of the sensor, averaged over the size of the cluster
+    haux_charge: dict(int, ROOT.TH2F)
+        Histograms, per sensor, of the track predicted position  at the plane of
+        the sensor
+    hcorr_trkX: dict(int,ROOT.TH2F)
+        Histograms per sensor, of the difference between the measured hit and the
+        predicted hits of the closest (defined as the x-distance) track of the event
+    hcorrX(Y): dict(int,ROOT.TH2F)
+        Histograms per sensor, of the difference between the track predicted position
+        at the DUT and at the REF, using the same matched track (meaning that the same
+        track is compatible with the REF and the DUT measured hits).
     """
     def __init__(self,minst):
         """ XXX MISSING DOC
@@ -628,26 +678,27 @@ class processor(object):
         self.events_with_ref_dut_tracks = 0
         # Some statistic histograms
         self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
-                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; _x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
-        # -- histograms DUTS/REF
-        # XXX: binning should be related with the pitch 
-        self.hmap = { minst.dut_plane: ROOT.TH2F("local_map_dut" ,";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("local_map_ref",";x [mm]; y [mm]; Entries", 130,-10.0*MM,10.0*MM,100,-10.0*MM,10.0*MM) }
-        self.hcharge = { minst.dut_plane: ROOT.TH2F("precharge_map_dut",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("precharge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM) }
+                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
+        # Residuals between REF-DUT (matched tracks family)
+        self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm]; y_{DUT}^{pred}-y_{REF}^{pred}",\
+                100,-0.04*MM,0.04*MM,100,-3.5*MM,3.5*MM) 
+        self.hmap = { minst.dut_plane: ROOT.TH2F("charge_map_dut" ,";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
+        self.hcharge = { minst.dut_plane: ROOT.TH2F("avr_charge_map_dut",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("avr_charge_map_ref",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
         # Keep the number of entries used in each bin
-        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",130,-10.0*MM,10.0*MM,130,-10.0*MM,10.0*MM) }
+        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
         # Correlations
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
                 minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
         self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
         self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
         # efficiendy
-        self.hpass = ROOT.TH2F("pass_map",";x [mm]; y [mm]; #varepsilon",130,-10.0,10.0,100,-10.0,10.0)
-        self.htotal = ROOT.TH2F("total_map",";x [mm]; y [mm]; #varepsilon",130,-10.0,10.0,100,-10.0,10.0)
+        self.hpass = ROOT.TH2F("pass_map",";x [mm]; y [mm]; #varepsilon",200,-10.0,10.0,200,-10.0,10.0)
+        self.htotal = ROOT.TH2F("total_map",";x [mm]; y [mm]; #varepsilon",200,-10.0,10.0,200,-10.0,10.0)
 
-        self._allhistograms = self.residual_projection.values()+self.hmap.values()+\
+        self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+self.hmap.values()+\
                 self.hcharge.values()+self.haux_charge.values()+self.hcorr_trkX.values()+\
                 [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
@@ -680,7 +731,13 @@ class processor(object):
             self._allhistograms.append(h)
 
     def store_histos(self,filename):
-        """
+        """Actually write the defined histograms to 
+        a root file
+
+        Parameters
+        ----------
+        filename: str
+            The name of file to store the results
         """
         import ROOT
         # Create the efficiency before recording them
@@ -722,7 +779,18 @@ class processor(object):
         
 
     def process(self,t,trks,refhits,duthits):
-        """Fill the relevant counters
+        """Fill the relevant counters and the histograms
+
+        Parameters
+        ----------
+        t: ROOT.TTree
+            The tree
+        trks: .tracks_ancessor
+            The tracks
+        refhits: list(.hits_plane_accessor )
+            The list of measured hits at the REF sensor
+        duthits: list(.hits_plane_accessor )
+            The list of measured hits at the DUT sensor
         """
         import math
         
@@ -738,7 +806,7 @@ class processor(object):
         # - a dict to get the sensors by its plane ID
         sensor_hits = { refhits.id: refhits, duthits.id: duthits }
 
-        # Get the matched hits { sensorID: [ (hit_index,track_index,. ..] , }
+        # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
         matched_hits = { duthits.id: duthits.matched_hits(trks,self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id]),
                 refhits.id: refhits.matched_hits(trks,self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id]) }
@@ -747,25 +815,48 @@ class processor(object):
         for sensorID,pointlist in matched_hits.iteritems():
             hits = sensor_hits[sensorID]
             for hit_el,trk_index in pointlist:
+                # Remember: it_el=index of the measured hit at the corrent sensor (sensorID)
+                #           trk_index= index of the track
                 xpred,ypred = trks.get_point(trk_index,hits.z[hit_el])
-                # Residuals
-                ##self.residual_projection[sensorID].Fill(xpred-hits.x[hit_el])
                 # Event and charge maps (using track predictions)
-                self.hmap[sensorID].Fill(xpred,ypred)
-                self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
+                # --- Some histograms should use the measured values (at least when possible)
+                self.hmap[sensorID].Fill(xpred,ypred,charge[hit_el])
+                self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el]/float(hits.n))
                 self.haux_charge[sensorID].Fill(xpred,ypred)
         # Matching beetwen DUT and REF: hits with the same track ID
+        # Loop over all the measured hits in the REF, matching to a
+        # track, using the track as common element in the DUT-REF match
         for ihit_ref,itrk in matched_hits[refhits.id]:
-            # Fill the total histogram (using the prediction in DUT)
-            x,y = trks.get_point(itrk,duthits.z[0])
-            self.htotal.Fill(x,y)
+            # Get the track predicted points at the DUT plane
+            xpred_dut,ypred_dut = trks.get_point(itrk,duthits.z[0])
+            # To fill the (charge efficiency) total histo, use the predictions
+            self.htotal.Fill(xpred_dut,ypred_dut)
+            # Get if any of the 
             dut_match = filter(lambda (ihit_dut,itrk_dut): itrk_dut == itrk,matched_hits[duthits.id])
+            if len(dut_match) > 1:
+                # Get the one with minimum distance at
+                min_distance = (1e20,-1)
+                for k,(i_dut,i_trk) in enumerate(dut_match):
+                    curr_dist = math.sqrt( (xpred_dut-duthits.x[i_dut])**2.0 + \
+                            (trks.get_point(itrk,refhits.z[ihit_ref])[0]-refhits.x[ihit_ref])**2.0 )
+                    if min_distance[0] > curr_dist:
+                        min_distance = (curr_dist,k)
+                # Re-write the variable!! Just keeping the lowest distance
+                dut_match = [ dut_match[min_distance[1]] ]
             if len(dut_match) > 0:
-                self.hpass.Fill(x,y)
-                # And some correlation plots of the predicted values
-                x_at_ref,y_at_ref = trks.get_point(itrk,refhits.z[ihit_ref])
-                self.hcorrX.Fill(x,x_at_ref)
-                self.hcorrY.Fill(y,y_at_ref)
+                xmeasured_dut = duthits.x[dut_match[0][0]]
+                self.hpass.Fill(xpred_dut,ypred_dut)
+                # Get the track predicted points at the REF plane
+                xpred_at_ref,ypred_at_ref = trks.get_point(itrk,refhits.z[ihit_ref])
+                # And some correlation plots of the predicted values between
+                # the DUT and REF sensors
+                # Note that the expected gaussian could be not centered at zero,
+                # in that case the difference will be related with the misaligned between them
+                self.hcorrX.Fill(xpred_dut,xpred_at_ref)
+                # Not measured elements at Y, so using the predictions
+                self.hcorrY.Fill(ypred_dut,ypred_at_ref)
+                ## Residuals only for the DUT-REF matched tracks
+                self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
 
 
     def __str__(self):
@@ -807,6 +898,9 @@ def sensor_map_production(fname):
     import os
     from .SPS2017TB_metadata import filename_parser 
     from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
+    # probably provisional XXX
+    global RESOLUTION
+
 
     # Get the name of the sensor and some other useful info
     fp = filename_parser(fname)
@@ -824,7 +918,6 @@ def sensor_map_production(fname):
 
     # FIXME provisional XXX
     RESOLUTION= { metadata.dut_plane: 0.2, metadata.ref_plane : 0.1 } # in mm
-    SENSOR_NAME = { metadata.ref_plane: "REF", metadata.dut_plane: "DUT" }
 
     # Set some globals
     #tree_inspector(t)
