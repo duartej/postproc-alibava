@@ -4,7 +4,7 @@ from glob import glob
 
 setup(name='alibavaSkifftools',
         version='v${postproc-alibava_VERSION_MAJOR}.${postproc-alibava_VERSION_MINOR}',
-        description='Configure the Alibava Marlin processors',
+        description='Configure, post-process and analyse Alibava data',
         author='Jordi Duarte-Campderros',
         author_email='Jordi.Duarte.Campderros@cern.ch',
         url='https://github.com/duartej/postproc-alibava/alibavaSkifftools',
@@ -16,5 +16,6 @@ setup(name='alibavaSkifftools',
         packages = ['alibavaSkifftools'],
         scripts=['${CMAKE_CURRENT_SOURCE_DIR}/bin/open_sesame', 
             '${CMAKE_CURRENT_SOURCE_DIR}/bin/telescope_job_sender',
-            '${CMAKE_CURRENT_SOURCE_DIR}/bin/alibava_job_sender' ]
+            '${CMAKE_CURRENT_SOURCE_DIR}/bin/alibava_job_sender',
+            '${CMAKE_CURRENT_SOURCE_DIR}/bin/alibava_root_conversion_sender' ]
         )
