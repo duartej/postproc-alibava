@@ -820,7 +820,7 @@ class processor(object):
                 xpred,ypred = trks.get_point(trk_index,hits.z[hit_el])
                 # Event and charge maps (using track predictions)
                 # --- Some histograms should use the measured values (at least when possible)
-                self.hmap[sensorID].Fill(xpred,ypred,charge[hit_el])
+                self.hmap[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
                 self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el]/float(hits.n))
                 self.haux_charge[sensorID].Fill(xpred,ypred)
         # Matching beetwen DUT and REF: hits with the same track ID
