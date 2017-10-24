@@ -2133,6 +2133,7 @@ class merge_full_reco(marlin_step):
         import os
         import stat
         import shutil
+        import glob
     
         # Check for inconsistencies
         for key in ['TELESCOPE_INPUT_FILENAME','ALIBAVA_INPUT_FILENAME',\
@@ -2145,7 +2146,7 @@ class merge_full_reco(marlin_step):
         self._ref_raw_file       = kwd['ALIBAVA_REF_INPUT_FILENAME']
         self._prealign_dump_gear = kwd['PREALIGN_DUMP_GEAR']
 
-        # Search and copy here the aligned gear from the telescope
+        # Search and copy here the aligned gear from the telescope and the hotpixel
         telescope_path  = os.path.split(os.path.abspath(self._telescope_raw_file))[0]
         copy_gear_file  = os.path.join(telescope_path,"gear_file_aligned.xml")
         target_gear_file= os.path.join(os.getcwd(),"gear_file_aligned.xml")
@@ -2155,6 +2156,13 @@ class merge_full_reco(marlin_step):
             # FIXME: Probably not a print but a raise
             print "\033[1;33mWARNING!\033[1;m Not found a needed `gear_file_aligned.xml`"\
                     " at '{0}'".format(telescope_path)
+        try:
+            copy_hotpixel_file  = glob.glob(os.path.join(telescope_path,"telescope-hotpixel_run*.slcio"))[0]
+        except IndexError:
+            raise RuntimeError("\033[1;33mWARNING!\033[1;m Not found a needed `telescope-hotpixel` slcio file"\
+                    " at '{0}'".format(telescope_path))
+        target_hotpixel_file= os.path.join(os.getcwd(),os.path.basename(copy_hotpixel_file))
+        shutil.copyfile(copy_hotpixel_file,target_hotpixel_file)
 
         # remove all the lcio files except the last one...
         toremove = set([])
