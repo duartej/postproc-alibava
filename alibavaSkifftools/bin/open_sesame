@@ -543,9 +543,14 @@ if __name__ == '__main__':
                     help=help)
 
         def __call__(self, parser, namespace, values, option_string=None):
-            print "\033[1;34mAvailable sensor names:\033[1;m"
-            for sensor in sensor_names:
-                print " - {0}".format(sensor)
+            if not namespace.op_format:
+                print "\033[1;34mAvailable sensor names:\033[1;m"
+                for sensor in sensor_names:                
+                    print " - {0}".format(sensor)
+            else:
+                for sensor in sensor_names:
+                    print sensor,
+                print
             parser.exit()
     
     # Helper class to allow list steering steps (without introducing
