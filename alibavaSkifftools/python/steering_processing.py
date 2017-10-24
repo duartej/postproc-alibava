@@ -43,7 +43,7 @@ The following data members/methods can be optionally used:
 """
 __author__ = "Jordi Duarte-Campderros"
 __credits__ = ["Jordi Duarte-Campderros"]
-__version__ = "0.1"
+__version__ = "1.0"
 __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
@@ -1769,11 +1769,6 @@ class merger(marlin_step):
         self.required_arguments = ('ROOT_FILENAME','RUN_NUMBER', 'TELESCOPE_INPUT_FILENAME',\
                 'ALIBAVA_INPUT_FILENAME', 'ALIBAVA_REF_INPUT_FILENAME', 'OUTPUT_FILENAME','GEAR_FILE',\
                 'DUT_ID','REF_ID')
-        # Define a tuned default for the gear file, describes
-        # telescope with no DUTs at all
-        #self.argument_values['GEAR_FILE']='gear_TB2017_CERNSPS_SETUP00_TELESCOPE_noDUTs.xml'
-        # And copy the gear file to the relevant place
-        #self.auxiliary_files.append(self.argument_values['GEAR_FILE'])
     
     @staticmethod
     def get_description():
@@ -1788,7 +1783,7 @@ class merger(marlin_step):
         kwd: dict
             the dictionary of arguments, which must be defined
             at _ARGUMENTS. Must contain
-             - DUT_OD
+             - ALIBAVA_INPUT_FILENAME
 
         Return
         ------
@@ -1797,7 +1792,7 @@ class merger(marlin_step):
         Raises
         ------
         RuntimeError
-            If DUT_ID or INPUT_FILENAME were not 
+            If INPUT_FILENAME were not 
             present
 
         NotImplementedError
@@ -1860,8 +1855,9 @@ class prealignment(marlin_step):
         kwd: dict
             the dictionary of arguments, which must be defined
             at _ARGUMENTS. Must contain
-             - PREALIGN_DUMP_GEAR
-             - DUT_OD
+             - INPUT_FILENAMES
+             - PREALIGN_DUMP_GEAR (note that this option is a flag in
+               open_sesame, therefore is always present)
 
         Return
         ------
@@ -2108,7 +2104,12 @@ class merge_full_reco(marlin_step):
         the TELESCOPE with the Alibava data using only the RAW 
         telescope and alibava data filenames. 
         Note that the other values should be change manually later in 
-        the created steering files
+        the created steering files. 
+        As it could be than the directory where the telescope or/and
+        the alibava data was processed, is not the same; the function
+        will also copy from the TELESCOPE_INPUT_FILENAME a 
+        `gear_file_aligned.xml` to the working dir
+
 
         Parameters
         ----------
@@ -2144,6 +2145,17 @@ class merge_full_reco(marlin_step):
         self._ref_raw_file       = kwd['ALIBAVA_REF_INPUT_FILENAME']
         self._prealign_dump_gear = kwd['PREALIGN_DUMP_GEAR']
 
+        # Search and copy here the aligned gear from the telescope
+        telescope_path  = os.path.split(os.path.abspath(self._telescope_raw_file))[0]
+        copy_gear_file  = os.path.join(telescope_path,"gear_file_aligned.xml")
+        target_gear_file= os.path.join(os.getcwd(),"gear_file_aligned.xml")
+        try:
+            shutil.copyfile(copy_gear_file,target_gear_file)
+        except IOError:
+            # FIXME: Probably not a print but a raise
+            print "\033[1;33mWARNING!\033[1;m Not found a needed `gear_file_aligned.xml`"\
+                    " at '{0}'".format(telescope_path)
+
         # remove all the lcio files except the last one...
         toremove = set([])
         # The bash file to concatenate all the process
@@ -2158,10 +2170,6 @@ class merge_full_reco(marlin_step):
             newargs = dict(map(lambda (x,y): (x,y()), args.iteritems()))
             # Create the steering file for this step
             step.publish_steering_file(**newargs)
-            #if isinstance(step,telescope_alignment):
-            #    old_steering_filename = step.steering_file
-            #    step.steering_file = old_steering_filename.replace(".xml","_{0}.xml".format(self.get_iteration_without_modification()))
-            #    shutil.move(old_steering_filename,step.steering_file)
             # The particular action defined: it will update file names...
             # See the properties and updaters defined above
             action(step)
