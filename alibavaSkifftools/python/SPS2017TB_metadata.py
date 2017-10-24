@@ -497,6 +497,9 @@ gear_content_template = """
 # 5: pitch in Y-direction
 # 6: spatial resolution (just the binary resolution)
 # 7: thickness
+# NOTE the rotation4 is set as the Telescope in order to place 
+#      sensors planes and telescope planes to the same reference
+#      system
 gear_dut_template="""<!--{0} - chip {1} -->
         <!-- WARNING, not sure about specs, first tentative values collected from several 
              sources. Resolution: (binary resolution, i.e. p/sqrt(12))-->
@@ -513,7 +516,7 @@ gear_dut_template="""<!--{0} - chip {1} -->
                           npixelX="128"           npixelY="1" 
                           pitchX="{4}"           pitchY="{5}"        resolution="{6}" 
                           rotation1="1.0"        rotation2="0.0" 
-                          rotation3="0.0"         rotation4="1.0" 
+                          rotation3="0.0"         rotation4="-1.0" 
                           radLength="93.660734"
                           />
         </layer>"""
