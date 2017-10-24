@@ -723,8 +723,8 @@ class processor(object):
         the total charge of all the entries
         """
         import ROOT
-        self.hcharge_average = dict([(s,h.Clone(h.GetName().replace("pre",""))) \
-                for s,h in self.hcharge.iteritems()])
+        self.hcharge_average = dict([(s,h.Clone(h.GetName().replace("charge_map","charge_map_per_bin"))) \
+                for s,h in self.hmap.iteritems()])
         for s,h in self.hcharge_average.iteritems():
             h.GetZaxis().SetTitle("<charge cluster> [ADC]")
             h.Divide(self.haux_charge[s])
