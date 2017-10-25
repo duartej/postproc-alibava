@@ -516,7 +516,7 @@ gear_dut_template="""<!--{0} - chip {1} -->
                           npixelX="128"           npixelY="1" 
                           pitchX="{4}"           pitchY="{5}"        resolution="{6}" 
                           rotation1="1.0"        rotation2="0.0" 
-                          rotation3="0.0"         rotation4="-1.0" 
+                          rotation3="0.0"         rotation4="1.0" 
                           radLength="93.660734"
                           />
         </layer>"""
