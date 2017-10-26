@@ -760,7 +760,7 @@ if __name__ == '__main__':
     an_parser.add_argument("--automask-criterium",dest='automask_criterium',action='store',type=float,\
             help="The criterium to used to decide if a channel is noisy or not. "\
             "A noisy channel is defined as |Noise_i - <Noise>| > X sigma [Default: 2.5]")
-    an_parser.add_argument("--cross-talk-correction",dest='xtcorrection',action='store',type=int,\
+    an_parser.add_argument("-i","--iterations-xt-correction",dest='xtcorrection',action='store',type=int,\
             help="The number of iterations needed for the FIR filter when applying the inductive"\
             " cross-talk correction. A value of 0, no correction is applied (default)")
     an_parser.set_defaults(which='sensor_analysis',snr_seed=5,snr_neighbour=3,\

@@ -15,6 +15,11 @@
 #include "ALIBAVA.h"
 
 // ROOT headers
+#include "TH2F.h"
+#include "TH1D.h"
+#include "TF1.h"
+#include "TGraphErrors.h"
+#include "TCanvas.h"
 
 // System headers
 #include <algorithm>
@@ -84,12 +89,20 @@ AlibavaSensorAnalysis::AlibavaSensorAnalysis():
     _masked_channels(nullptr),
     _mask_criterium(2.5),
     _snr_seed(5),
-    _snr_neighbour(3)
+    _snr_neighbour(3),
+    _current_xt_iteration(0),
+    _nNeighbours(7),
+    _nb_charge_diff_h(nullptr)
 {
     // Fix the size of the TDC cut vector
     _tdc_cut.resize(2);
     _tdc_cut[0] = 3.0;
     _tdc_cut[1] = 30.0;
+
+    // The histogram initialization
+    // FIXME: Hardcoded ranges
+    _nb_charge_diff_h = new TH2F("xt_factor_histo","",_nNeighbours,-0.5,_nNeighbours-0.5,200,-0.6,0.6);
+    _nb_charge_diff_h->SetDirectory(0);
 }
 
 AlibavaSensorAnalysis::~AlibavaSensorAnalysis()
@@ -98,6 +111,12 @@ AlibavaSensorAnalysis::~AlibavaSensorAnalysis()
     {
         delete _masked_channels;
         _masked_channels = nullptr;
+    }
+
+    if(_nb_charge_diff_h != nullptr)
+    {
+        delete _nb_charge_diff_h;
+        _nb_charge_diff_h = nullptr;
     }
 }
 
@@ -207,10 +226,13 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
     // Note that all channels are set to true initially
     std::vector<bool> channel_can_be_used(ioft->adc_data().size(),true);
 
+    // Cross-talk correction if needed
+    std::vector<float> adc_data = get_data_xt_corrected(ioft->adc_data());
+
     // Now, mask channels that cannot pass the neighbour cut, 
     // add the *channel numbers* as seed candidate if it pass SeedSNRCut
     std::vector<int> seedCandidates;
-    for(int ichan=0; ichan<static_cast<int>(ioft->adc_data().size()); ++ichan)
+    for(int ichan=0; ichan<static_cast<int>(adc_data.size()); ++ichan)
     {
         // Not use this channel if is already masked
         if(this->is_channel_masked(ichan))
@@ -219,7 +241,7 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
             continue;
         }
         // if it is here, it is not masked, so ..
-        const float snr = (_polarity*ioft->adc_data()[ichan])/ioft->noise()[ichan];
+        const float snr = (_polarity*adc_data[ichan])/ioft->noise()[ichan];
 	// mask channels that cannot pass neighbour cut
         // therefore, we don't need to check it in the next loop
         if(snr < _snr_neighbour)
@@ -234,8 +256,8 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
     // sort seed channels according to their SNR, highest comes first!
     std::sort(seedCandidates.begin(),seedCandidates.end(),
             [&] (const int & ichanLeft,const int & ichanRight) 
-            { return ((_polarity*ioft->adc_data()[ichanLeft])/ioft->noise()[ichanLeft] > 
-                (_polarity*ioft->adc_data()[ichanRight])/ioft->noise()[ichanRight]); });
+            { return ((_polarity*adc_data[ichanLeft])/ioft->noise()[ichanLeft] > 
+                (_polarity*adc_data[ichanRight])/ioft->noise()[ichanRight]); });
     
     // Define some functors to be used to provide order to the cluster
     // finding loop (first left, then right)
@@ -274,9 +296,9 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
         // FIXME:: Really need it?
         acluster->set_sensitive_direction(0);
         // Calculate the seed eta (using neighbours)
-        acluster->set_eta_seed( this->calculate_seed_eta(seedChan,ioft->adc_data()) );
+        acluster->set_eta_seed( this->calculate_seed_eta(seedChan,adc_data) );
 	// add seed channel to the cluster
-        acluster->add(seedChan, ioft->adc_data()[seedChan]);
+        acluster->add(seedChan, adc_data[seedChan]);
         // mask seed channel so no other cluster can use it!
         channel_can_be_used[seedChan]=false;
         
@@ -318,7 +340,7 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
                 // And the channel if possible
                 if(channel_can_be_used[ichan])
                 {
-                    acluster->add(ichan, ioft->adc_data()[ichan]);
+                    acluster->add(ichan, adc_data[ichan]);
                     // and mask it so that it will not be added to any other cluster
                     channel_can_be_used[ichan]=false;
                 }
@@ -330,19 +352,19 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
                 }
             }
         }
-	
-	// now if there is no neighbour not bonded
-	if(there_is_non_bonded_channel == false)
+
+	// now if there is no neighbour not bonded, we can push the vector,
+        // otherwise
+	if(there_is_non_bonded_channel)
         {
-            // fill the histograms and add them to the cluster vector
-            //this->fillHistos(acluster);
-            clusterVector.push_back(std::move(acluster));
+            continue;
         }
 
-        // Cross-talk diagnosis plot
-        /*if(acluster.getClusterSize() == 1)
+        // Cross-talk diagnosis plot: using only 1-size cluster, assuring
+        // neigbhours must contain no charge (noise)
+        if(acluster->size() == 1)
         {
-            for(int ineigh=1; ineigh < _nNeighbourgs && ineigh > 0 && ineigh < ALIBAVA::NOOFCHANNELS; ++ineigh)
+            for(int ineigh=1; ineigh < _nNeighbours && ineigh > 0 && ineigh < ALIBAVA::NOOFCHANNELS; ++ineigh)
             {
                 // Be sure the neighbourgs are in equal conditions 
                 // (no seed next-to-neighbourg)
@@ -352,9 +374,12 @@ std::vector<std::unique_ptr<StripCluster> > AlibavaSensorAnalysis::find_clusters
                    // Found another cluster/seed too close
                    break;
                 }
-                hSeedNeighbours->Fill(ineigh,(dataVec[seedChan-ineigh]-dataVec[seedChan+ineigh])/dataVec[seedChan]);
+                _nb_charge_diff_h->Fill(ineigh,(adc_data[seedChan-ineigh]-adc_data[seedChan+ineigh])/adc_data[seedChan]);
             }
-        }*/
+        }
+        
+        // Store the vector
+        clusterVector.push_back(std::move(acluster));
     }
     return clusterVector;
 }
@@ -422,6 +447,109 @@ float AlibavaSensorAnalysis::calculate_seed_eta(const int & seed_channel,const s
         eta = right_signal/(seed_signal+right_signal);
     }
     return eta;	
+}
+
+int AlibavaSensorAnalysis::update_crosstalk_factors()
+{
+    // First be sure the histogram has been filled (just check there is at least
+    // a entry -- not strong check though.
+    if( _nb_charge_diff_h->GetEntries() == 0 )
+    {
+        std::cerr << "\033[1;31mERROR\033[1;m Trying to use the cross-talk correction "
+            << "without being called first the clusters!!" << std::endl;
+        return -1;
+    }
+    
+    // Now calculate the factors
+    // Prepare the averaged of the relative charge difference 
+    // between the adjacent channels to a seed
+    TCanvas *canvas = new TCanvas("aux_canvas");
+    TGraphErrors * gr = new TGraphErrors();
+    gr->SetTitle(";Neighbourg distance; <(Q_{seed-1}-Q_{seed+1})/Q_{seed}>");
+    int igr = 0;
+    for(int xbin = 2; xbin < _nb_charge_diff_h->GetNbinsX()+1; ++xbin, ++igr)
+    {
+        const int sd = _nb_charge_diff_h->GetXaxis()->GetBinCenter(xbin);
+        const std::string seed_distance(std::to_string(static_cast<int>(sd)));
+        // Get the projection histogram
+        const std::string projection_name(std::string(_nb_charge_diff_h->GetName())+"_Neighbourg_"+seed_distance);
+        TH1D * hproj = _nb_charge_diff_h->ProjectionY(projection_name.c_str(),xbin,xbin);
+        
+        // A first gaussian estimation
+        TF1 * gaus = new TF1(std::string(projection_name+"_gaus").c_str(),"gaus",-0.07,0.07);
+        hproj->Fit(gaus,"QNR");
+        const std::vector<double> gaus_parameters { gaus->GetParameter(0),gaus->GetParameter(1), gaus->GetParameter(2) };
+        
+        // A fine model, adding a polynomial for the continous background
+        TF1 * mod = new TF1(std::string(projection_name+"_gaus_cheb").c_str(),"gaus(0)+cheb2(3)");
+        // - Initialize the gausian parameters, the polynomial is going to be easy to fit
+        for(int k=0; k < gaus->GetNumberFreeParameters(); ++k)
+        {
+            // Note that the gausian in the model is set the first one,
+            // therefore can do that
+            mod->SetParameter(k,gaus->GetParameter(k));
+        }
+        // Now fit the full model
+        hproj->Fit(mod,"Q");
+        
+        // Update the mean graph
+        gr->SetPoint(igr,sd,mod->GetParameter(1));
+        gr->SetPointError(igr,0.0,mod->GetParameter(2)/std::sqrt(hproj->GetEntries()));
+        
+        // Store the factor for the i-neighbour 
+        // Remember the cross talk factors are obtained directly
+        // from the difference bewteen left-right, and we are
+        // applying the filter by subtracting to the right channel 
+        // (to compensate back)
+        _xtfactors.push_back( (-1.0)*(mod->GetParameter(1)) );
+            
+        // Delete histos and graphs
+        delete gaus;
+        gaus = nullptr;
+        delete mod;
+        mod = nullptr;
+    }
+    // De-allocate memory
+    delete gr;
+    gr=nullptr;
+    delete canvas;
+    canvas=nullptr;
+
+    // Update the cross-talk iteration
+    ++_current_xt_iteration;
+    // And reset the histogram
+    _nb_charge_diff_h->Reset();
+
+    return 0;
+}
+
+std::vector<float> AlibavaSensorAnalysis::get_data_xt_corrected(const std::vector<float> & adc_orig)
+{
+    // The new corrected data, copy the original data
+    std::vector<float> newdatavec(adc_orig);
+    // Not do nothing if this is the first loop
+    if(_current_xt_iteration == 0)
+    {
+        return newdatavec;
+    }
+
+    for(unsigned int  n= 0; n < ALIBAVA::NOOFCHANNELS; ++n)
+    {
+        // Note j=Neighbourg order, j-1: Elements filter factor
+        for(unsigned int j =1; j <= _xtfactors.size() &&  j-1 < n ; ++j)
+        {
+            if(this->is_channel_masked(n-j))
+            {
+                continue;
+            }
+            newdatavec[n] -= _xtfactors[j-1]*adc_orig[n-j];
+            // The subtracted charge from the channel n (estimated contribution from
+            // channel n-j), is place back to the channel n-j.
+            // This assures charge conservation
+            newdatavec[n-j] += _xtfactors[j-1]*adc_orig[n-j];
+        }
+    }
+    return newdatavec;
 }
 
 
@@ -496,6 +624,8 @@ extern "C"
         std::vector<std::unique_ptr<StripCluster> > theclusters(aa_inst->find_clusters(ioft));
         //aa_inst->store_event(theclusters);
     }
+    // --- The calculation of the cross-talk factors, to be called after evaluated all the events
+    int aa_update_crosstalk_factors(AlibavaSensorAnalysis * aa_inst) { return aa_inst->update_crosstalk_factors(); }
 #ifdef __cplusplus
 }
 #endif

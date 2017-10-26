@@ -22,6 +22,7 @@
 
 // forward
 class IOFortythieves;
+class TH2F;
 
 class AlibavaSensorAnalysis
 {
@@ -75,6 +76,9 @@ class AlibavaSensorAnalysis
         // Calculate the eta of a seed (only using their two neighbours)
         float calculate_seed_eta(const int & seed_channel, const std::vector<float> & adc_data);
 
+        // Asymmetric cross-talk correction
+        int update_crosstalk_factors();
+
 
     private:
         // Signal polarity of the sensor
@@ -94,6 +98,22 @@ class AlibavaSensorAnalysis
         // Seed and neighbour cuts for the cluster finding
         float _snr_seed;
         float _snr_neighbour;
+        
+        // Asymmetric cross-talk related data-members
+        // Cross-talk counte, the number of times the xt-correction 
+        // method has been called
+        int _current_xt_iteration;
+        // Neighbours to consider in the correction
+        int _nNeighbours;
+        // The neighbour factors: element=neighbour order+1
+        std::vector<float> _xtfactors;
+        // The histogram to calculate the cross-talk factors
+        // The histogram is storing the charge difference between
+        // the i(-bin) neighbour of the cluster seed
+        TH2F * _nb_charge_diff_h;
+
+        // Method to correct the asymmetric cross-talk
+        std::vector<float> get_data_xt_corrected(const std::vector<float> & original_data);
 };
 
 

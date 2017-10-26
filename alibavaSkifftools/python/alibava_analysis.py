@@ -37,6 +37,8 @@ class alibava_analysis(object):
         # -- whether or not the results should be stored in a file
         #    using the IOASAResults class
         self._store_results = False
+        # -- the iterations to be applied for the xtcorrection
+        self.xtcorrection   = None
 
         # Library
         self._lib = ctypes.cdll.LoadLibrary("libAlibavaSensorAnalysis.so")
@@ -87,6 +89,8 @@ class alibava_analysis(object):
 
         # -- modifiers
         self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
+        self._lib.aa_update_crosstalk_factors.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_update_crosstalk_factors.restype = ctypes.c_int 
 
         # The objects
         self._ioft            = self._lib.ioft_new(filename,chip)
@@ -331,6 +335,26 @@ class alibava_analysis(object):
         self._results = self._lib.ioresults_new(filename)
         self._lib.ioresults_book_tree(self._results)
         self._store_results = True
+        self._results_filename = filename
+
+    def update_crosstalk_factors(self):
+        """Wrapper to the update of the cross-talk factors
+        This function should be called after the event loop
+        XXX: check that this is true? In the 
+
+        Return
+        ------
+        int: Whether the update was performed without errors
+            (0) or not (-1)
+        """
+        # Update the factors
+        status = self._lib.aa_update_crosstalk_factors(self._sensor_analysis)
+        # Reset the ioresult 
+        # XXX is there a better approach than deleting and reintializating
+        if self._store_results:
+            self._lib.ioresults_delete(self._results)
+            self.book_results(self._results_filename)
+            self._lib.ioresults_fill_header(self._results,self._ioft)
 
     def process(self,i=-1):
         """Processing the event, i.e finding cluster algorithm 
@@ -357,14 +381,20 @@ class alibava_analysis(object):
             evts = xrange(self.get_entries())
         else:
             evts = [ i ]
-
-        point = float(self.get_entries())/100.0
-        for k in evts:
-            # Progress bar 
-            sys.stdout.write("\r\033[1;34mINFO\033[1;m Alibava cluster analysis "+\
-                    "[ "+"\b"+str(int(float(k+1)/point)).rjust(3)+"%]")
-            sys.stdout.flush()
-            self.process_event(k)
-            analyze_event()
-        print
+            # Force not to do the cross-talk correction
+            self.xtcorrection = 0
+        
+        for xt_iter in xrange(self.xtcorrection+1):
+            print "\r\033[1;34mINFO::::::::\033[1;m Cross-talk correction ITERATION:{0}".format(xt_iter)
+            point = float(self.get_entries())/100.0
+            for k in evts:
+                # Progress bar 
+                sys.stdout.write("\r\033[1;34mINFO\033[1;m Alibava cluster analysis "+\
+                        "[ "+"\b"+str(int(float(k+1)/point)).rjust(3)+"%]")
+                sys.stdout.flush()
+                self.process_event(k)
+                analyze_event()
+            if xt_iter < self.xtcorrection:
+                self.update_crosstalk_factors()
+            print
     
