@@ -167,6 +167,27 @@ def create_steering_file(step_name,**args):
     # And create the steering file
     step.publish_steering_file(**args)
 
+def sensor_alignment(ntuplename,verbose):
+    """Performs the alignment of the DUT and REF sensors
+    with respect to the Telescope, using the tracks of 
+    the telescope and assuming the telescope is already 
+    aligned. The coordinate Y of both sensors are considered
+    to be unmeasurable
+
+    Parameters
+    ----------
+    ntuplename: str
+        The name of the ROOT ntuple. The filename MUST follow
+        the standard notation defined through the class 
+        alibavaSkifftools.SPS2017TB_metadata.filename_parser 
+    verbose: bool
+        Whether or not to print verbose info of the alignment
+    """
+    from alibavaSkifftools.marlin_postprocessor import sensor_alignment
+    
+    # Just do the job
+    return sensor_alignment(ntuplename,verbose)
+
 def sensor_map_production(ntuplename):
     """Produce the charge maps and the efficiency maps (hit 
     reconstruction efficiency) for the sensor included in the 
@@ -701,7 +722,12 @@ if __name__ == '__main__':
     sm_parser = subparsers.add_parser("sensor_maps",description=usage_sm)
     sm_parser.add_argument('ntuple',help="The root NTUPLE "\
             " file obtained by the EUTelTreeCreator processor")
-    sm_parser.set_defaults(which='sensor_maps')
+    sm_parser.add_argument('-a','--align',dest="align",action="store_true",\
+            help="Perform the alignment of the DUT (and REF) sensors, "\
+            "assuming the coordinate Y is not measured_true. A file"\
+            " is created to store the alignment constants to be applied to "\
+            "the DUT and REF sensors")
+    sm_parser.set_defaults(which='sensor_maps',align=False)
     
     # -- Subparser: simple file merger when dealing with EORE extra events
     usage_fm  = "Create the steering file to be used to merge a collection "
@@ -778,6 +804,22 @@ if __name__ == '__main__':
         # arguments in the template steering files
         create_steering_file(args.step,**the_args)
     elif args.which == "sensor_maps":
+        # Probably ask for alignment if there is no
+        # file with the alignment result
+        if args.align:
+            # initalize some variables
+            ST = { -1: '\033[1;31mNOT ALIGNED\033[1;m', 0: '\033[1;32mALIGNED\033[1;m'}
+            user_answer = 'y'
+            iteration = 0
+            print "\033[1;34mPerforming DUT and REF alignment\033[1;m..."
+            # do the alignment if the user says so 
+            while user_answer[0].lower() == 'y':
+                alignment_status = sensor_alignment(args.ntuple,True)
+                print "\033[1;34mINFO ALIGNMENT\033[1;m  ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
+                # XXX: Check if python3, then use input instead
+                user_answer = raw_input("  *** Would you like to perform another alignment iteration [y/any key]? ")
+                iteration+=1
+        # Create the maps
         sensor_map_production(args.ntuple)
     elif args.which == 'merge_eore':
         steering_filename=merge_files(args.lcio_files,args.output)

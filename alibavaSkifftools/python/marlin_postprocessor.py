@@ -71,6 +71,85 @@ class dummy_list(list):
     """
     def __getitem__(self,i):
         return list.__getitem__(self,0)
+    
+class alignment_cts(object):
+    """Container for the alignment constants
+    """
+    def __init__(self):
+        """Initialize the data-members
+        """
+        self.x_offset = 0.0
+        self.y_offset = 0.0
+        self.turn = 0.0
+        self.tilt = 0.0
+        self.rot  = 0.0
+        self.dz   = 0.0
+
+    def __str__(self):
+        """Just the print out of the alignment constants
+        """
+        from math import degrees
+        m  = "x_offset: {0} mm\n".format(self.x_offset)
+        m += "y_offset: {0} mm\n".format(self.y_offset)
+        m += "turn    : {0} deg\n".format(degrees(self.turn))
+        m += "tilt    : {0} deg\n".format(degrees(self.tilt))
+        m += "rot     : {0} deg\n".format(degrees(self.rot))
+        m += "dz      : {0} mm\n".format(self.dz)
+
+        return m
+
+    def __iadd__(self,other):
+        """Updating the alignment constants
+
+        Parameters
+        ----------
+        other: alignment_cts instance
+
+        Returns
+        -------
+        A copy of self
+        """
+        for attr in self.__dict__.keys():
+            prov = getattr(self,attr)+getattr(other,attr)
+            setattr(self,attr,prov)
+        return self
+        
+    def parse_alignment(self,fobj):
+        """Extract the information relative to the alignment
+        from a file object
+
+        Parameters
+        ----------
+        filename: file object
+            The alignment file 
+
+        Return
+        ------
+        A object class containing the relevant alignment
+        attributes
+        """
+        lines=fobj.readlines()
+        keywords = [ 'x_offset', 'y_offset', 'rot', 'tilt', 'turn', 'dz' ]
+        for i in lines:
+            try:
+                align_word = filter(lambda x: i.find(x) == 0,keywords)[0]
+            except IndexError:
+                continue
+            setattr(self,align_word,float(i.split(":")[-1]))
+
+class memoize:
+    """A simple memozation for the trigonometric 
+    functions
+    """
+    def __init__(self,f):
+        self.f = f
+        self.memo = {}
+    def __call__(self,*args):
+        """ Note args = { id,  } 
+        """
+        if not args in self.memo:
+            self.memo[args] = self.f(*args)
+        return self.memo[args]
 
 class hits_plane_accessor(object):
     """Access to the TBranches contained in a 
@@ -98,6 +177,15 @@ class hits_plane_accessor(object):
     charge: ROOT.std.vector(int)()
         The hit total charge in ADCs counts 
     """
+    # The properties of the plane where the hit lives
+    # The rotation:=beta (around z-axis), tilt:=alpha (around x-axis) 
+    # and turn:=omega (around y-axis) [radians]
+    # [A dictionary being the plane id the keys}
+    align_constants = {}
+    resync = {}
+    # vector normal to the plane
+    normal   = {}
+    
     def __init__(self,tree,planeid):
         """Accessors for the branches related with Alibava
         sensors hits
@@ -123,7 +211,7 @@ class hits_plane_accessor(object):
         self.x_local = getattr(tree,"hit_XLocal_{0}".format(self.id))
         self.y_local = getattr(tree,"hit_YLocal_{0}".format(self.id))
         self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
-        
+
         # Let's assume that z doesn't change between events, as 
         # it is a fixed constrain, so find the first entry with
         # a valid value and then obtain
@@ -138,7 +226,33 @@ class hits_plane_accessor(object):
             raise RuntimeError("No event was found with a valid value "\
                     "at Z for the {0}-plane. Something in the input file"\
                     " is corrupted")
-    
+        
+        # Initialize resync static variable
+        if not hits_plane_accessor.resync.has_key(self.id):
+            hits_plane_accessor.resync[self.id] = True
+        # Check the presence of an alignment file, and then update the alignment
+        # constants. Assuming in the telescope frame system
+        if hits_plane_accessor.resync[self.id]:
+            print
+            print "DEBUG ALIGNMENT",self.id
+            # Just do it if there weren't initialized previously
+            if not hits_plane_accessor.align_constants.has_key(self.id):
+                hits_plane_accessor.align_constants[self.id] = alignment_cts()
+            filename = "align_cts_ID_{0}.txt".format(self.id)
+            try:
+                with open(filename) as f:
+                    align = alignment_cts()
+                    align.parse_alignment(f)
+                    #hits_plane_accessor.align_constants[self.id].parse_alignment(f)
+                    hits_plane_accessor.align_constants[self.id] += align
+            except IOError:
+                # Just init to 0
+                pass
+            # Not re-synchronized until new order
+            print hits_plane_accessor.align_constants[self.id]
+            hits_plane_accessor.resync[self.id] = False
+        #hits_plane_accessor.init_alignment(alg_ct,self.id)
+        
     @property
     def n(self):
         """The number of hit elements
@@ -148,6 +262,156 @@ class hits_plane_accessor(object):
         int
         """
         return self.x.size()
+    
+    #@staticmethod
+    #def init_alignment(align_inst,pid):
+    #    """Initialize the alignment constants
+    #    """
+    #    # Just do it if there was not initialized
+    #    if hits_plane_accessor.x_offset.has_key(pid):
+    #        return
+    #    hits_plane_accessor.x_offset[pid] = align_inst.x_offset
+    #    hits_plane_accessor.y_offset[pid] = align_inst.y_offset
+    #    hits_plane_accessor.rotation[pid] = align_inst.rot
+    #    hits_plane_accessor.tilt[pid]     = align_inst.tilt
+    #    hits_plane_accessor.turn[pid]     = align_inst.turn
+    #    hits_plane_accessor.dz[pid]       = align_inst.dz
+    
+    #@staticmethod
+    def update_alignment(self,align_inst):
+        """Update the alignment constants
+        """
+        hits_plane_accessor.align_constants[self.id] += align_inst
+        #hits_plane_accessor.x_offset[self.id] += align_inst.x_offset
+        #hits_plane_accessor.y_offset[self.id] += align_inst.y_offset
+        #hits_plane_accessor.rot[self.id]      += align_inst.rot
+        #hits_plane_accessor.tilt[self.id]     += align_inst.tilt
+        #hits_plane_accessor.turn[self.id]     += align_inst.turn
+        #hits_plane_accessor.dz[self.id]       += align_inst.dz
+    
+    def get_normal_vector(self):
+        """Get the normal vector to the sensor plane, if perfectly 
+        aligned it must be (0,0,-1) (note that the plane is defined
+        following the opposite direction of the beam)
+
+        Return
+        ------
+        vector normal: (float,float,float)
+        """
+        if not hits_plane_accessor.normal.has_key(self.id):
+            # Calculate it and momorize
+            hits_plane_accessor.normal[self.id] = (-self.cos_tilt(self.id)*self.sin_turn(self.id),\
+                    self.sin_tilt(self.id),\
+                    -self.cos_tilt(self.id)*self.cos_turn(self.id) )
+        return hits_plane_accessor.normal[self.id]
+    
+    @staticmethod
+    @memoize
+    def cos_tilt(pid):
+        """Memorize cos(tilt) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the cosinos of the tilt (rotation around x-axis)
+        """
+        from math import cos
+
+        return cos(hits_plane_accessor.align_constants[pid].tilt)
+    
+    @staticmethod
+    @memoize
+    def sin_tilt(pid):
+        """Memorize sin(tilt) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the sin of the tilt (rotation around x-axis)
+        """
+        from math import sin
+        
+        return sin(hits_plane_accessor.align_constants[pid].tilt)
+    
+    @staticmethod
+    @memoize
+    def cos_turn(pid):
+        """Memorize cos(turn) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the cosinos of the turn (rotation around y-axis)
+        """
+        from math import cos
+        
+        return cos(hits_plane_accessor.align_constants[pid].turn)
+    
+    @staticmethod
+    @memoize
+    def sin_turn(pid):
+        """Memorize sin(turn) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the sin of the turn (rotation around y-axis)
+        """
+        from math import sin
+        
+        return sin(hits_plane_accessor.align_constants[pid].turn)
+    
+    @staticmethod
+    @memoize
+    def cos_rot(pid):
+        """Memorize cos(rot) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the cosinos of the turn (rotation around z-axis)
+        """
+        from math import cos
+        
+        return cos(hits_plane_accessor.align_constants[pid].rot)
+    
+    @staticmethod
+    @memoize
+    def sin_rot(pid):
+        """Memorize sin(rot) angle
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        float: the sin of the turn (rotation around z-axis)
+        """
+        from math import sin
+        
+        return sin(hits_plane_accessor.align_constants[pid].rot)
     
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
@@ -172,7 +436,7 @@ class hits_plane_accessor(object):
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
 
-    def matched_hits(self,track_acc,histo,hres,res=None):
+    def matched_hits(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event
 
@@ -180,12 +444,30 @@ class hits_plane_accessor(object):
         ----------
         track_acc: tracks_accessor instance
             The accessor to the telescope tracks branches
-        histo: ROOT.TH2
-            The histogram to store correlation between the 
-            hit in the sensor and the hit in the track
-        hres: ROOT.TH1
-            The histogram to store residuals between the 
-            hit in the sensor and the hit in the track
+        histos: tuple(ROOT.TH)
+            A tuple of histograms to be filled within this 
+            function. The histograms must be in order:
+            - A ROOT.TH2F histogram to store correlation between the 
+              hit in the sensor and the hit in the track.
+              See `residual_projection` in the processor class 
+            - A ROOT.TH1F histogram to store the residuals between the 
+              hit in the sensor and the predicted hit for the track
+            - A ROOT.TH1F histogram to store the residuals between the 
+              hit in the sensor and the predicted hit for the track of
+              those passing the cuts (isolation, matching). See `dx_h`
+              in the processor class.
+            - A ROOT.TProfile to store the variation of the residual in y
+              (see last histo) vs. the x-prediction. See `dy_x_h` in the 
+              processor class. This histo is used for alignment (rotation)            
+            - A ROOT.TProfile to store the variation of the residual in y
+              (see last histo) vs. the y-prediction. See `dy_x_h` in the 
+              processor class. This histo is used for alignment (tilt)
+            - A ROOT.TProfile to store the variation of the residual in y
+              (see last histo) vs. the y-slope. See `dy_ty_h` in the 
+              processor class. This histo is used for alignment (z-shift)
+        is_ref: bool, optional [XXX: Maybe define a data-member in the init)
+            Whether or not the current plane is the REFERENCE sensor,
+            in that case the isolation criteria should be applied
         res: float (optional)
             The maximum distance to consider a hit matched
 
@@ -194,8 +476,14 @@ class hits_plane_accessor(object):
         hitlist: dict(int,list(int))
             The list of indices of the hits matched with a track 
         """
+        from math import sqrt
+
         if not res:
             res=RESOLUTION[self.id]
+        ISOLATION = 0.6*MM
+
+        # Get the histograms
+        hcorr,hres,hdx,hrot,hturn,hdz = histos
 
         matched_hits = []
         # Given the hits in that sensor,
@@ -203,27 +491,39 @@ class hits_plane_accessor(object):
             closest = {}
             # Evaluate the distance from the hit to any tracks
             for itrk in xrange(track_acc.n):
-                xpred,ypred=track_acc.get_point(itrk,self.z[ihit])
-                closest[abs(xpred-self.x[ihit])] = (itrk,xpred,self.x[ihit])
+                # Note that the prediction are given in the sensor reference frame
+                # See `get_point_in_sensor_frame`
+                xpred,ypred,zpred=track_acc.get_point_in_sensor_frame(itrk,self)
+                # So, get the x in the sensor local frame
+                closest[abs(xpred-self.x_local[ihit])] = (itrk,xpred,ypred,self.x_local[ihit],track_acc.dxdz[itrk])
             if len(closest) == 0:
                 continue
-            # if any track matched, get the closest one 
-            distance,(trk_el,xpredicted,x_in_hit) =sorted(closest.iteritems())[0]
+            # If dealing with REF, the isolation condition should be applied
+            # for the given hit, only one track must be found within 0.6 mm
+            # (in the prediction)
+            if is_ref and \
+                    len(filter(lambda (_i,x,y,xhit,ty): sqrt(x**2.+y**2.) < ISOLATION, closest.values())) > 1:
+                continue
+            # if any track matched, get the closest one (just the DUT case, this 
+            # case cannot be given in the REF case)
+            distance,(trk_el,xpredicted,ypredicted,x_in_hit,slope_x) =sorted(closest.iteritems())[0]
 
             # Fill correlation histograms
-            histo.Fill(x_in_hit,xpredicted)
-            hres.Fill(xpredicted-x_in_hit)
-            # define resolution (an input maybe?)
-            # and olny add the track matched within the 
-            # resolution
-            # XXX Resolution MUST be related with the sensor 
-            # resolution \otimes track resolution (maybe any other effect?)
+            hcorr.Fill(x_in_hit,xpredicted)
+            hres.Fill(x_in_hit-xpredicted)
             #res = RESOLUTION[self.id]
+            # Fill only thos passing the cuts
             if res > distance:
+                # Alignment histos
+                hdx.Fill(x_in_hit-xpredicted)
+                hrot.Fill(x_in_hit-xpredicted,ypredicted)
+                hturn.Fill(x_in_hit-xpredicted,xpredicted)
+                hdz.Fill(x_in_hit-xpredicted,slope_x)
+                # Fill the machted hits
                 matched_hits.append( (ihit,trk_el) )
 
         return matched_hits
-
+    
 
 class track_hits_plane_accessor(object):
     """Access to the TBranches contained in a 
@@ -519,7 +819,7 @@ class tracks_accessor(object):
         # --- ref
         self.ref_measured_hits = track_hits_plane_accessor(tree,self.refid,True,self.refid,self.dutid)
         self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False,self.refid,self.dutid)
-        
+
     @property
     def n(self):
         """The number of tracks
@@ -601,10 +901,53 @@ class tracks_accessor(object):
         
         Return
         ------
-        (float,float): Predicted position at the z-plane
+        (float,float,float): Predicted position at the z-plane
         """
         t = z-self.z0[i]
-        return (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t)
+        return (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t,z)
+    
+    def get_point_in_sensor_frame(self,i,hit):
+        """Give the predicted position (x,y) for the i-track using
+        a transformation into the sensor frame (passive).
+        Suitable when the sensors are rotated or titled
+
+        Parameters
+        ----------
+        i: int
+            The index of the track
+        hit: hits_plane_accessor
+            The hit instance
+        
+        Return
+        ------
+        (float,float): Predicted position at the z-plane
+        """
+        # Obtain the normal vector of the plane (defined in opposite direction to the beam)
+        # With perfect alignment: (0,0,-1)
+        n = hit.get_normal_vector()
+        # Intersect the track with the sensor plane (to obtain the diferent z-values depending 
+        # the x or y). Plane equation n (r-r_{p}),
+        #  - the plane vector: n
+        #  - the assume plane position r_{p}= (0,0,z_p-z0)
+        #  - the predicted point       r = (x0+tx(z-z0), y0+ty(z-z0), z-z0)
+        # Then, t=(z-z0) is obtained for an inclined plane (therefore 
+        # will give different z-values depending on the x,y, instead of being at the fixed z_p
+        t = (n[2]*(hit.z[0]-self.z0[i])-n[1]*self.y0[i]-n[0]*self.x0[i])/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
+        ### XXX --- print n,t,hit.z[0],hit.z[0]-self.z0[i]
+        # Transfrom into the sensor plane frame (passive transformation)
+        r_at_sens = (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t,t-self.z0[i])
+        ### XXX --- print r_at_sens
+        # Euler angles
+        # -- First: turn
+        x1 = (r_at_sens[0]*hit.cos_turn(hit.id)-r_at_sens[2]*hit.sin_turn(hit.id),\
+                r_at_sens[1],r_at_sens[0]*hit.sin_turn(hit.id)+r_at_sens[2]*hit.cos_turn(hit.id))
+        # -- Second: tilt
+        x2 = (x1[0],x1[1]*hit.cos_tilt(hit.id)+x1[2]*hit.sin_tilt(hit.id),x1[2])
+        # -- third: rot
+        x3 = (x2[0]*hit.cos_rot(hit.id)+x2[1]*hit.sin_rot(hit.id),-x2[0]*hit.sin_rot(hit.id)+x2[1]*hit.cos_rot(hit.id),x2[2])
+        ### XXX --- print x3
+        # -- And finally, the shift
+        return (-x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2])
 
 class processor(object):
     """Results extractor. Main class where statistics and histograms 
@@ -676,6 +1019,19 @@ class processor(object):
         self.events_with_dut_no_tracks = 0
         self.events_with_ref_no_tracks = 0
         self.events_with_ref_dut_tracks = 0
+        self.number_matched_hits = {}
+        # Alingment histos
+        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3*MM,0.3*MM),
+                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3*MM,0.3*MM) }
+        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ; #Deltay_{DUT} [mm];x_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ; x_{REF} [mm];x_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2) }
+        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ; #Deltay_{DUT} [mm];y_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ; #Deltay_{REF} [mm];y_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2) }
+        self.dy_ty_h = { minst.dut_plane: ROOT.TProfile("dy_ty_dut"," ; #Deltay_{DUT} [mm];#theta_{y,trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_ty_ref"," ; #Deltay_{REF};#theta_{y,trk}^{pred} [mm];",100,-0.3*MM,0.3*MM,-0.2,0.2) }
+        
+        self._alignment_histos = self.dx_h.values()+self.dy_x_h.values()+self.dy_y_h.values()+self.dy_ty_h.values()
+
         # Some statistic histograms
         self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
                 minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
@@ -700,8 +1056,12 @@ class processor(object):
 
         self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+self.hmap.values()+\
                 self.hcharge.values()+self.haux_charge.values()+self.hcorr_trkX.values()+\
+                self._alignment_histos+\
                 [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
+
+        # The alignment constants
+        self.alignment = {}
 
     #def draw_all_in_canvas():
     #    """
@@ -729,6 +1089,8 @@ class processor(object):
             h.GetZaxis().SetTitle("<charge cluster> [ADC]")
             h.Divide(self.haux_charge[s])
             self._allhistograms.append(h)
+        # Map over 100 um module
+
 
     def store_histos(self,filename):
         """Actually write the defined histograms to 
@@ -747,6 +1109,54 @@ class processor(object):
         # Store all the histograms
         f=ROOT.TFile.Open(filename,"RECREATE")
         for h in self._allhistograms:
+            h.Write()
+        f.Close()
+    
+    def create_alignment_file(self):
+        """Extract the information relative to the alignment
+        and dump it into a file
+        """
+        from math import sin,cos
+
+        # Just extract all the static info of the class,
+        for pl_id in self.alignment.keys():
+            align_file_content=''
+            filename = "align_cts_ID_{0}.txt".format(pl_id)
+            # -- The x-offset
+            align_file_content += "x_offset: {0}\n".format(self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id]))
+            # -- The y-offset
+            align_file_content += "y_offset: {0}\n".format(0.0)
+            # -- The rotation
+            align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot+get_linear_fit(self.dy_x_h[pl_id]))
+            # -- The tilt(??)
+            #align_file_content[i].append("tilt: {0}\n".format(self.alignment[pl_id]tilt+get_linear_fit(self.dy_y[pl_id])))
+            # -- The turn
+            try:
+                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+get_linear_fit(self.dy_y_h[pl_id])/sin(self.alignment[pl_id].turn))
+            except ZeroDivisionError:
+                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn)
+            # -- the z-shift
+            align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz+get_linear_fit(self.dy_ty_h[pl_id]))
+            # Now do the fits to the histograms
+            with open(filename,"w") as f:
+                f.write(align_file_content)
+            # And prepare the alignment constants to be updated 
+            # in the next iteration
+            hits_plane_accessor.resync[pl_id] = True
+
+    def store_alignment(self,filename):
+        """Actually write the alignment histograms to 
+        a root file
+
+        Parameters
+        ----------
+        filename: str
+            The name of file to store the results
+        """
+        import ROOT
+        # Store all the histograms
+        f=ROOT.TFile.Open(filename,"RECREATE")
+        for h in self._alignment_histos:
             h.Write()
         f.Close()
 
@@ -777,8 +1187,23 @@ class processor(object):
         if ndut != 0 and nref != 0 and tracks != 0:
             self.events_with_ref_dut_tracks += 1
         
+    def fill_statistics_matched(self,matched_hits):
+        """Fill some statistic related with the number of 
+        matched-to-track hits
 
-    def process(self,t,trks,refhits,duthits):
+        Parameters
+        ----------
+        matched_hits:  dict(int,[])
+            The list of matched hits 
+        """
+        for plid,thelist in matched_hits.iteritems():
+            if not self.number_matched_hits.has_key(plid):
+                self.number_matched_hits[plid] = len(thelist)
+            else:
+                self.number_matched_hits[plid] += len(thelist)
+
+
+    def process(self,t,trks,refhits,duthits,is_alignment=False):
         """Fill the relevant counters and the histograms
 
         Parameters
@@ -791,6 +1216,9 @@ class processor(object):
             The list of measured hits at the REF sensor
         duthits: list(.hits_plane_accessor )
             The list of measured hits at the DUT sensor
+        is_alignment: bool, optional
+            Whether if the run is an alignment run, therefore
+            no need for filling extra histograms
         """
         import math
         
@@ -805,11 +1233,28 @@ class processor(object):
         
         # - a dict to get the sensors by its plane ID
         sensor_hits = { refhits.id: refhits, duthits.id: duthits }
+        
+        # Update the sensors with the alignment results
+        #for pl_id,hits in sensor_hits.iteritems():
+        #    hits.update_alignment(self.alignment[pl_id])
 
+        # Prepare the ntuple of histograms for DUT and REF
+        histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
+                self.dy_x_h[duthits.id],self.dy_y_h[duthits.id],self.dy_ty_h[duthits.id])
+        histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
+                self.dy_x_h[refhits.id],self.dy_y_h[refhits.id],self.dy_ty_h[refhits.id])
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
-        matched_hits = { duthits.id: duthits.matched_hits(trks,self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id]),
-                refhits.id: refhits.matched_hits(trks,self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id]) }
+        matched_hits = { duthits.id: duthits.matched_hits(trks,histos_dut),
+                refhits.id: refhits.matched_hits(trks,histos_ref,True) }
+        # If alignment, just return here, trying to avoid extra processing time
+        if is_alignment:
+            # Update the alignment constants 
+            self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
+            # Get an estimation of the sensor efficiency ?
+            self.fill_statistics_matched(matched_hits)
+            return
+
         predictions = {}
         # Filling histograms
         for sensorID,pointlist in matched_hits.iteritems():
@@ -858,6 +1303,14 @@ class processor(object):
                 ## Residuals only for the DUT-REF matched tracks
                 self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
 
+    def get_raw_sensors_efficiency(self):
+        """Summarize the efficiency of the sensors:
+        eff = Number of matched hits/number of events
+        """
+        m = "|-------------------------------------------|\n"
+        for plid,n in self.number_matched_hits.iteritems():
+            m+= " {0}-Sensor efficiency: {1:.2f}%)\n".format(plid,float(n)/float(self.total_events)*100.)
+        return m
 
     def __str__(self):
         """Summarize the information
@@ -873,7 +1326,92 @@ class processor(object):
 
         return m
 
-def sensor_map_production(fname):
+def get_x_offset(h):
+    """XXX 
+    """
+    import ROOT
+    ROOT.gROOT.SetBatch()
+    
+    cns=ROOT.TCanvas()
+
+    gbg = ROOT.TF1("gbg","[0]*exp(-0.5*((x-[1])/[2])**2.0)+[3]",-1,1)
+    # Set the initial values
+    # -- Amplitude
+    gbg.SetParameter(0,h.GetMaximum())
+    # -- Mean
+    peak = h.GetBinCenter(h.GetMaximumBin())
+    gbg.SetParameter(1,peak)
+    # -- Sigma
+    gbg.SetParameter(2,h.GetBinWidth(1))
+    # -- Background: get the guess from far the peak point
+    gbg.SetParameter(3,h.GetBinContent(h.FindBin(peak-0.4)))
+    ## Do the fit
+    status = h.Fit(gbg,"SQ","",peak-1.0,peak+1.0)
+    if status == 0:
+        # XXX
+        print "KKITA!!!! FAILED THE X-OFFSET FIT"
+    new_align_x = gbg.GetParameter(1)
+    
+    return new_align_x
+
+def get_linear_fit(h):
+    """XXX 
+    """
+    import ROOT
+    ROOT.gROOT.SetBatch()
+
+    gbg = ROOT.TF1("linear_fit","pol1")
+    ## Do the fit
+    status = h.Fit(gbg,"SQL")
+    if status == 0:
+        # XXX
+        print "KKITA!!!! FAILED THE LINEAR FIT"
+    return gbg.GetParameter(1)
+
+def sensor_alignment(fname,verbose,alignment_file=""):
+    """Performs the alignment of the DUT and REF sensors
+    with respect to the Telescope, using the tracks of 
+    the telescope and assuming the telescope is already 
+    aligned. The coordinate Y of both sensors are considered
+    to be unmeasurable, but is assumed to be assigned by the
+    track (in its first iteration?)
+
+    Parameters
+    ----------
+    fname: str
+        The name of the ROOT ntuple produced by the EUTelTreeCreator
+        processor (part of the EUTelescope package, which uses the 
+        Marlin framework). The filename MUST follow the standard 
+        notation defined through the class 
+        `alibavaSkifftools.SPS2017TB_metadata.filename_parser`
+    verbose: bool
+        Whether or not to print out the alignment parameters
+
+    Returns
+    -------
+    status: int
+        The code status describing the outcome of the alignment
+        process: 0 means that the parameters describing the alignment 
+        are below some predefined values, considering the sensor
+        aligned. The value -1 is sent otherwise.
+
+    Raises
+    ------
+    IOError
+        Whenever the ROOT file is not present
+    """
+    import ROOT
+    from math import sin
+
+    # Get the data, build clusters, do the actual analysis, 
+    # but only the first 50k events
+    proc_inst = sensor_map_production(fname,entries_proc=10000,alignment=True)
+    proc_inst.create_alignment_file()
+    print proc_inst.get_raw_sensors_efficiency()
+    return -1
+
+
+def sensor_map_production(fname,entries_proc=-1,alignment=False):
     """Produce the charge maps and the efficiency maps (hit 
     reconstruction efficiency) for the sensor included in the 
     NTUPLE.
@@ -886,6 +1424,15 @@ def sensor_map_production(fname):
         Marlin framework). The filename MUST follow the standard 
         notation defined through the class 
         `alibavaSkifftools.SPS2017TB_metadata.filename_parser`
+    entries_proc: int, optional
+        The number of entries to process, if -1 all entries available
+    alignment: bool, optional
+        Whether this run is used to align or not. Effectively means
+        that less histograms are going to be fill and less entries processed
+
+    Return
+    ------
+    A processor instance (if alignment mode)
 
     Raises
     ------
@@ -898,6 +1445,7 @@ def sensor_map_production(fname):
     import os
     from .SPS2017TB_metadata import filename_parser 
     from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
+    from .SPS2017TB_metadata import sensor_name_spec_map as specs
     # probably provisional XXX
     global RESOLUTION
 
@@ -916,8 +1464,9 @@ def sensor_map_production(fname):
     # resolutions)
     metadata = metadata_container(t,name_converter[fp.sensor_name])
 
-    # FIXME provisional XXX
-    RESOLUTION= { metadata.dut_plane: 0.2, metadata.ref_plane : 0.1 } # in mm
+    # FIXME provisional XXX : 2 x pitch for dut, same for ref?. Check the efficiency
+    RESOLUTION= { metadata.dut_plane: 2.0*specs[name_converter[fp.sensor_name]].pitchX,\
+            metadata.ref_plane : 2.0*specs["REF_0_b1"].pitchX } # in mm
 
     # Set some globals
     #tree_inspector(t)
@@ -931,16 +1480,26 @@ def sensor_map_production(fname):
     #start_time = timeit.default_timer()
     wtch = processor(metadata)
     
-    nentries = t.GetEntries()
+    if entries_proc == -1:
+        nentries = t.GetEntries()
+    else:
+        nentries = int(entries_proc)
     pointpb = float(nentries)/100.0
     for i,_t in enumerate(t):
+        if i > nentries:
+            break
         sys.stdout.write("\r\033[1;34mINFO\033[1;m -- Processing file '"+\
                 os.path.basename(fname)+" [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
-        wtch.process(_t,tracks,ref,dut)
+        wtch.process(_t,tracks,ref,dut,alignment)
     print
     #print timeit.default_timer()-start_time
-    print wtch
-    foutput = "sensor_maps_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
-    print "File created at '{0}'".format(foutput)
-    wtch.store_histos(foutput)
+    if alignment:
+        foutput = "aligment_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
+        wtch.store_alignment(foutput)
+        return wtch
+    else:
+        print wtch
+        foutput = "sensor_maps_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
+        print "File created at '{0}'".format(foutput)
+        wtch.store_histos(foutput)
