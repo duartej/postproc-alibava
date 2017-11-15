@@ -13,6 +13,38 @@ __status__ = "Development"
 # 4. Be sure plots are in the LOCAL coordinates of the plane as well, i.e. channel (see the formula to convert in biblio)
 # 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so) ??
 
+DEBUG=True
+
+# -- Take care of the activated branches when reading 
+#    the root file
+class branch_list(object):
+    """
+    """
+    def __init__(self):
+        self._active_br = []
+        pass
+    def update(self,tree,brlist):
+        """De-activate all branches but those
+        described and introduced
+
+        Parameters
+        ----------
+        tree: ROOT.TTree
+        brlist: list(sts)
+        """
+        pass
+        #for br in brlist:
+        #    self._active_br.append(br)
+        #    tree.SetBranchStatus(br,1)
+        ## Deactivate all but the active
+        #for b in filter(lambda x: not x.GetName() in self._active_br, \
+        #        tree.GetListOfBranches()):
+        #    tree.SetBranchStatus(b.GetName(),0)
+        # Re-do the attributes list (??)
+
+# The global instance
+ACTIVE_BRS = branch_list()        
+
 # XXX
 # Not sure yet how to deal with that. So far see
 # see declaration at sensor_map_production function
@@ -78,6 +110,7 @@ class alignment_cts(object):
     def __init__(self):
         """Initialize the data-members
         """
+        self.iteration = 0
         self.x_offset = 0.0
         self.y_offset = 0.0
         self.turn = 0.0
@@ -89,12 +122,13 @@ class alignment_cts(object):
         """Just the print out of the alignment constants
         """
         from math import degrees
-        m  = "x_offset: {0} mm\n".format(self.x_offset)
-        m += "y_offset: {0} mm\n".format(self.y_offset)
-        m += "turn    : {0} deg\n".format(degrees(self.turn))
-        m += "tilt    : {0} deg\n".format(degrees(self.tilt))
-        m += "rot     : {0} deg\n".format(degrees(self.rot))
-        m += "dz      : {0} mm\n".format(self.dz)
+        m  = "iteration: {0}\n".format(int(self.iteration))
+        m += "x_offset : {0} mm\n".format(self.x_offset)
+        m += "y_offset : {0} mm\n".format(self.y_offset)
+        m += "turn     : {0} deg\n".format(degrees(self.turn))
+        m += "tilt     : {0} deg\n".format(degrees(self.tilt))
+        m += "rot      : {0} deg\n".format(degrees(self.rot))
+        m += "dz       : {0} mm\n".format(self.dz)
 
         return m
 
@@ -129,7 +163,7 @@ class alignment_cts(object):
         attributes
         """
         lines=fobj.readlines()
-        keywords = [ 'x_offset', 'y_offset', 'rot', 'tilt', 'turn', 'dz' ]
+        keywords = [ 'iteration', 'x_offset', 'y_offset', 'rot', 'tilt', 'turn', 'dz' ]
         for i in lines:
             try:
                 align_word = filter(lambda x: i.find(x) == 0,keywords)[0]
@@ -182,6 +216,7 @@ class hits_plane_accessor(object):
     # and turn:=omega (around y-axis) [radians]
     # [A dictionary being the plane id the keys}
     align_constants = {}
+    # Activate the update of the alignment constants
     resync = {}
     # vector normal to the plane
     normal   = {}
@@ -199,6 +234,13 @@ class hits_plane_accessor(object):
         
         """
         self.id = planeid
+        # ----------------------------------
+        global ACTIVE_BRS
+        # -- De-activate those branches not needed
+        pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal","hit_total_charge"]
+        brnames = map(lambda x: "{0}_{1}".format(x,self.id),pre_brnames)
+        ACTIVE_BRS.update(tree,brnames)
+        # ----------------------------------
         # Check if there is any problem
         if len(filter(lambda br: br.GetName() == "hit_X_{0}".format(self.id) ,tree.GetListOfBranches())) == 0:
             raise RuntimeError("The INDEX '{0}' does not identify any Alibava"\
@@ -233,8 +275,9 @@ class hits_plane_accessor(object):
         # Check the presence of an alignment file, and then update the alignment
         # constants. Assuming in the telescope frame system
         if hits_plane_accessor.resync[self.id]:
-            print
-            print "DEBUG ALIGNMENT",self.id
+            if DEBUG:
+                print
+                print "DEBUG ALIGNMENT",self.id
             # Just do it if there weren't initialized previously
             if not hits_plane_accessor.align_constants.has_key(self.id):
                 hits_plane_accessor.align_constants[self.id] = alignment_cts()
@@ -243,15 +286,21 @@ class hits_plane_accessor(object):
                 with open(filename) as f:
                     align = alignment_cts()
                     align.parse_alignment(f)
-                    #hits_plane_accessor.align_constants[self.id].parse_alignment(f)
-                    hits_plane_accessor.align_constants[self.id] += align
+                    # Update the alignment constants
+                    hits_plane_accessor.align_constants[self.id] = align
             except IOError:
-                # Just init to 0
-                pass
+                # First access, propagate the prealignment from the Marlin 
+                # processor here:
+                _k = 1
+                # Just to be sure we have data
+                while self.x_local.size() == 0:
+                    dummy = tree.GetEntry(_k)
+                    _k+=1
+                hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]-self.x[0]
             # Not re-synchronized until new order
-            print hits_plane_accessor.align_constants[self.id]
+            if DEBUG:
+                print hits_plane_accessor.align_constants[self.id]
             hits_plane_accessor.resync[self.id] = False
-        #hits_plane_accessor.init_alignment(alg_ct,self.id)
         
     @property
     def n(self):
@@ -264,30 +313,10 @@ class hits_plane_accessor(object):
         return self.x.size()
     
     #@staticmethod
-    #def init_alignment(align_inst,pid):
-    #    """Initialize the alignment constants
-    #    """
-    #    # Just do it if there was not initialized
-    #    if hits_plane_accessor.x_offset.has_key(pid):
-    #        return
-    #    hits_plane_accessor.x_offset[pid] = align_inst.x_offset
-    #    hits_plane_accessor.y_offset[pid] = align_inst.y_offset
-    #    hits_plane_accessor.rotation[pid] = align_inst.rot
-    #    hits_plane_accessor.tilt[pid]     = align_inst.tilt
-    #    hits_plane_accessor.turn[pid]     = align_inst.turn
-    #    hits_plane_accessor.dz[pid]       = align_inst.dz
-    
-    #@staticmethod
     def update_alignment(self,align_inst):
         """Update the alignment constants
         """
         hits_plane_accessor.align_constants[self.id] += align_inst
-        #hits_plane_accessor.x_offset[self.id] += align_inst.x_offset
-        #hits_plane_accessor.y_offset[self.id] += align_inst.y_offset
-        #hits_plane_accessor.rot[self.id]      += align_inst.rot
-        #hits_plane_accessor.tilt[self.id]     += align_inst.tilt
-        #hits_plane_accessor.turn[self.id]     += align_inst.turn
-        #hits_plane_accessor.dz[self.id]       += align_inst.dz
     
     def get_normal_vector(self):
         """Get the normal vector to the sensor plane, if perfectly 
@@ -457,13 +486,13 @@ class hits_plane_accessor(object):
               those passing the cuts (isolation, matching). See `dx_h`
               in the processor class.
             - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the x-prediction. See `dy_x_h` in the 
+              (see last histo) vs. the x-prediction. See `dx_y_h` in the 
               processor class. This histo is used for alignment (rotation)            
             - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the y-prediction. See `dy_x_h` in the 
+              (see last histo) vs. the y-prediction. See `dx_y_h` in the 
               processor class. This histo is used for alignment (tilt)
             - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the y-slope. See `dy_ty_h` in the 
+              (see last histo) vs. the y-slope. See `dx_tx_h` in the 
               processor class. This histo is used for alignment (z-shift)
         is_ref: bool, optional [XXX: Maybe define a data-member in the init)
             Whether or not the current plane is the REFERENCE sensor,
@@ -516,9 +545,9 @@ class hits_plane_accessor(object):
             if res > distance:
                 # Alignment histos
                 hdx.Fill(x_in_hit-xpredicted)
-                hrot.Fill(x_in_hit-xpredicted,ypredicted)
-                hturn.Fill(x_in_hit-xpredicted,xpredicted)
-                hdz.Fill(x_in_hit-xpredicted,slope_x)
+                hrot.Fill(ypredicted,x_in_hit-xpredicted)
+                hturn.Fill(xpredicted,x_in_hit-xpredicted)
+                hdz.Fill(slope_x,x_in_hit-xpredicted)
                 # Fill the machted hits
                 matched_hits.append( (ihit,trk_el) )
 
@@ -585,10 +614,16 @@ class track_hits_plane_accessor(object):
             prefix = "trk_hit_meas"
         else:
             prefix = "trk_hit_fit"
-
         self.id = planeid
         self.is_dut = (self.id == dut_plane_id)
         self.is_ref = (self.id == ref_plane_id)
+        # ----------------------------------
+        global ACTIVE_BRS
+        # -- De-activate those branches not needed
+        pre_brnames = ["X","Y","Z","XLocal","YLocal","Z","index"]
+        brnames = map(lambda x: "{0}_{1}_{2}".format(prefix,x,self.id),pre_brnames)
+        ACTIVE_BRS.update(tree,brnames)
+        # ----------------------------------
         # A consistency check
         if self.is_ref and self.is_dut:
             raise AssertionError("The plane index for the DUT and the "\
@@ -783,6 +818,12 @@ class tracks_accessor(object):
             The plane index introduced does not belong to any
             (checking the 'trk_hit_meas(|fit)_X_<planeID>' brach)
         """
+        global ACTIVE_BRS
+        # -- De-activate those branches not needed
+        brnames = ["trk_hit_fit_X_{0}".format(dut_plane),"trk_hit_fit_X_{0}".format(ref_plane),\
+                "trk_refPoint_X","trk_refPoint_Y","trk_refPoint_Z","trk_dxdz","trk_dydz"]
+        ACTIVE_BRS.update(tree,brnames)
+        # --------------------------------
         self.refid = ref_plane
         self.dutid = dut_plane
         self.tel_planes = tel_planes
@@ -932,22 +973,30 @@ class tracks_accessor(object):
         #  - the predicted point       r = (x0+tx(z-z0), y0+ty(z-z0), z-z0)
         # Then, t=(z-z0) is obtained for an inclined plane (therefore 
         # will give different z-values depending on the x,y, instead of being at the fixed z_p
-        t = (n[2]*(hit.z[0]-self.z0[i])-n[1]*self.y0[i]-n[0]*self.x0[i])/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
+        # Note zc = z-z0 (the t-parameter equivalent but using a tilt-rot or turned plane)
+        zc = (n[2]*(hit.z[0]-self.z0[i])-n[1]*self.y0[i]-n[0]*self.x0[i])/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
         ### XXX --- print n,t,hit.z[0],hit.z[0]-self.z0[i]
         # Transfrom into the sensor plane frame (passive transformation)
-        r_at_sens = (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t,t-self.z0[i])
+        r_at_sens = (self.x0[i]+self.dxdz[i]*zc,self.y0[i]+self.dydz[i]*zc,zc)
+        # Distance between the 
+        dzc = zc + hit.align_constants[hit.id].dz - self.z0[i]
+        ## print dzc,self.z0[i],zc
+
         ### XXX --- print r_at_sens
         # Euler angles
         # -- First: turn
-        x1 = (r_at_sens[0]*hit.cos_turn(hit.id)-r_at_sens[2]*hit.sin_turn(hit.id),\
-                r_at_sens[1],r_at_sens[0]*hit.sin_turn(hit.id)+r_at_sens[2]*hit.cos_turn(hit.id))
+        x1 = (r_at_sens[0]*hit.cos_turn(hit.id)-dzc*hit.sin_turn(hit.id),\
+                r_at_sens[1],r_at_sens[0]*hit.sin_turn(hit.id)+dzc*hit.cos_turn(hit.id))
         # -- Second: tilt
-        x2 = (x1[0],x1[1]*hit.cos_tilt(hit.id)+x1[2]*hit.sin_tilt(hit.id),x1[2])
+        x2 = (x1[0],x1[1]*hit.cos_tilt(hit.id)+x1[2]*hit.sin_tilt(hit.id),-x1[1]*hit.sin_tilt(hit.id)+x1[2]*hit.cos_tilt(hit.id))
         # -- third: rot
         x3 = (x2[0]*hit.cos_rot(hit.id)+x2[1]*hit.sin_rot(hit.id),-x2[0]*hit.sin_rot(hit.id)+x2[1]*hit.cos_rot(hit.id),x2[2])
-        ### XXX --- print x3
+        # print r_at_sens,x3
         # -- And finally, the shift
-        return (-x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2])
+        # Note that if x_offset is obtained from x_local - x 
+        #if abs(hit.align_constants[hit.id].x_offset) < 1e-9:
+        #    hit.align_constants[hit.id].x_offset = hit.x_local[i]
+        return (x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2])
 
 class processor(object):
     """Results extractor. Main class where statistics and histograms 
@@ -1021,16 +1070,19 @@ class processor(object):
         self.events_with_ref_dut_tracks = 0
         self.number_matched_hits = {}
         # Alingment histos
-        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3*MM,0.3*MM),
-                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3*MM,0.3*MM) }
-        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ; #Deltay_{DUT} [mm];x_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ; x_{REF} [mm];x_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2) }
-        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ; #Deltay_{DUT} [mm];y_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ; #Deltay_{REF} [mm];y_{trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2) }
-        self.dy_ty_h = { minst.dut_plane: ROOT.TProfile("dy_ty_dut"," ; #Deltay_{DUT} [mm];#theta_{y,trk}^{pred} [mm]",100,-0.3*MM,0.3*MM,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_ty_ref"," ; #Deltay_{REF};#theta_{y,trk}^{pred} [mm];",100,-0.3*MM,0.3*MM,-0.2,0.2) }
+        # -- the shift in x
+        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3),
+                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3) }
+        # -- the rot (around z-axis)
+        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-0.3,0.3,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;#y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-0.3,0.3,-0.2,0.2) }
+        # -- the turn (around y-axis)
+        self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-0.3,0.3,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;xy_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-0.3,0.3,-0.2,0.2) }
+        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-0.002,0.002,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-0.002,0.002,-0.2,0.2) }
         
-        self._alignment_histos = self.dx_h.values()+self.dy_x_h.values()+self.dy_y_h.values()+self.dy_ty_h.values()
+        self._alignment_histos = self.dx_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()
 
         # Some statistic histograms
         self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
@@ -1112,37 +1164,64 @@ class processor(object):
             h.Write()
         f.Close()
     
-    def create_alignment_file(self):
+    def update_alignment_file(self):
         """Extract the information relative to the alignment
         and dump it into a file
+
+        Explanation
         """
         from math import sin,cos
+        MIN_ENTRIES = 999
 
         # Just extract all the static info of the class,
         for pl_id in self.alignment.keys():
-            align_file_content=''
+            # Update the counter
+            self.alignment[pl_id].iteration += 1
+            align_file_content='iteration: {0}\n'.format(int(self.alignment[pl_id].iteration))
             filename = "align_cts_ID_{0}.txt".format(pl_id)
-            # -- The x-offset
-            align_file_content += "x_offset: {0}\n".format(self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id]))
-            # -- The y-offset
+            # check the new offset
+            new_x_offset = self.alignment[pl_id].x_offset
+            # Some checks first: do a gross alignment first
+            if self.dx_h[pl_id].GetEntries() > MIN_ENTRIES:
+                new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id])
+                # Finer alignment
+                if self.alignment[pl_id].iteration > 1 \
+                        and abs(new_x_offset-self.alignment[pl_id].x_offset) < 0.1:
+                    new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id],-0.1,0.1)
+                # -- The x-offset 
+                align_file_content += "x_offset: {0}\n".format(new_x_offset)
+            else:
+                align_file_content += "x_offset: {0}\n".format(self.alignment[pl_id].x_offset)
+            # -- The y-offset (We don't have y-coordinate so far)
             align_file_content += "y_offset: {0}\n".format(0.0)
-            # -- The rotation
-            align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot+get_linear_fit(self.dy_x_h[pl_id]))
+            # -- The rotation: XXX NOT SURE YET!!!
+            if self.dx_y_h[pl_id].GetEntries() > MIN_ENTRIES:
+                print "ROT",pl_id,-get_linear_fit(self.dx_y_h[pl_id]),self.alignment[pl_id].rot
+                print "DEGREES",pl_id,-get_linear_fit(self.dx_y_h[pl_id])*180./3.1415,self.alignment[pl_id].rot*180./3.1415
+                align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot-get_linear_fit(self.dx_y_h[pl_id]))
+            else:
+                align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
             # -- The tilt(??)
             #align_file_content[i].append("tilt: {0}\n".format(self.alignment[pl_id]tilt+get_linear_fit(self.dy_y[pl_id])))
-            # -- The turn
-            try:
-                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+get_linear_fit(self.dy_y_h[pl_id])/sin(self.alignment[pl_id].turn))
-            except ZeroDivisionError:
+            print  pl_id,self.dx_x_h[pl_id].GetEntries(),self.alignment[pl_id].turn
+            # -- The turn (only evaluate it if greater than 5 degrees: 0.087 rad.
+            if False and abs(self.alignment[pl_id].turn) > 0.087 \
+                    and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
+                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+get_linear_fit(self.dx_x_h[pl_id])/sin(self.alignment[pl_id].turn))
+            else:
                 align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn)
             # -- the z-shift
-            align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz+get_linear_fit(self.dy_ty_h[pl_id]))
+            if False and self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
+                align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz-get_linear_fit(self.dx_tx_h[pl_id]))
+            else:
+                align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
             # Now do the fits to the histograms
             with open(filename,"w") as f:
                 f.write(align_file_content)
             # And prepare the alignment constants to be updated 
             # in the next iteration
             hits_plane_accessor.resync[pl_id] = True
+        # Update the alignment loop here?
 
     def store_alignment(self,filename):
         """Actually write the alignment histograms to 
@@ -1240,9 +1319,9 @@ class processor(object):
 
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dy_x_h[duthits.id],self.dy_y_h[duthits.id],self.dy_ty_h[duthits.id])
+                self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dy_x_h[refhits.id],self.dy_y_h[refhits.id],self.dy_ty_h[refhits.id])
+                self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id])
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
         matched_hits = { duthits.id: duthits.matched_hits(trks,histos_dut),
@@ -1307,9 +1386,9 @@ class processor(object):
         """Summarize the efficiency of the sensors:
         eff = Number of matched hits/number of events
         """
-        m = "|-------------------------------------------|\n"
+        m = ""
         for plid,n in self.number_matched_hits.iteritems():
-            m+= " {0}-Sensor efficiency: {1:.2f}%)\n".format(plid,float(n)/float(self.total_events)*100.)
+            m+= "{0}-Sensor efficiency: {1:.2f}%)\n".format(plid,float(n)/float(self.total_events)*100.)
         return m
 
     def __str__(self):
@@ -1326,7 +1405,7 @@ class processor(object):
 
         return m
 
-def get_x_offset(h):
+def get_x_offset(h,xmin=-1.0,xmax=1.0):
     """XXX 
     """
     import ROOT
@@ -1334,7 +1413,7 @@ def get_x_offset(h):
     
     cns=ROOT.TCanvas()
 
-    gbg = ROOT.TF1("gbg","[0]*exp(-0.5*((x-[1])/[2])**2.0)+[3]",-1,1)
+    gbg = ROOT.TF1("gbg","[0]*exp(-0.5*((x-[1])/[2])**2.0)+[3]",xmin,xmax)
     # Set the initial values
     # -- Amplitude
     gbg.SetParameter(0,h.GetMaximum())
@@ -1346,7 +1425,7 @@ def get_x_offset(h):
     # -- Background: get the guess from far the peak point
     gbg.SetParameter(3,h.GetBinContent(h.FindBin(peak-0.4)))
     ## Do the fit
-    status = h.Fit(gbg,"SQ","",peak-1.0,peak+1.0)
+    status = h.Fit(gbg,"SQR","")
     if status == 0:
         # XXX
         print "KKITA!!!! FAILED THE X-OFFSET FIT"
@@ -1354,15 +1433,15 @@ def get_x_offset(h):
     
     return new_align_x
 
-def get_linear_fit(h):
+def get_linear_fit(h,xmin=-0.2,xmax=0.2):
     """XXX 
     """
     import ROOT
     ROOT.gROOT.SetBatch()
 
-    gbg = ROOT.TF1("linear_fit","pol1")
+    gbg = ROOT.TF1("linear_fit","pol1",xmin,xmax)
     ## Do the fit
-    status = h.Fit(gbg,"SQL")
+    status = h.Fit(gbg,"SQRL")
     if status == 0:
         # XXX
         print "KKITA!!!! FAILED THE LINEAR FIT"
@@ -1406,7 +1485,7 @@ def sensor_alignment(fname,verbose,alignment_file=""):
     # Get the data, build clusters, do the actual analysis, 
     # but only the first 50k events
     proc_inst = sensor_map_production(fname,entries_proc=10000,alignment=True)
-    proc_inst.create_alignment_file()
+    proc_inst.update_alignment_file()
     print proc_inst.get_raw_sensors_efficiency()
     return -1
 
@@ -1495,7 +1574,7 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False):
     print
     #print timeit.default_timer()-start_time
     if alignment:
-        foutput = "aligment_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
+        foutput = "alignment_plots_{0}_run000{1}.root".format(fp.sensor_name,fp.run_number)
         wtch.store_alignment(foutput)
         return wtch
     else:
