@@ -724,10 +724,13 @@ if __name__ == '__main__':
             " file obtained by the EUTelTreeCreator processor")
     sm_parser.add_argument('-a','--align',dest="align",action="store_true",\
             help="Perform the alignment of the DUT (and REF) sensors, "\
-            "assuming the coordinate Y is not measured_true. A file"\
+            "assuming the coordinate Y is not measured. A file"\
             " is created to store the alignment constants to be applied to "\
             "the DUT and REF sensors")
-    sm_parser.set_defaults(which='sensor_maps',align=False)
+    sm_parser.add_argument('--align-auto',dest="align_auto",action="store_true",\
+            help="Same as '-a','--align' option, except the alignment" \
+            " is performed automatically. WARNING: use it carefully")
+    sm_parser.set_defaults(which='sensor_maps',align=False,align_auto=False)
     
     # -- Subparser: simple file merger when dealing with EORE extra events
     usage_fm  = "Create the steering file to be used to merge a collection "
@@ -804,11 +807,11 @@ if __name__ == '__main__':
         # arguments in the template steering files
         create_steering_file(args.step,**the_args)
     elif args.which == "sensor_maps":
-        # Probably ask for alignment if there is no
-        # file with the alignment result
-        if args.align:
+        if args.align and args.align_auto:
+            raise RuntimeError("Incompatible options: '-a' and '--align-auto'")
+        if args.align or args.align_auto:
             # initalize some variables
-            ST = { -1: '\033[1;31mNOT ALIGNED\033[1;m', 0: '\033[1;32mALIGNED\033[1;m'}
+            ST = { False: '\033[1;31mNOT ALIGNED\033[1;m', True: '\033[1;32mALIGNED\033[1;m'}
             user_answer = 'y'
             iteration = 0
             print "\033[1;34mPerforming DUT and REF alignment\033[1;m..."
@@ -816,11 +819,15 @@ if __name__ == '__main__':
             while user_answer[0].lower() == 'y':
                 alignment_status = sensor_alignment(args.ntuple,True)
                 print "\033[1;34mINFO ALIGNMENT\033[1;m  ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
+                if args.align_auto and alignment_status:
+                    break
                 # XXX: Check if python3, then use input instead
-                user_answer = raw_input("  *** Would you like to perform another alignment iteration [y/any key]? ")
+                if not args.align_auto:
+                    user_answer = raw_input("*** Would you like to perform another alignment iteration [y/any key]? ")
                 iteration+=1
-        # Create the maps
-        sensor_map_production(args.ntuple)
+        else:
+            # Create the maps
+            sensor_map_production(args.ntuple)
     elif args.which == 'merge_eore':
         steering_filename=merge_files(args.lcio_files,args.output)
         print "\033[1;34mTo create the merged file, run: \033[1;m\n"\
