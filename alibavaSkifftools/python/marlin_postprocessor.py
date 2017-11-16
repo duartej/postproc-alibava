@@ -15,6 +15,9 @@ __status__ = "Development"
 
 DEBUG=True
 
+# Be sure use the same alignment files: ct
+ALIGN_FILE_FORMAT= "align_cts_ID_{0}.txt"
+
 # -- Take care of the activated branches when reading 
 #    the root file
 class branch_list(object):
@@ -92,10 +95,21 @@ class metadata_container(object):
                 filter(lambda x: x.GetName().find("hit_X_") == 0, tree.GetListOfBranches()))[0]
         except IndexError:
             raise RuntimeError("Unexpected tree structure")
+        # Some useful extra info 
+        # REF
+        self.ref_pitchX = sensor_name_spec_map[self.ref_name].pitchX
+        self.ref_pitchY = sensor_name_spec_map[self.ref_name].pitchY
+        self.ref_sizeX  = sensor_name_spec_map[self.ref_name].sizeX
+        self.ref_sizeY  = sensor_name_spec_map[self.ref_name].sizeY
+        ##  DUT
+        self.dut_pitchX = sensor_name_spec_map[self.dut_name].pitchX
+        self.dut_pitchY = sensor_name_spec_map[self.dut_name].pitchY
+        self.dut_sizeX  = sensor_name_spec_map[self.dut_name].sizeX
+        self.dut_sizeY  = sensor_name_spec_map[self.dut_name].sizeY
         # Resolutions: REF and DUT (binary so far)
         _p = 1.0/math.sqrt(12.0)
-        self.resolution = { self.ref_plane: sensor_name_spec_map[self.ref_name].pitchX*_p/MM , 
-                self.dut_plane: sensor_name_spec_map[self.dut_name].pitchX*_p/MM }
+        self.resolution = { self.ref_plane: self.ref_pitchX*_p/MM , 
+                self.dut_plane: self.dut_pitchX*_p/MM }
 
 class dummy_list(list):
     """A dummy list which returns always
@@ -147,6 +161,29 @@ class alignment_cts(object):
             prov = getattr(self,attr)+getattr(other,attr)
             setattr(self,attr,prov)
         return self
+    
+    def __eq__(self,other):
+        """Compare two alignment constants, considered
+        converged whenever the constants are equal within
+        a TOLERANCE
+
+        Parameters
+        ----------
+        other: alignment_cts instance
+
+        Returns
+        -------
+        bool: whether or not converged
+        """
+        # The list of tolerances
+        attr_tol = [ ('x_offset', 0.005), ('y_offset', 0.005),\
+                ('turn', 0.018), ('tilt', 0.018), ('rot', 0.018),\
+                ('dz', 4.0) ]
+        # All attributes must be within tolerance
+        for attr,tolerance in attr_tol:
+            if abs(getattr(self,attr)-getattr(other,attr)) > tolerance:
+                return False
+        return True
         
     def parse_alignment(self,fobj):
         """Extract the information relative to the alignment
@@ -208,8 +245,13 @@ class hits_plane_accessor(object):
         The vector of x local position of the hits 
     y_local: ROOT.std.vector(float)()
         The vector of y local position of the hits
-    charge: ROOT.std.vector(int)()
+    charge: ROOT.std.vector(float)()
         The hit total charge in ADCs counts 
+    n_cluster: ROOT.std.vector(int)()
+        The total number of elements forming the cluster
+    track_link: dict((int,int)
+        The index of the hit is related with the track
+        produced that hit (if any)
     """
     # The properties of the plane where the hit lives
     # The rotation:=beta (around z-axis), tilt:=alpha (around x-axis) 
@@ -237,7 +279,7 @@ class hits_plane_accessor(object):
         # ----------------------------------
         global ACTIVE_BRS
         # -- De-activate those branches not needed
-        pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal","hit_total_charge"]
+        pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal","hit_total_charge","hit_Ncluster"]
         brnames = map(lambda x: "{0}_{1}".format(x,self.id),pre_brnames)
         ACTIVE_BRS.update(tree,brnames)
         # ----------------------------------
@@ -253,6 +295,10 @@ class hits_plane_accessor(object):
         self.x_local = getattr(tree,"hit_XLocal_{0}".format(self.id))
         self.y_local = getattr(tree,"hit_YLocal_{0}".format(self.id))
         self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
+        self.n_cluster = getattr(tree,"hit_Ncluster_{0}".format(self.id))
+
+        # Initialize the link index 
+        self.track_link = {}
 
         # Let's assume that z doesn't change between events, as 
         # it is a fixed constrain, so find the first entry with
@@ -281,7 +327,7 @@ class hits_plane_accessor(object):
             # Just do it if there weren't initialized previously
             if not hits_plane_accessor.align_constants.has_key(self.id):
                 hits_plane_accessor.align_constants[self.id] = alignment_cts()
-            filename = "align_cts_ID_{0}.txt".format(self.id)
+            filename = ALIGN_FILE_FORMAT.format(self.id)
             try:
                 with open(filename) as f:
                     align = alignment_cts()
@@ -311,6 +357,13 @@ class hits_plane_accessor(object):
         int
         """
         return self.x.size()
+    
+    def new_event(self):
+        """Call it every time a new event is going to
+        be processed. Clean some variables.
+        """
+        # Clean up the links
+        self.track_link = {}
     
     #@staticmethod
     def update_alignment(self,align_inst):
@@ -512,45 +565,64 @@ class hits_plane_accessor(object):
         ISOLATION = 0.6*MM
 
         # Get the histograms
-        hcorr,hres,hdx,hrot,hturn,hdz = histos
+        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz = histos
 
         matched_hits = []
+        # non isolated tracks and already used: keep them listed 
+        # to avoid re-processing
+        used_tracks = []
         # Given the hits in that sensor,
         for ihit in xrange(self.n):
             closest = {}
-            # Evaluate the distance from the hit to any tracks
-            for itrk in xrange(track_acc.n):
-                # Note that the prediction are given in the sensor reference frame
+            # Evaluate the distance from the hit to any track (not used already)
+            for itrk in filter(lambda i: i not in used_tracks, xrange(track_acc.n)):
+                # Isolation: be sure there is no other track surrounding this one
+                xpred,ypred,zpred = track_acc.get_point(itrk,self.z[ihit])
+                if len(filter(lambda (o_x,o_y,o_z): sqrt(o_x**2.0+o_y**2) < ISOLATION,
+                    map(lambda other_i:  track_acc.get_point(other_i,zpred), xrange(itrk+1,track_acc.n)))) > 1:
+                    # Another track has been found sourrounding this one, 
+                    # not isolated, just continue
+                    used_tracks.append(itrk)
+                    continue
+                # Note that the prediction is given in the sensor reference frame
                 # See `get_point_in_sensor_frame`
-                xpred,ypred,zpred=track_acc.get_point_in_sensor_frame(itrk,self)
-                # So, get the x in the sensor local frame
-                closest[abs(xpred-self.x_local[ihit])] = (itrk,xpred,ypred,self.x_local[ihit],track_acc.dxdz[itrk])
+                #xpred,ypred,zpred=track_acc.get_point_in_sensor_frame(itrk,self)
+                xturn,xtilt,xrot,xsen=track_acc.get_point_in_sensor_frame(itrk,self)
+                # Fill the alignment histograms
+                closest[abs(self.x_local[ihit]-xsen[0])] = itrk
             if len(closest) == 0:
                 continue
-            # If dealing with REF, the isolation condition should be applied
-            # for the given hit, only one track must be found within 0.6 mm
-            # (in the prediction)
-            if is_ref and \
-                    len(filter(lambda (_i,x,y,xhit,ty): sqrt(x**2.+y**2.) < ISOLATION, closest.values())) > 1:
-                continue
-            # if any track matched, get the closest one (just the DUT case, this 
-            # case cannot be given in the REF case)
-            distance,(trk_el,xpredicted,ypredicted,x_in_hit,slope_x) =sorted(closest.iteritems())[0]
+            # if any track matched, get the closest one 
+            distance_abs,trk_el =sorted(closest.iteritems())[0]
+            # and tag it as used
+            used_tracks.append(trk_el)
 
+            # Link the hit with the track
+            self.track_link[ihit] = trk_el
+            
+            # Get again  the info
+            rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
+            # And fill some histograms
             # Fill correlation histograms
-            hcorr.Fill(x_in_hit,xpredicted)
-            hres.Fill(x_in_hit-xpredicted)
-            #res = RESOLUTION[self.id]
+            hcorr.Fill(self.x_local[ihit],rsensor[0])
+            dx = self.x_local[ihit]-rsensor[0]
+            hres.Fill(dx)
+            # Fill the alignment histograms
+            # -- shift in x
+            #    All but the shift
+            hdx.Fill(self.x_local[ihit]-rrot[0])
+            #    finer alignment, including the shift
+            hdx_finer.Fill(dx)
+            # -- turn
+            hturn.Fill(rturn[0],dx)
+            ## -- rot
+            hrot.Fill(rrot[1],dx)
+            ## -- dz (no acting at all the transformation)
+            hdz.Fill(track_acc.dxdz[trk_el],dx)
             # Fill only thos passing the cuts
-            if res > distance:
-                # Alignment histos
-                hdx.Fill(x_in_hit-xpredicted)
-                hrot.Fill(ypredicted,x_in_hit-xpredicted)
-                hturn.Fill(xpredicted,x_in_hit-xpredicted)
-                hdz.Fill(slope_x,x_in_hit-xpredicted)
-                # Fill the machted hits
+            if distance_abs < distance:
+                # Fill the matched hits
                 matched_hits.append( (ihit,trk_el) )
-
         return matched_hits
     
 
@@ -652,6 +724,14 @@ class track_hits_plane_accessor(object):
         """
         return self.x.size()
     
+    def new_event(self):
+        """Call it every time a new event is going to
+        be processed. Clean some variables.
+        Do nothing, just in case we need to extend this
+        class.
+        """
+        pass
+    
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
         if (x,z) are equal
@@ -732,7 +812,51 @@ class track_hits_plane_accessor(object):
         """Whether the plane corresponds to the Alibava REF
         """
         return self.is_ref
-    
+ 
+class memoize_hasher(object):
+    """A simple memoization using a hash of 
+    the inputs
+    Use the track Id and a hash from the hit object
+    as keys. 
+    Inspired from
+    http://code.activestate.com/recipes/577452-a-memoize-decorator-for-instance-methods/
+    """
+    def __init__(self,f):
+        self.f = f
+    def __get__(self,obj,objtype=None):
+        """
+        """
+        from functools import partial
+        if obj is None:
+            return self.f
+        return partial(self,obj)
+    def __call__(self,*args):
+        """Only need the z-plane, all the other stuff is the same
+        """
+        # Clean call 
+        obj = args[0]
+        if args[1] == "clean":
+            self._clean(obj)
+            return
+        # -- REGULAR CALL
+        try:
+            cache = obj.__cache
+        except AttributeError:
+            cache = obj.__cache = {}
+        if hasattr(args[2],'z'):
+            args1 = int(args[2].z[0])
+        else:
+            args1 = int(args[2])
+        key = (self.f,args[1],args1)
+        try:
+            res = cache[key]
+        except KeyError:
+            res = cache[key] = self.f(*args)
+        return res
+    def _clean(self,obj):
+        """Clean the cache
+        """
+        obj.__cache ={}
 
 class tracks_accessor(object):
     """Access to the TBranches contained in a 
@@ -871,6 +995,14 @@ class tracks_accessor(object):
         """
         return self.x0.size()
 
+    def new_event(self):
+        """Call it every time a new event is going to
+        be processed. Clean some variables.
+        """
+        # -- Clean the cache
+        self.get_point("clean")
+        self.get_point_in_sensor_frame("clean")
+
     def _matched_hits(self,duthits,refhits,h):
         """Function only usable if the tracks were fitted including
         both the DUT and REF sensor hits. 
@@ -930,6 +1062,7 @@ class tracks_accessor(object):
                     hitlist[sID].append( (i_in_hit_plane,itrk) )
         return hitlist
     
+    @memoize_hasher
     def get_point(self,i,z):
         """Give the predicted position (x,y) for the i-track
 
@@ -947,6 +1080,7 @@ class tracks_accessor(object):
         t = z-self.z0[i]
         return (self.x0[i]+self.dxdz[i]*t,self.y0[i]+self.dydz[i]*t,z)
     
+    @memoize_hasher
     def get_point_in_sensor_frame(self,i,hit):
         """Give the predicted position (x,y) for the i-track using
         a transformation into the sensor frame (passive).
@@ -961,8 +1095,15 @@ class tracks_accessor(object):
         
         Return
         ------
-        (float,float): Predicted position at the z-plane
+        (nt1,nt2,nt3,nt4): being nti=(float,float,float)
+            The predicted position by the track in the sensor
+            reference frame, after apply one transformation
+            1: turn
+            2: tilt 
+            3: rot 
+            4: sensor reference plane
         """
+        # XXX Memoize using the itrk and the hit hash
         # Obtain the normal vector of the plane (defined in opposite direction to the beam)
         # With perfect alignment: (0,0,-1)
         n = hit.get_normal_vector()
@@ -978,8 +1119,11 @@ class tracks_accessor(object):
         ### XXX --- print n,t,hit.z[0],hit.z[0]-self.z0[i]
         # Transfrom into the sensor plane frame (passive transformation)
         r_at_sens = (self.x0[i]+self.dxdz[i]*zc,self.y0[i]+self.dydz[i]*zc,zc)
-        # Distance between the 
-        dzc = zc + hit.align_constants[hit.id].dz - self.z0[i]
+        # Distance away from the sensor frame:
+        #   the z in the telescope plane for the current track (zc), minus
+        #   the z position of the sensor plane (hit.z[0]) corrected by the alignment cte
+        dzc = zc  - (hit.z[0]+hit.align_constants[hit.id].dz)
+        #print dzc, zc, self.z0[i], (hit.z[0]-hit.align_constants[hit.id].dz)
         ## print dzc,self.z0[i],zc
 
         ### XXX --- print r_at_sens
@@ -996,7 +1140,7 @@ class tracks_accessor(object):
         # Note that if x_offset is obtained from x_local - x 
         #if abs(hit.align_constants[hit.id].x_offset) < 1e-9:
         #    hit.align_constants[hit.id].x_offset = hit.x_local[i]
-        return (x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2])
+        return (x1,x2,x3,(x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2]))
 
 class processor(object):
     """Results extractor. Main class where statistics and histograms 
@@ -1051,6 +1195,12 @@ class processor(object):
         at the DUT and at the REF, using the same matched track (meaning that the same
         track is compatible with the REF and the DUT measured hits).
     """
+    # Some static members to be used for the aligment
+    # - whether or not the dz alignment should be performed
+    #align_allow_dz = {}
+    # - whether or not the rot alignment should be performed
+    #align_allow_rot = {}
+
     def __init__(self,minst):
         """ XXX MISSING DOC
         Parameters
@@ -1058,6 +1208,21 @@ class processor(object):
         minst: metadata_container instance
         """
         import ROOT
+
+        # Get some useful info to build the histograms
+        # Asumming strips for the ref (so recall is going 
+        # to be used as 2 x pitch)
+        self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
+        self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: 0.5*minst.ref_pitchY }
+        # -- Check if is 3-D or strips
+        if minst.dut_name.lower().find("lgad") == -1:
+            # simulate pixels
+            self.pitchY[minst.dut_plane] = minst.dut_pitchX
+        else:
+            # As is going to be use as 2 x pitch
+            self.pitchY[minst.dut_plane] = 0.5*minst.dut_pitchY
+        self.sizeX = { minst.dut_plane: minst.dut_sizeX, minst.ref_plane: minst.ref_sizeX }
+        self.sizeY = { minst.dut_plane: minst.dut_sizeY, minst.ref_plane: minst.ref_sizeY }
 
         # some info numbers
         self.total_events    = 0
@@ -1071,18 +1236,21 @@ class processor(object):
         self.number_matched_hits = {}
         # Alingment histos
         # -- the shift in x
-        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3),
-                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3) }
+        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-10.0,10.0),
+                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-10.0,10.0) }
+        # -- finer alignment
+        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx__finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
+                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5) }
         # -- the rot (around z-axis)
-        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-0.3,0.3,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;#y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-0.3,0.3,-0.2,0.2) }
+        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
         # -- the turn (around y-axis)
-        self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-0.3,0.3,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;xy_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-0.3,0.3,-0.2,0.2) }
-        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-0.002,0.002,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-0.002,0.002,-0.2,0.2) }
+        self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-1.2,1.2),
+                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;xy_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
+        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-1e-4,1e-4,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-1e-4,1e-4,-0.2,0.2) }
         
-        self._alignment_histos = self.dx_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()
+        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()
 
         # Some statistic histograms
         self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
@@ -1090,10 +1258,19 @@ class processor(object):
         # Residuals between REF-DUT (matched tracks family)
         self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm]; y_{DUT}^{pred}-y_{REF}^{pred}",\
                 100,-0.04*MM,0.04*MM,100,-3.5*MM,3.5*MM) 
-        self.hmap = { minst.dut_plane: ROOT.TH2F("charge_map_dut" ,";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
+        self.hmap = { minst.dut_plane: ROOT.TProfile2D("charge_map_dut" ,";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
+                minst.ref_plane: ROOT.TProfile2D("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
         self.hcharge = { minst.dut_plane: ROOT.TH2F("avr_charge_map_dut",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
                 minst.ref_plane: ROOT.TH2F("avr_charge_map_ref",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
+        # -- Module (2 x pitch X)
+        self.hcluster_size_mod = { minst.dut_plane: ROOT.TProfile2D("cluster_size_mod_dut" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch}"\
+                        "[mm];<cluster size>", 40,0,2.0*self.pitchX[minst.dut_plane],40,0.0,2.0*self.pitchY[minst.dut_plane]),
+                minst.ref_plane: ROOT.TProfile2D("cluster_size_mod_ref" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch} [mm];"\
+                        "<cluster size>", 40,0,2.0*self.pitchX[minst.ref_plane],40,0.0,2.0*self.pitchY[minst.ref_plane]) }
+        self.hcharge_mod = { minst.dut_plane: ROOT.TProfile2D("charge_mod_dut",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane],40,0.0,2.0*self.pitchY[minst.dut_plane]),
+                minst.ref_plane: ROOT.TProfile2D("charge_mod_ref",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.ref_plane],40,0.0,2.0*self.pitchY[minst.ref_plane]) }
         # Keep the number of entries used in each bin
         self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
                 minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
@@ -1108,6 +1285,7 @@ class processor(object):
 
         self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+self.hmap.values()+\
                 self.hcharge.values()+self.haux_charge.values()+self.hcorr_trkX.values()+\
+                self.hcluster_size_mod.values()+self.hcharge_mod.values()+\
                 self._alignment_histos+\
                 [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
@@ -1170,7 +1348,7 @@ class processor(object):
 
         Explanation
         """
-        from math import sin,cos
+        from math import sin,cos,sqrt
         MIN_ENTRIES = 999
 
         # Just extract all the static info of the class,
@@ -1178,41 +1356,55 @@ class processor(object):
             # Update the counter
             self.alignment[pl_id].iteration += 1
             align_file_content='iteration: {0}\n'.format(int(self.alignment[pl_id].iteration))
-            filename = "align_cts_ID_{0}.txt".format(pl_id)
+            filename = ALIGN_FILE_FORMAT.format(pl_id)
             # check the new offset
             new_x_offset = self.alignment[pl_id].x_offset
             # Some checks first: do a gross alignment first
             if self.dx_h[pl_id].GetEntries() > MIN_ENTRIES:
                 new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id])
-                # Finer alignment
-                if self.alignment[pl_id].iteration > 1 \
-                        and abs(new_x_offset-self.alignment[pl_id].x_offset) < 0.1:
-                    new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id],-0.1,0.1)
+                # Finer alignment -- XXX SOMETHING FAILS!!
+                ##if self.alignment[pl_id].iteration > 1 \
+                ##        and abs(new_x_offset-self.alignment[pl_id].x_offset) < 0.1:
+                ##    new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_finer_h[pl_id],-0.1,0.1)
                 # -- The x-offset 
                 align_file_content += "x_offset: {0}\n".format(new_x_offset)
             else:
                 align_file_content += "x_offset: {0}\n".format(self.alignment[pl_id].x_offset)
             # -- The y-offset (We don't have y-coordinate so far)
             align_file_content += "y_offset: {0}\n".format(0.0)
-            # -- The rotation: XXX NOT SURE YET!!!
+            # -- The rotation
+            # XXX --- Maybe if the change is less than 0.1 degrees (or some % of the previous one)
+            #         There is no more alignment in here
             if self.dx_y_h[pl_id].GetEntries() > MIN_ENTRIES:
-                print "ROT",pl_id,-get_linear_fit(self.dx_y_h[pl_id]),self.alignment[pl_id].rot
-                print "DEGREES",pl_id,-get_linear_fit(self.dx_y_h[pl_id])*180./3.1415,self.alignment[pl_id].rot*180./3.1415
-                align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot-get_linear_fit(self.dx_y_h[pl_id]))
+                new_align_rot = self.alignment[pl_id].rot-get_linear_fit(self.dx_y_h[pl_id])
+                # Check convergence, if the change are below 0.5 degree, just 
+                # converged
+                if abs(self.alignment[pl_id].rot-new_align_rot) < 0.0087:
+                    #processor.align_allow_rot = False
+                    align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
+                else:
+                    align_file_content += "rot: {0}\n".format(new_align_rot)
             else:
                 align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
             # -- The tilt(??)
             #align_file_content[i].append("tilt: {0}\n".format(self.alignment[pl_id]tilt+get_linear_fit(self.dy_y[pl_id])))
-            print  pl_id,self.dx_x_h[pl_id].GetEntries(),self.alignment[pl_id].turn
             # -- The turn (only evaluate it if greater than 5 degrees: 0.087 rad.
-            if False and abs(self.alignment[pl_id].turn) > 0.087 \
+            if abs(self.alignment[pl_id].turn) > 0.087 \
                     and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
-                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+get_linear_fit(self.dx_x_h[pl_id])/sin(self.alignment[pl_id].turn))
+                new_turn = get_linear_fit(self.dx_x_h[pl_id])
+                align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn))
             else:
                 align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn)
-            # -- the z-shift
-            if False and self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz-get_linear_fit(self.dx_tx_h[pl_id]))
+            # -- the z-shift: Note the SPS beam hardly divergent (less than 0.1 mrad),
+            #    therefore do not trust too much in this correction, not stable. 
+            #    We trust in the initial measurement, if the diference is higher than a couple of mm, 
+            #    deactivate it
+            if self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
+                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-5e-5,5e-5)
+                if abs(new_dz) > 3.0:
+                    align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
+                else:
+                    align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz+new_dz)
             else:
                 align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
             # Now do the fits to the histograms
@@ -1304,6 +1496,11 @@ class processor(object):
         # Get the number of hits in the DUT and REF plane
         self.fill_statistics(duthits.n,refhits.n,t.ntracks)
 
+        # Start new event
+        trks.new_event()
+        refhits.new_event()
+        duthits.new_event()
+
         # Fill histograms for the DUT/REF
         # -- Charge map: using a matched track to the sensor, in order to
         # find the missing Y
@@ -1319,13 +1516,14 @@ class processor(object):
 
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id])
+                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id])
+                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id])
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
         matched_hits = { duthits.id: duthits.matched_hits(trks,histos_dut),
                 refhits.id: refhits.matched_hits(trks,histos_ref,True) }
+
         # If alignment, just return here, trying to avoid extra processing time
         if is_alignment:
             # Update the alignment constants 
@@ -1341,37 +1539,34 @@ class processor(object):
             for hit_el,trk_index in pointlist:
                 # Remember: it_el=index of the measured hit at the corrent sensor (sensorID)
                 #           trk_index= index of the track
-                xpred,ypred = trks.get_point(trk_index,hits.z[hit_el])
+                xpred,ypred,zpred = trks.get_point(trk_index,hits.z[0])
                 # Event and charge maps (using track predictions)
                 # --- Some histograms should use the measured values (at least when possible)
                 self.hmap[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
                 self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el]/float(hits.n))
                 self.haux_charge[sensorID].Fill(xpred,ypred)
+                # Modulo (Assuming the center of the sensor: self.size/2-5*pitch ~
+                # XXX provisional
+                xmod = (-0.1+xpred)%(2.0*self.pitchX[sensorID])
+                ymod = (-0.1+ypred)%(2.0*self.pitchY[sensorID])
+                self.hcluster_size_mod[sensorID].Fill(xmod,ymod,hits.n_cluster[hit_el])
+                self.hcharge_mod[sensorID].Fill(xmod,ymod,hits.charge[hit_el])
+                ## INCLUDE IT IN HERE
         # Matching beetwen DUT and REF: hits with the same track ID
         # Loop over all the measured hits in the REF, matching to a
         # track, using the track as common element in the DUT-REF match
         for ihit_ref,itrk in matched_hits[refhits.id]:
             # Get the track predicted points at the DUT plane
-            xpred_dut,ypred_dut = trks.get_point(itrk,duthits.z[0])
+            xpred_dut,ypred_dut,zpred_dut = trks.get_point(itrk,duthits.z[0])
             # To fill the (charge efficiency) total histo, use the predictions
             self.htotal.Fill(xpred_dut,ypred_dut)
             # Get if any of the 
             dut_match = filter(lambda (ihit_dut,itrk_dut): itrk_dut == itrk,matched_hits[duthits.id])
-            if len(dut_match) > 1:
-                # Get the one with minimum distance at
-                min_distance = (1e20,-1)
-                for k,(i_dut,i_trk) in enumerate(dut_match):
-                    curr_dist = math.sqrt( (xpred_dut-duthits.x[i_dut])**2.0 + \
-                            (trks.get_point(itrk,refhits.z[ihit_ref])[0]-refhits.x[ihit_ref])**2.0 )
-                    if min_distance[0] > curr_dist:
-                        min_distance = (curr_dist,k)
-                # Re-write the variable!! Just keeping the lowest distance
-                dut_match = [ dut_match[min_distance[1]] ]
             if len(dut_match) > 0:
                 xmeasured_dut = duthits.x[dut_match[0][0]]
                 self.hpass.Fill(xpred_dut,ypred_dut)
                 # Get the track predicted points at the REF plane
-                xpred_at_ref,ypred_at_ref = trks.get_point(itrk,refhits.z[ihit_ref])
+                xpred_at_ref,ypred_at_ref,zpred_at_ref = trks.get_point(itrk,refhits.z[0])
                 # And some correlation plots of the predicted values between
                 # the DUT and REF sensors
                 # Note that the expected gaussian could be not centered at zero,
@@ -1381,6 +1576,8 @@ class processor(object):
                 self.hcorrY.Fill(ypred_dut,ypred_at_ref)
                 ## Residuals only for the DUT-REF matched tracks
                 self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
+            elif len(dut_match) > 1:
+                raise RuntimeError("This must never happens!! Contact developer, error 3E43")
 
     def get_raw_sensors_efficiency(self):
         """Summarize the efficiency of the sensors:
@@ -1388,7 +1585,7 @@ class processor(object):
         """
         m = ""
         for plid,n in self.number_matched_hits.iteritems():
-            m+= "{0}-Sensor efficiency: {1:.2f}%)\n".format(plid,float(n)/float(self.total_events)*100.)
+            m+= "{0}-Sensor efficiency: {1:.2f}%\n".format(plid,float(n)/float(self.total_events)*100.)
         return m
 
     def __str__(self):
@@ -1433,21 +1630,22 @@ def get_x_offset(h,xmin=-1.0,xmax=1.0):
     
     return new_align_x
 
-def get_linear_fit(h,xmin=-0.2,xmax=0.2):
+def get_linear_fit(h,xmin=-4.0,xmax=4.0):
     """XXX 
     """
     import ROOT
     ROOT.gROOT.SetBatch()
+    cns=ROOT.TCanvas()
 
     gbg = ROOT.TF1("linear_fit","pol1",xmin,xmax)
     ## Do the fit
-    status = h.Fit(gbg,"SQRL")
+    status = h.Fit(gbg,"SQR")
     if status == 0:
         # XXX
         print "KKITA!!!! FAILED THE LINEAR FIT"
     return gbg.GetParameter(1)
 
-def sensor_alignment(fname,verbose,alignment_file=""):
+def sensor_alignment(fname,verbose):
     """Performs the alignment of the DUT and REF sensors
     with respect to the Telescope, using the tracks of 
     the telescope and assuming the telescope is already 
@@ -1484,10 +1682,26 @@ def sensor_alignment(fname,verbose,alignment_file=""):
 
     # Get the data, build clusters, do the actual analysis, 
     # but only the first 50k events
-    proc_inst = sensor_map_production(fname,entries_proc=10000,alignment=True)
+    proc_inst = sensor_map_production(fname,entries_proc=60000,alignment=True)
+    # Considered aligned if the aligned constants doesn't change (within some 
+    # tolerance): then extract the alignment constants before
+    aligned_sensors = 0
+    for pl_id,current_align in proc_inst.alignment.iteritems():
+        align_f = ALIGN_FILE_FORMAT.format(pl_id)
+        old_align = alignment_cts()
+        try:
+            with open(align_f) as f:
+                old_align.parse_alignment(f)
+        except IOError:
+            # not do anything at the begining
+            continue
+        if old_align == current_align:
+            aligned_sensors += 1
+    # Update the alignment files
     proc_inst.update_alignment_file()
     print proc_inst.get_raw_sensors_efficiency()
-    return -1
+    # Check if all sensors are aligned
+    return (aligned_sensors == len(proc_inst.alignment.keys()))
 
 
 def sensor_map_production(fname,entries_proc=-1,alignment=False):
