@@ -1300,7 +1300,7 @@ class processor(object):
                         "<charge cluster> [ADC]", 300,-sxdut,sxdut,300,-sydut,sydut),
                 minst.ref_plane: ROOT.TProfile2D("charge_map_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
                         "<charge cluster> [ADC]", 300,-sxref,sxref,300,-syref,syref) }
-        self.hhitmap = { minst.dut_plane: ROOT.TH2F("hit_map_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
+        self.hhitmap = { minst.dut_plane: ROOT.TH2F("hitmap_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
                         "Entries", 300,-sxdut,sxdut,300,-sydut,sydut),
                 minst.ref_plane: ROOT.TH2F("hitmap_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
                         "Entries", 300,-sxref,sxref,300,-syref,syref) }
