@@ -275,6 +275,8 @@ class hits_plane_accessor(object):
             The sensor plane ID
         
         """
+        import ROOT
+
         self.id = planeid
         # ----------------------------------
         global ACTIVE_BRS
@@ -294,8 +296,26 @@ class hits_plane_accessor(object):
         self.y = getattr(tree,"hit_Y_{0}".format(self.id))
         self.x_local = getattr(tree,"hit_XLocal_{0}".format(self.id))
         self.y_local = getattr(tree,"hit_YLocal_{0}".format(self.id))
+        #self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
         self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
         self.n_cluster = getattr(tree,"hit_Ncluster_{0}".format(self.id))
+
+        # Get the maximum and minimum in x and y (to define the fiducial cuts)
+        ROOT.gROOT.SetBatch()
+        prv_c = ROOT.TCanvas()
+        dummy = tree.Draw("hit_X_{0}>>hdum(100)".format(self.id))
+        hdummy = ROOT.gDirectory.Get("hdum")
+        self.xmin = hdummy.GetXaxis().GetBinLowEdge(1)
+        self.xmax = hdummy.GetXaxis().GetBinUpEdge(100)
+        # Dont have this coordinate!!!
+        #dummy2 = tree.Draw("hit_Y_{0}>>hdum2".format(self.id))
+        #hdummy2 = ROOT.gDirectory.Get("hdum2")
+        #self.ymin = hdummy2.GetXaxis().GetBinLowEdge(1)
+        #self.ymax = hdummy2.GetXaxis().GetBinUpEdge(hdummy2.GetNbinsX())
+
+        # -- For the modulo definition, let's be sure we don't use any masked region
+        #    or channels
+        del prv_c
 
         # Initialize the link index 
         self.track_link = {}
@@ -517,8 +537,7 @@ class hits_plane_accessor(object):
         return abs(self.x[i]-other.x[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
-    # XXX -- VERY SLOW FUNCTION WHICH IS CALLED TWICE!! maybe re-organize
-    def matched_hits(self,track_acc,histos,is_ref=False,res=None):
+    def match_isolated(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event
 
@@ -585,9 +604,10 @@ class hits_plane_accessor(object):
                     used_tracks.append(itrk)
                     continue
                 # Note that the prediction is given in the sensor reference frame
-                xturn,xtilt,xrot,xsen=track_acc.get_point_in_sensor_frame(itrk,self)
+                #xturn,xtilt,xrot,xsen=track_acc.get_point_in_sensor_frame(itrk,self)
                 # Fill the alignment histograms
-                closest[abs(self.x_local[ihit]-xsen[0])] = itrk
+                #closest[abs(self.x_local[ihit]-xsen[0])] = itrk
+                closest[abs(self.x[ihit]-xpred)] = itrk
             if len(closest) == 0:
                 continue
             # Get the closest track (in x)
@@ -598,16 +618,20 @@ class hits_plane_accessor(object):
             # self.track_link[ihit] = trk_el
             # Get again  the info in the reference frame of the sensor
             # XXX --- SEEMS not to need all the partial results
-            rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
+            #rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
+            rsensor = track_acc.get_point(trk_el,self.z[ihit])
             # And fill some histograms
             # Fill correlation histograms
-            hcorr.Fill(self.x_local[ihit],rsensor[0])
+            ### hcorr.Fill(self.x_local[ihit],rsensor[0])
+            hcorr.Fill(self.x[ihit],rsensor[0])
             # -- resolution histogram
-            dx = self.x_local[ihit]-rsensor[0]
+            ## -- dx = self.x_local[ihit]-rsensor[0]
+            dx = self.x[ihit]-rsensor[0]
             hres.Fill(dx)
             # Alignment histos: x-offset
             # -- Pre-alignment, rot, tilt an turn but no shift
-            hdx.Fill(self.x_local[ihit]-rrot[0])
+            ##hdx.Fill(self.x_local[ihit]-rrot[0])
+            hdx.Fill(self.x[ihit]-rsensor[0])
             # -- finer
             hdx_finer.Fill(dx)
             # Fill only thos passing the cuts
@@ -1005,7 +1029,7 @@ class tracks_accessor(object):
         # -- Clean the cache
         self.get_point("clean")
         self.get_point_in_sensor_frame("clean")
-
+    
     def _matched_hits(self,duthits,refhits,h):
         """Function only usable if the tracks were fitted including
         both the DUT and REF sensor hits. 
@@ -1181,15 +1205,9 @@ class processor(object):
     residual_sensor: ROOT.TH2F
         Histogram of the difference between the hit predicted at the DUT and the
         hit predicted at the REF by the same, and matched to both sensors, track
-    hmap: ditc(int, ROOT.TH2F)
-        Histograms, per sensor, of the deposited charge in the track predicted 
-        position at the plane of the sensor
     hcharge: dict(int, ROOT.TH2F)
         Histograms, per sensor, of the deposited charge in the track predicted 
-        position at the plane of the sensor, averaged over the size of the cluster
-    haux_charge: dict(int, ROOT.TH2F)
-        Histograms, per sensor, of the track predicted position  at the plane of
-        the sensor
+        position at the plane of the sensor
     hcorr_trkX: dict(int,ROOT.TH2F)
         Histograms per sensor, of the difference between the measured hit and the
         predicted hits of the closest (defined as the x-distance) track of the event
@@ -1213,19 +1231,35 @@ class processor(object):
         import ROOT
 
         # Get some useful info to build the histograms
+        self.dut_plane = minst.dut_plane
+        self.ref_plane = minst.ref_plane
+
         # Asumming strips for the ref (so recall is going 
         # to be used as 2 x pitch)
         self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
-        self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: 0.5*minst.ref_pitchY }
+        ## --- XXX Simulate pixels
+        self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
+        self.pitchY = self.pitchX
         # -- Check if is 3-D or strips
-        if minst.dut_name.lower().find("lgad") == -1:
-            # simulate pixels
-            self.pitchY[minst.dut_plane] = minst.dut_pitchX
-        else:
-            # As is going to be use as 2 x pitch
-            self.pitchY[minst.dut_plane] = 0.5*minst.dut_pitchY
+        #if minst.dut_name.lower().find("lgad") == -1:
+        #    # simulate pixels
+        #    self.pitchY[minst.dut_plane] = minst.dut_pitchX
+        #else:
+        #    # As is going to be use as 2 x pitch
+        #    self.pitchY[minst.dut_plane] = 0.5*minst.dut_pitchY
         self.sizeX = { minst.dut_plane: minst.dut_sizeX, minst.ref_plane: minst.ref_sizeX }
+        # Be careful than iLGAD and LGAD don't have the proper dimensions of the sensors
+        if minst.dut_name.lower().find("ilgad") == 0:
+            self.sizeX[minst.dut_plane]= 7.2*MM
+        elif minst.dut_name.lower().find("lgad") == 0:
+            self.sizeX[minst.dut_plane]= 5.2*MM
         self.sizeY = { minst.dut_plane: minst.dut_sizeY, minst.ref_plane: minst.ref_sizeY }
+        # useful for the histos
+        # half size plus some extra to keep alignment factors
+        sxdut = self.sizeX[minst.dut_plane]/2.0+1.5
+        sydut = self.sizeY[minst.dut_plane]/2.0+1.5
+        sxref = self.sizeX[minst.ref_plane]/2.0+1.5
+        syref = self.sizeY[minst.ref_plane]/2.0+1.5
 
         # some info numbers
         self.total_events    = 0
@@ -1239,58 +1273,69 @@ class processor(object):
         self.number_matched_hits = {}
         # Alingment histos
         # -- the shift in x
-        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-10.0,10.0),
-                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-10.0,10.0) }
+        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-sxdut,sxdut),
+                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-sxref,sxref) }
         # -- finer alignment
-        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx__finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
+        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
                 minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5) }
         # -- the rot (around z-axis)
         self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-0.2,0.2),
                 minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
         # -- the turn (around y-axis)
         self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-1.2,1.2),
-                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;xy_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
+                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;x_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
         self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-1e-4,1e-4,-0.2,0.2),
                 minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-1e-4,1e-4,-0.2,0.2) }
         
         self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()
 
         # Some statistic histograms
-        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-2.5*MM,2.5*MM),
+        # -------------------------
+        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM),
                 minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
         # Residuals between REF-DUT (matched tracks family)
-        self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm]; y_{DUT}^{pred}-y_{REF}^{pred}",\
+        self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm];y_{DUT}^{pred}-y_{REF}^{pred}",\
                 100,-0.04*MM,0.04*MM,100,-3.5*MM,3.5*MM) 
-        self.hmap = { minst.dut_plane: ROOT.TProfile2D("charge_map_dut" ,";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TProfile2D("charge_map_ref",";x [mm]; y [mm]; charge cluster [ADC]", 300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
-        self.hcharge = { minst.dut_plane: ROOT.TH2F("avr_charge_map_dut",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("avr_charge_map_ref",";x [mm]; y [mm]; charge/N_{cluster} [ADC]",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
+        self.hcharge = { minst.dut_plane: ROOT.TProfile2D("charge_map_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
+                        "<charge cluster> [ADC]", 300,-sxdut,sxdut,300,-sydut,sydut),
+                minst.ref_plane: ROOT.TProfile2D("charge_map_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
+                        "<charge cluster> [ADC]", 300,-sxref,sxref,300,-syref,syref) }
+        self.hhitmap = { minst.dut_plane: ROOT.TH2F("hit_map_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
+                        "Entries", 300,-sxdut,sxdut,300,-sydut,sydut),
+                minst.ref_plane: ROOT.TH2F("hitmap_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
+                        "Entries", 300,-sxref,sxref,300,-syref,syref) }
         # -- Module (2 x pitch X)
         self.hcluster_size_mod = { minst.dut_plane: ROOT.TProfile2D("cluster_size_mod_dut" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch}"\
-                        "[mm];<cluster size>", 40,0,2.0*self.pitchX[minst.dut_plane],40,0.0,2.0*self.pitchY[minst.dut_plane]),
+                        "[mm];<cluster size>", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
                 minst.ref_plane: ROOT.TProfile2D("cluster_size_mod_ref" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch} [mm];"\
-                        "<cluster size>", 40,0,2.0*self.pitchX[minst.ref_plane],40,0.0,2.0*self.pitchY[minst.ref_plane]) }
+                        "<cluster size>", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
         self.hcharge_mod = { minst.dut_plane: ROOT.TProfile2D("charge_mod_dut",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
-                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane],40,0.0,2.0*self.pitchY[minst.dut_plane]),
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
                 minst.ref_plane: ROOT.TProfile2D("charge_mod_ref",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
-                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.ref_plane],40,0.0,2.0*self.pitchY[minst.ref_plane]) }
-        # Keep the number of entries used in each bin
-        self.haux_charge = { minst.dut_plane: ROOT.TH2F("aux_charge_dut",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM),
-                minst.ref_plane: ROOT.TH2F("aux_charge_ref",";x [mm]; y [mm]; Entries",300,-10.0*MM,10.0*MM,300,-10.0*MM,10.0*MM) }
-        # Correlations
-        self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0),
-                minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
-        self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
-        self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)
-        # efficiendy
-        self.hpass = ROOT.TH2F("pass_map",";x [mm]; y [mm]; #varepsilon",200,-10.0,10.0,200,-10.0,10.0)
-        self.htotal = ROOT.TH2F("total_map",";x [mm]; y [mm]; #varepsilon",200,-10.0,10.0,200,-10.0,10.0)
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
+        self.hhitmap_mod = { minst.dut_plane: ROOT.TH2F("hitmap_mod_dut",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                        "Entries", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
+                minst.ref_plane: ROOT.TH2F("hitmap_mod_ref",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                        "Entries", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
+        # -- efficiency mod
+        self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                        "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
+        # Correlations: 
+        # -- Sensors-tracks
+        self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut),
+                minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut)}
+        # -- DUT-REF
+        self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
+        self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
+        # efficiency
+        self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
+        self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
 
-        self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+self.hmap.values()+\
-                self.hcharge.values()+self.haux_charge.values()+self.hcorr_trkX.values()+\
-                self.hcluster_size_mod.values()+self.hcharge_mod.values()+\
+        self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+\
+                self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
+                self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+[self.heff_mod]+\
                 self._alignment_histos+\
-                [self.hcorrX,self.hcorrY,self.hpass,self.htotal]
+                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries]
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
         # The alignment constants
@@ -1300,29 +1345,6 @@ class processor(object):
     #    """
     #    """
     #    import ROOT
-    def create_efficiency(self):
-        """Create the hit efficiency map using the total and pass
-        histograms
-        """
-        import ROOT
-        self.eff = ROOT.TEfficiency(self.hpass,self.htotal)
-        self.eff.SetName("sensor_efficiency")
-        self.eff.SetDirectory(0)
-        self._allhistograms.append(self.eff)
-
-    def create_charge_map(self):
-        """Create the charge map using the two auxiliary histograms,
-        one containing the entries for a x,y position and the other
-        the total charge of all the entries
-        """
-        import ROOT
-        self.hcharge_average = dict([(s,h.Clone(h.GetName().replace("charge_map","charge_map_per_bin"))) \
-                for s,h in self.hmap.iteritems()])
-        for s,h in self.hcharge_average.iteritems():
-            h.GetZaxis().SetTitle("<charge cluster> [ADC]")
-            h.Divide(self.haux_charge[s])
-            self._allhistograms.append(h)
-        # Map over 100 um module
 
 
     def store_histos(self,filename):
@@ -1335,10 +1357,6 @@ class processor(object):
             The name of file to store the results
         """
         import ROOT
-        # Create the efficiency before recording them
-        self.create_efficiency()
-        # Create the map of average charges
-        self.create_charge_map()
         # Store all the histograms
         f=ROOT.TFile.Open(filename,"RECREATE")
         for h in self._allhistograms:
@@ -1531,10 +1549,11 @@ class processor(object):
                 self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
                 self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id])
+        histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
-        matched_hits = { duthits.id: duthits.matched_hits(trks,histos_dut),
-                refhits.id: refhits.matched_hits(trks,histos_ref,True) }
+        matched_hits = { duthits.id: duthits.match_isolated(trks,histos_dut),
+                refhits.id: refhits.match_isolated(trks,histos_ref,True) }
 
         # If alignment, just return here, trying to avoid extra processing time
         if is_alignment:
@@ -1554,29 +1573,40 @@ class processor(object):
                 xpred,ypred,zpred = trks.get_point(trk_index,hits.z[0])
                 # Event and charge maps (using track predictions)
                 # --- Some histograms should use the measured values (at least when possible)
-                self.hmap[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
-                self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el]/float(hits.n))
-                self.haux_charge[sensorID].Fill(xpred,ypred)
-                # Modulo (Assuming the center of the sensor: self.size/2-5*pitch ~
+                self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
+                self.hhitmap[sensorID].Fill(xpred,ypred)
+                # Modulo (Assuming the center of the sensor: -0.5*pitch 
                 # XXX provisional
-                xmod = (-0.1+xpred)%(2.0*self.pitchX[sensorID])
-                ymod = (-0.1+ypred)%(2.0*self.pitchY[sensorID])
-                self.hcluster_size_mod[sensorID].Fill(xmod,ymod,hits.n_cluster[hit_el])
-                self.hcharge_mod[sensorID].Fill(xmod,ymod,hits.charge[hit_el])
+                xmod = (32.+xpred)%(2.0*self.pitchX[sensorID])
+                ymod = (32+ypred)%(2.0*self.pitchY[sensorID])
+                if abs(xmod) > 2.0*self.pitchX[sensorID] \
+                        or abs(ymod) > 2.0*self.pitchY[sensorID]:
+                    raise RuntimeError("WHAT THE FUCK!??!?")
+                self.hcluster_size_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.n_cluster[hit_el])
+                self.hcharge_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
+                self.hhitmap_mod[sensorID].Fill(xmod*UM,ymod*UM)
                 ## INCLUDE IT IN HERE
         # Matching beetwen DUT and REF: hits with the same track ID
         # Loop over all the measured hits in the REF, matching to a
         # track, using the track as common element in the DUT-REF match
+        # XXX Just using those within the fiducial cut of the DUT XXX
         for ihit_ref,itrk in matched_hits[refhits.id]:
             # Get the track predicted points at the DUT plane
             xpred_dut,ypred_dut,zpred_dut = trks.get_point(itrk,duthits.z[0])
-            # To fill the (charge efficiency) total histo, use the predictions
-            self.htotal.Fill(xpred_dut,ypred_dut)
+            # Only within fiducial  (note that we don't have coordinate Y)
+            if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin:
+                continue
+            # Modulo pitch
+            xmod = (32.0+xpred_dut)%(2.0*self.pitchX[duthits.id])
+            ymod = (32.0+ypred_dut)%(2.0*self.pitchY[duthits.id])
             # Get if any of the 
             dut_match = filter(lambda (ihit_dut,itrk_dut): itrk_dut == itrk,matched_hits[duthits.id])
+            any_match = int(len(dut_match)>0)
+            # Efficiency
+            self.heff_mod.Fill(xmod*UM,ymod*UM,any_match)
+            self.heff.Fill(xpred_dut,ypred_dut,any_match)
             if len(dut_match) > 0:
-                xmeasured_dut = duthits.x[dut_match[0][0]]
-                self.hpass.Fill(xpred_dut,ypred_dut)
+                self.heff_entries.Fill(xpred_dut,ypred_dut)
                 # Get the track predicted points at the REF plane
                 xpred_at_ref,ypred_at_ref,zpred_at_ref = trks.get_point(itrk,refhits.z[0])
                 # And some correlation plots of the predicted values between
@@ -1597,7 +1627,14 @@ class processor(object):
         """
         m = ""
         for plid,n in self.number_matched_hits.iteritems():
-            m+= "{0}-Sensor efficiency: {1:.2f}%\n".format(plid,float(n)/float(self.total_events)*100.)
+            if plid == self.dut_plane:
+                sensor_evts = self.events_with_dut
+                sensor_name = "DUT"
+            else:
+                sensor_evts = self.events_with_ref
+                sensor_name = "REF"
+            m+= "{0} efficiency           : {1:.2f}%\n".format(sensor_name,float(sensor_evts)/float(self.total_events)*100.)
+            m+= "{0} efficiency (MATCHED) : {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events)*100.)
         return m
 
     def __str__(self):
