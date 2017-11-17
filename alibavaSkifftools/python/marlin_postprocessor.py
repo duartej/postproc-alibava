@@ -517,7 +517,7 @@ class hits_plane_accessor(object):
         return abs(self.x[i]-other.x[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
-
+    # XXX -- VERY SLOW FUNCTION WHICH IS CALLED TWICE!! maybe re-organize
     def matched_hits(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event
@@ -578,51 +578,54 @@ class hits_plane_accessor(object):
             for itrk in filter(lambda i: i not in used_tracks, xrange(track_acc.n)):
                 # Isolation: be sure there is no other track surrounding this one
                 xpred,ypred,zpred = track_acc.get_point(itrk,self.z[ihit])
-                if len(filter(lambda (o_x,o_y,o_z): sqrt(o_x**2.0+o_y**2) < ISOLATION,
+                if len(filter(lambda (o_x,o_y,o_z): sqrt(o_x**2.0+o_y**2.0) < ISOLATION,
                     map(lambda other_i:  track_acc.get_point(other_i,zpred), xrange(itrk+1,track_acc.n)))) > 1:
                     # Another track has been found sourrounding this one, 
                     # not isolated, just continue
                     used_tracks.append(itrk)
                     continue
                 # Note that the prediction is given in the sensor reference frame
-                # See `get_point_in_sensor_frame`
-                #xpred,ypred,zpred=track_acc.get_point_in_sensor_frame(itrk,self)
                 xturn,xtilt,xrot,xsen=track_acc.get_point_in_sensor_frame(itrk,self)
                 # Fill the alignment histograms
                 closest[abs(self.x_local[ihit]-xsen[0])] = itrk
             if len(closest) == 0:
                 continue
-            # if any track matched, get the closest one 
+            # Get the closest track (in x)
             distance_abs,trk_el =sorted(closest.iteritems())[0]
-            # and tag it as used
-            used_tracks.append(trk_el)
-
+            # and tag it as used, not yet as we don't know if is below the cut!!
+            #used_tracks.append(trk_el)
             # Link the hit with the track
-            self.track_link[ihit] = trk_el
-            
-            # Get again  the info
+            # self.track_link[ihit] = trk_el
+            # Get again  the info in the reference frame of the sensor
+            # XXX --- SEEMS not to need all the partial results
             rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
             # And fill some histograms
             # Fill correlation histograms
             hcorr.Fill(self.x_local[ihit],rsensor[0])
+            # -- resolution histogram
             dx = self.x_local[ihit]-rsensor[0]
             hres.Fill(dx)
-            # Fill the alignment histograms
-            # -- shift in x
-            #    All but the shift
+            # Alignment histos: x-offset
+            # -- Pre-alignment, rot, tilt an turn but no shift
             hdx.Fill(self.x_local[ihit]-rrot[0])
-            #    finer alignment, including the shift
+            # -- finer
             hdx_finer.Fill(dx)
-            # -- turn
-            hturn.Fill(rturn[0],dx)
-            ## -- rot
-            hrot.Fill(rrot[1],dx)
-            ## -- dz (no acting at all the transformation)
-            hdz.Fill(track_acc.dxdz[trk_el],dx)
             # Fill only thos passing the cuts
-            if distance_abs < distance:
+            if distance_abs < res:
                 # Fill the matched hits
                 matched_hits.append( (ihit,trk_el) )
+                # Tag the cut as used
+                used_tracks.append(trk_el)
+                # and link the hit with the track
+                self.track_link[ihit] = trk_el
+                ## Fill the alignment histograms after being accepted
+                #  as providing from the hit
+                ## -- rot
+                hrot.Fill(rsensor[1],dx)
+                # -- turn
+                hturn.Fill(rsensor[0],dx)
+                ## -- dz 
+                hdz.Fill(track_acc.dxdz[trk_el],dx)
         return matched_hits
     
 
@@ -1348,8 +1351,8 @@ class processor(object):
 
         Explanation
         """
-        from math import sin,cos,sqrt
-        MIN_ENTRIES = 999
+        from math import sin,cos,sqrt,asin
+        MIN_ENTRIES = 1000
 
         # Just extract all the static info of the class,
         for pl_id in self.alignment.keys():
@@ -1359,13 +1362,14 @@ class processor(object):
             filename = ALIGN_FILE_FORMAT.format(pl_id)
             # check the new offset
             new_x_offset = self.alignment[pl_id].x_offset
-            # Some checks first: do a gross alignment first
+            # Some checks first: do a gross alignment first (before the shift)
             if self.dx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_h[pl_id])
-                # Finer alignment -- XXX SOMETHING FAILS!!
-                ##if self.alignment[pl_id].iteration > 1 \
-                ##        and abs(new_x_offset-self.alignment[pl_id].x_offset) < 0.1:
-                ##    new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_finer_h[pl_id],-0.1,0.1)
+                new_x_offset = get_x_offset(self.dx_h[pl_id])
+                # Finer alignment -- including the shift, therefore to be added
+                # to the old offset
+                if self.alignment[pl_id].iteration > 1 \
+                        and abs(new_x_offset-self.alignment[pl_id].x_offset) < 0.1:
+                    new_x_offset = self.alignment[pl_id].x_offset+get_x_offset(self.dx_finer_h[pl_id],-0.1,0.1)
                 # -- The x-offset 
                 align_file_content += "x_offset: {0}\n".format(new_x_offset)
             else:
@@ -1378,8 +1382,9 @@ class processor(object):
             if self.dx_y_h[pl_id].GetEntries() > MIN_ENTRIES:
                 new_align_rot = self.alignment[pl_id].rot-get_linear_fit(self.dx_y_h[pl_id])
                 # Check convergence, if the change are below 0.5 degree, just 
-                # converged
-                if abs(self.alignment[pl_id].rot-new_align_rot) < 0.0087:
+                # converged (not checked in the first iteration)
+                if self.alignment[pl_id].iteration > 1 \
+                        and abs(self.alignment[pl_id].rot-new_align_rot) < 0.0087:
                     #processor.align_allow_rot = False
                     align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
                 else:
@@ -1389,18 +1394,25 @@ class processor(object):
             # -- The tilt(??)
             #align_file_content[i].append("tilt: {0}\n".format(self.alignment[pl_id]tilt+get_linear_fit(self.dy_y[pl_id])))
             # -- The turn (only evaluate it if greater than 5 degrees: 0.087 rad.
-            if abs(self.alignment[pl_id].turn) > 0.087 \
+            if abs(self.alignment[pl_id].turn) > 0.018 \
                     and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
                 new_turn = get_linear_fit(self.dx_x_h[pl_id])
                 align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn))
             else:
+                # --- XXX NOT TRUSTABLE XXX
+                # Check the aproximation (asuming the angle is small): sin**2
+                #new_turn = get_linear_fit(self.dx_x_h[pl_id])
+                #sign_turn = int(new_turn/abs(new_turn))
+                #align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+sign_turn*asin(sqrt(abs(new_turn))))
+                # --- XXX NOT TRUSTABLE XXX
                 align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn)
             # -- the z-shift: Note the SPS beam hardly divergent (less than 0.1 mrad),
             #    therefore do not trust too much in this correction, not stable. 
             #    We trust in the initial measurement, if the diference is higher than a couple of mm, 
             #    deactivate it
             if self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-5e-5,5e-5)
+                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-1e-3,1e-3)
+                # -- XXX Guard to avoid not estable results XXX
                 if abs(new_dz) > 3.0:
                     align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
                 else:
@@ -1602,7 +1614,7 @@ class processor(object):
 
         return m
 
-def get_x_offset(h,xmin=-1.0,xmax=1.0):
+def get_x_offset(h,xmin=-2.0,xmax=2.0):
     """XXX 
     """
     import ROOT
@@ -1700,7 +1712,7 @@ def sensor_alignment(fname,verbose):
     # Update the alignment files
     proc_inst.update_alignment_file()
     print proc_inst.get_raw_sensors_efficiency()
-    # Check if all sensors are aligned
+    # Check if all sensors are aligned: XXX Not correct  ?
     return (aligned_sensors == len(proc_inst.alignment.keys()))
 
 
