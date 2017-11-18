@@ -1605,8 +1605,8 @@ class processor(object):
             # Efficiency
             self.heff_mod.Fill(xmod*UM,ymod*UM,any_match)
             self.heff.Fill(xpred_dut,ypred_dut,any_match)
+            self.heff_entries.Fill(xpred_dut,ypred_dut)
             if len(dut_match) > 0:
-                self.heff_entries.Fill(xpred_dut,ypred_dut)
                 # Get the track predicted points at the REF plane
                 xpred_at_ref,ypred_at_ref,zpred_at_ref = trks.get_point(itrk,refhits.z[0])
                 # And some correlation plots of the predicted values between
