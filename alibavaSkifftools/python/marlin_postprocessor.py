@@ -402,7 +402,7 @@ class hits_plane_accessor(object):
         """
         if not hits_plane_accessor.normal.has_key(self.id):
             # Calculate it and momorize
-            hits_plane_accessor.normal[self.id] = (-self.cos_tilt(self.id)*self.sin_turn(self.id),\
+            hits_plane_accessor.normal[self.id] = (self.cos_tilt(self.id)*self.sin_turn(self.id),\
                     self.sin_tilt(self.id),\
                     -self.cos_tilt(self.id)*self.cos_turn(self.id) )
         return hits_plane_accessor.normal[self.id]
