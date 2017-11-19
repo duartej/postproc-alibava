@@ -312,7 +312,8 @@ class specs_sensor():
         # All units are mm
         # Note that the size is standarize to the 128 sensor 
         # strip length in order to keep the same indices along 
-        # the processors
+        # the processors: XXX This introduce a fake size for the iLGAD and LGAD,
+        # which they do not have this amount of strips
         force_strips = 128
         self.sizeX = force_strips*pitchX #sizeX
         self.sizeY = sizeY
