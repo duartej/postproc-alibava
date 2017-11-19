@@ -1848,8 +1848,10 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False):
     metadata = metadata_container(t,name_converter[fp.sensor_name])
 
     # FIXME provisional XXX : 2 x pitch for dut, same for ref?. Check the efficiency
-    RESOLUTION= { metadata.dut_plane: 2.0*specs[name_converter[fp.sensor_name]].pitchX,\
+    # Note, loose cut for the dut, while tight cut for the ref link
+    RESOLUTION= { metadata.dut_plane: 6.0*specs[name_converter[fp.sensor_name]].pitchX,\
             metadata.ref_plane : 2.0*specs["REF_0_b1"].pitchX } # in mm
+    # 
 
     # Set some globals
     #tree_inspector(t)
