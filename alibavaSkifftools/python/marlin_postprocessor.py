@@ -249,6 +249,8 @@ class hits_plane_accessor(object):
         The hit total charge in ADCs counts 
     n_cluster: ROOT.std.vector(int)()
         The total number of elements forming the cluster
+    eta: ROOT.std.vector(float)()
+        The eta value (charge distribution on the cluster)
     track_link: dict((int,int)
         The index of the hit is related with the track
         produced that hit (if any)
@@ -299,6 +301,7 @@ class hits_plane_accessor(object):
         #self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
         self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
         self.n_cluster = getattr(tree,"hit_Ncluster_{0}".format(self.id))
+        self.eta = getattr(tree,"hit_cluster_eta_{0}".format(self.id))
 
         # Get the maximum and minimum in x and y (to define the fiducial cuts)
         ROOT.gROOT.SetBatch()
@@ -377,6 +380,44 @@ class hits_plane_accessor(object):
         int
         """
         return self.x.size()
+
+    def x_channel(self,i,sizeX,pitch):
+        """The equivalent channel number for the
+        i-hit
+
+        Parameters
+        ----------
+        i: int
+            The index of the hit
+        sizeX: float
+            The size of the sensor in mm
+        pitch: float
+            The pitch of the segmented channels in mm
+
+        Return
+        ------
+        The x position in channel number
+        """
+        return (self.x_local[i]+0.5*sizeX)/pitch-0.5
+    
+    def y_channel(self,i,sizeY,pitch):
+        """The equivalent channel number for the
+        i-hit
+
+        Parameters
+        ----------
+        i: int
+            The index of the hit
+        sizeX: float
+            The size of the sensor in mm
+        pitch: float
+            The pitch of the segmented channels in mm
+
+        Return
+        ------
+        The y position in channel number
+        """
+        return (self.y_local[i]+0.5*sizeY)/pitch-0.5
     
     def new_event(self):
         """Call it every time a new event is going to
