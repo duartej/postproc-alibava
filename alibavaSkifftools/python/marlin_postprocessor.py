@@ -625,7 +625,7 @@ class hits_plane_accessor(object):
         ISOLATION = 0.6*MM
 
         # Get the histograms
-        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz = histos
+        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz,hplane = histos
 
         matched_hits = []
         # non isolated tracks and already used: keep them listed 
@@ -1313,6 +1313,7 @@ class processor(object):
         self.events_with_ref_dut_tracks = 0
         self.number_matched_hits = {}
         # Alingment histos
+        # -----------------
         # -- the shift in x
         self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-sxdut,sxdut),
                 minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-sxref,sxref) }
@@ -1327,11 +1328,17 @@ class processor(object):
                 minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;x_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
         self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-1e-4,1e-4,-0.2,0.2),
                 minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-1e-4,1e-4,-0.2,0.2) }
+        # geometry: z
+        #----------
+        self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
+                    51,-5.0,5.0,50,-sxdut*1.5,sxdut*1.5,50,-1.5*sydut,1.5*sydut),
+                minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
+                    51,-5.0,5.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
         
-        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()
+        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()+self.hplane.values()
 
-        # Some statistic histograms
-        # -------------------------
+        # Analysis histos using isolated tracks
+        # -------------------------------------
         self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM),
                 minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
         # Residuals between REF-DUT (matched tracks family)
@@ -1372,6 +1379,7 @@ class processor(object):
         self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
         self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
 
+
         self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+\
                 self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
                 self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+[self.heff_mod]+\
@@ -1381,12 +1389,6 @@ class processor(object):
 
         # The alignment constants
         self.alignment = {}
-
-    #def draw_all_in_canvas():
-    #    """
-    #    """
-    #    import ROOT
-
 
     def store_histos(self,filename):
         """Actually write the defined histograms to 
@@ -1450,8 +1452,9 @@ class processor(object):
                     align_file_content += "rot: {0}\n".format(new_align_rot)
             else:
                 align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
-            # -- The tilt(??)
-            #align_file_content[i].append("tilt: {0}\n".format(self.alignment[pl_id]tilt+get_linear_fit(self.dy_y[pl_id])))
+            # -- The tilt: we don't have coordinate to deal with, just using whatever 
+            #    the user introduced
+            align_file_content += "tilt: {0}\n".format(self.alignment[pl_id].tilt)
             # -- The turn (only evaluate it if greater than 5 degrees: 0.087 rad.
             if abs(self.alignment[pl_id].turn) > 0.018 \
                     and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
@@ -1581,15 +1584,11 @@ class processor(object):
         # - a dict to get the sensors by its plane ID
         sensor_hits = { refhits.id: refhits, duthits.id: duthits }
         
-        # Update the sensors with the alignment results
-        #for pl_id,hits in sensor_hits.iteritems():
-        #    hits.update_alignment(self.alignment[pl_id])
-
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id])
+                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id])
+                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
@@ -1661,6 +1660,7 @@ class processor(object):
                 self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
             elif len(dut_match) > 1:
                 raise RuntimeError("This must never happens!! Contact developer, error 3E43")
+        self.fill_statistics_matched(matched_hits)
 
     def get_raw_sensors_efficiency(self):
         """Summarize the efficiency of the sensors:
@@ -1674,8 +1674,7 @@ class processor(object):
             else:
                 sensor_evts = self.events_with_ref
                 sensor_name = "REF"
-            m+= "{0} efficiency           : {1:.2f}%\n".format(sensor_name,float(sensor_evts)/float(self.total_events)*100.)
-            m+= "{0} efficiency (MATCHED) : {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events)*100.)
+            m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events)*100.)
         return m
 
     def __str__(self):
@@ -1687,7 +1686,8 @@ class processor(object):
         m+= "\n Events with DUT but no tracks: {0}\n".format(self.events_with_dut_no_tracks)
         m+= " Events with REF but no tracks: {0}\n".format(self.events_with_ref_no_tracks)
         m+= " Events with REF and DUT and tracks: {0}\n".format(self.events_with_ref_dut_tracks)
-        m+= "\n Total processed events: {0}\n".format(self.total_events)
+        m+= "\n Total processed events: {0}\n\n".format(self.total_events)
+        m+= self.get_raw_sensors_efficiency()
         m+= "|-------------------------------------------|"
 
         return m
@@ -1713,7 +1713,7 @@ def get_x_offset(h,xmin=-2.0,xmax=2.0):
     gbg.SetParameter(3,h.GetBinContent(h.FindBin(peak-0.4)))
     ## Do the fit
     status = h.Fit(gbg,"SQR","")
-    if status == 0:
+    if status.Status() != 0:
         # XXX
         print "KKITA!!!! FAILED THE X-OFFSET FIT"
     new_align_x = gbg.GetParameter(1)
@@ -1730,7 +1730,7 @@ def get_linear_fit(h,xmin=-4.0,xmax=4.0):
     gbg = ROOT.TF1("linear_fit","pol1",xmin,xmax)
     ## Do the fit
     status = h.Fit(gbg,"SQR")
-    if status == 0:
+    if status.Status() != 0:
         # XXX
         print "KKITA!!!! FAILED THE LINEAR FIT"
     return gbg.GetParameter(1)
