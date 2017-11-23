@@ -683,11 +683,8 @@ class hits_plane_accessor(object):
             for itrk in filter(lambda i: i not in used_tracks, xrange(track_acc.n)):
                 # Isolation: be sure there is no other track surrounding this one
                 xpred,ypred,zpred = track_acc.get_point_in_sensor_frame(itrk,self)
-                #xpred,ypred,zpred = track_acc.get_point(itrk,self.z[0])
                 if len(filter(lambda (o_x,o_y,o_z): sqrt(o_x**2.0+o_y**2.0) < ISOLATION,
                     map(lambda other_i:  track_acc.get_point_in_sensor_frame(other_i,self), xrange(itrk+1,track_acc.n)))) > 1:
-                #if len(filter(lambda (o_x,o_y,o_z): sqrt(o_x**2.0+o_y**2.0) < ISOLATION,
-                #    map(lambda other_i:  track_acc.get_point(other_i,self.z[0]), xrange(itrk+1,track_acc.n)))) > 1:
                     # Another track has been found sourrounding this one, 
                     # not isolated, just continue
                     used_tracks.append(itrk)
@@ -696,7 +693,6 @@ class hits_plane_accessor(object):
                 hplane.Fill(zpred-self.z[0],xpred,ypred)
                 # Fill the alignment histograms
                 closest[abs(self.x_local[ihit]-xpred)] = itrk
-                #closest[abs(self.x[ihit]-xpred)] = itrk
             if len(closest) == 0:
                 continue
             # Get the closest track (in x)
@@ -1374,6 +1370,7 @@ class processor(object):
 
         # some info numbers
         self.total_events    = 0
+        self.total_events_tracks = 0
         self.events_with_dut = 0
         self.dut_hits        = 0
         self.events_with_ref = 0
@@ -1630,6 +1627,8 @@ class processor(object):
             Number of reconstructed tracks
         """
         self.total_events += 1
+        if tracks != 0:
+            self.total_events_tracks += 1
         if ndut != 0:
             self.events_with_dut += 1
             self.dut_hits += ndut
@@ -1786,7 +1785,7 @@ class processor(object):
 
     def get_raw_sensors_efficiency(self):
         """Summarize the efficiency of the sensors:
-        eff = Number of matched hits/number of events
+        eff = Number of matched hits/number of events with tracks
         """
         m = ""
         for plid,n in self.number_matched_hits.iteritems():
@@ -1796,7 +1795,7 @@ class processor(object):
             else:
                 sensor_evts = self.events_with_ref
                 sensor_name = "REF"
-            m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events)*100.)
+            m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events_tracks)*100.)
         return m
 
     def __str__(self):
