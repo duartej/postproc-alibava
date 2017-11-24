@@ -1541,29 +1541,23 @@ class processor(object):
             #    the user introduced
             #align_file_content += "tilt: {0}\n".format(self.alignment[pl_id].tilt)
             new_align.tilt = self.alignment[pl_id].tilt
-            # -- The turn (only evaluate it if greater than 5 degrees: 0.087 rad.
+            # -- The turn (only evaluate it if greater than 1 degrees: 0.018 rad. (XXX O medio grado?)
             if abs(self.alignment[pl_id].turn) > 0.018 \
                     and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
                 new_turn = get_linear_fit(self.dx_x_h[pl_id])
                 #align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn))
                 new_align.turn = self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn)
             else:
-                # --- XXX NOT TRUSTABLE XXX
-                # Check the aproximation (asuming the angle is small): sin**2
-                #new_turn = get_linear_fit(self.dx_x_h[pl_id])
-                #sign_turn = int(new_turn/abs(new_turn))
-                #align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+sign_turn*asin(sqrt(abs(new_turn))))
-                # --- XXX NOT TRUSTABLE XXX
-                #align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn)
                 new_align.turn = self.alignment[pl_id].turn
             # -- the z-shift: Note the SPS beam hardly divergent (less than 0.1 mrad),
             #    therefore do not trust too much in this correction, not stable. 
             #    We trust in the initial measurement, if the diference is higher than a couple of mm, 
             #    deactivate it
             if self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-8e-5,8e-5)
+                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-1e-4,1e-4)
                 # -- XXX Guard to avoid not estable results XXX
-                if abs(new_dz) > 3.0:
+                #if abs(new_dz) > 3.0:
+                if abs(new_dz) > 3e10:
                     #align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
                     new_align.dz = self.alignment[pl_id].dz
                 else:
@@ -1842,21 +1836,32 @@ def get_x_offset(h,xmin=-2.0,xmax=2.0):
     status = h.Fit(gbg,"SQR","")
     if status.Status() != 0:
         # XXX
-        print "KKITA!!!! FAILED THE X-OFFSET FIT"
+        print "\033[1;33mWARNING\033[1;m FAILED THE X-OFFSET FIT: "\
+                "Status {0}".format(status.Status())
     new_align_x = gbg.GetParameter(1)
     
     return new_align_x
 
 def get_linear_fit(h,xmin=-4.0,xmax=4.0):
-    """XXX 
+    """Perform a linear (robust) fit of the histogram (profile)
+
+    Parameters
+    ----------
+    h: ROOT.TH1
+        The histogram or the profile 1D
+    xmin: float, optional (-4.0)
+        The minimum x-value to consider in the fit
+    xmax: float, optional (4.0)
+        The maximum x-value to consider in the fit
     """
     import ROOT
     ROOT.gROOT.SetBatch()
     cns=ROOT.TCanvas()
 
     gbg = ROOT.TF1("linear_fit","pol1",xmin,xmax)
-    ## Do the fit
-    status = h.Fit(gbg,"SQR")
+    #  Do the fit: Note that is using a robust fit (assuming 
+    #  the 75% of the points at least are not outliers
+    status = h.Fit(gbg,"SQ+ROB=0.75")
     if status.Status() != 0:
         # XXX
         print "KKITA!!!! FAILED THE LINEAR FIT"
