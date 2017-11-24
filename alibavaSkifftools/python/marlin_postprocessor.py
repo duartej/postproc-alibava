@@ -477,6 +477,9 @@ class hits_plane_accessor(object):
         """
         hits_plane_accessor.align_constants[self.id] += align_inst
     
+    ### -- shoould --> @memoize
+    # Maybe not needed because is only call once (as the get_point_in_sensor_frame
+    # is memoize and is the only client..
     def get_normal_vector(self):
         """Get the normal vector to the sensor plane, if perfectly 
         aligned it must be (0,0,-1) (note that the plane is defined
@@ -689,8 +692,9 @@ class hits_plane_accessor(object):
                     # not isolated, just continue
                     used_tracks.append(itrk)
                     continue
-                # Note that the prediction is given in the sensor reference frame
-                hplane.Fill(zpred-self.z[0],xpred,ypred)
+                # Note that the prediction is given in the sensor reference frame (z should be zero)
+                # Therefore, not to interesting this plot, better
+                hplane.Fill(zpred,xpred,ypred)
                 # Fill the alignment histograms
                 closest[abs(self.x_local[ihit]-xpred)] = itrk
             if len(closest) == 0:
@@ -1218,59 +1222,53 @@ class tracks_accessor(object):
         # Intersect the track with the sensor plane (to obtain the diferent z-values depending 
         # the x or y). Plane equat
         #  - the plane vector: n
-        #  - the plane position  r_{p}= (0,0,z_p)
+        #  - the plane position  r_{p}= (0,0,z_p) (with the alignment correction)
+        rpp = (0.0,0.0,hit.z[0]+hit.align_constants[hit.id].dz)
         #  - the plane position including the offset corrections: rpp = (-xoffset,-yoffset,(zp-dz))
-        rpp = (-hit.align_constants[hit.id].x_offset,\
-                -hit.align_constants[hit.id].y_offset,\
-                hit.z[0]-hit.align_constants[hit.id].dz)
+        #rpp = (-hit.align_constants[hit.id].x_offset,\
+        #        -hit.align_constants[hit.id].y_offset,\
+        #        hit.z[0]-hit.align_constants[hit.id].dz)
         #  - the predicted point rcc = (x0+tx(zcc-z0), y0+ty(zcc-z0), zcc-z0)
         # The point rcc is in the plane defined by n and the point r_p, if only if, fulfill
         #      n (rcc-rp) = 0, i.e nx(xcc-0)+ny(ycc-0)+nz(zcc-zp) = 0
         # Let us to redefine zc := zcc-z0 (the t-parameter equivalent but using a tilt-rot or turned plane)
         zc = (n[2]*rpp[2]-n[1]*(self.y0[i]-rpp[1])-n[0]*(self.x0[i]-rpp[0]))/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
-        #zc = (n[2]*hit.z[0]-n[1]*self.y0[i]-n[0]*self.x0[i])/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
-        ### XXX --- print n,t,hit.z[0],hit.z[0]-self.z0[i]
-        # -- Using zc instead of nominal z-plane, will found the x and y upon
-        #    the sensor, so it is equivalent to a passive transformation (transformation
-        #    of the telescope frame of reference to the sensor)
+        # -- As we obtain the the zc which the point is (after correcting
+        #    by the sensor plane position), now we can propagate the track
+        #    up to that zc (instead of the nominal z)
         r_at_sens = (self.x0[i]+self.dxdz[i]*zc,self.y0[i]+self.dydz[i]*zc,zc)
-        
-        # However it is missing the effect of rotation of the sensor:
-        #  x_new = x_old*cos(old_angle+rot)
-        #  y_new = y_old*sin(old_angle+rot)
-        rxy = sqrt(r_at_sens[0]**2.0+r_at_sens[1]**2.0)
-        if abs(rxy) < 1e-9:
-            # Not afected by rotation
-            cosx0 = siny0 = 0.0
-        else:
-            cosx0 = r_at_sens[0]/rxy
-            siny0 = r_at_sens[1]/rxy
-        r_rot = (rxy*(hit.cos_rot(hit.id)*cosx0-hit.sin_rot(hit.id)*siny0),\
-                rxy*(hit.sin_rot(hit.id)*cosx0+hit.cos_rot(hit.id)*siny0),\
-                zc)
-        # (and offsets if you did not include them)
-        #### Distance away from the sensor frame:
-        ####   the z in the telescope plane for the current track (zc), minus
-        ####   the z position of the sensor plane (hit.z[0]) corrected by the alignment cte
-        ###dzc = zc  - (hit.z[0]+hit.align_constants[hit.id].dz)
-        ####print dzc, zc, self.z0[i], (hit.z[0]-hit.align_constants[hit.id].dz)
-        ##### print dzc,self.z0[i],zc
 
-        ###### XXX --- print r_at_sens
-        #### Euler angles
-        #### -- First: turn
-        ###x1 = (r_at_sens[0]*hit.cos_turn(hit.id)-dzc*hit.sin_turn(hit.id),\
-        ###        r_at_sens[1],r_at_sens[0]*hit.sin_turn(hit.id)+dzc*hit.cos_turn(hit.id))
-        #### -- Second: tilt
-        ###x2 = (x1[0],x1[1]*hit.cos_tilt(hit.id)+x1[2]*hit.sin_tilt(hit.id),-x1[1]*hit.sin_tilt(hit.id)+x1[2]*hit.cos_tilt(hit.id))
-        #### -- third: rot
-        ###x3 = (x2[0]*hit.cos_rot(hit.id)+x2[1]*hit.sin_rot(hit.id),-x2[0]*hit.sin_rot(hit.id)+x2[1]*hit.cos_rot(hit.id),x2[2])
-        #### print r_at_sens,x3
-        #### -- And finally, the shift
-        #### Note that if x_offset is obtained from x_local - x 
-        ####if abs(hit.align_constants[hit.id].x_offset) < 1e-9:
-        ####    hit.align_constants[hit.id].x_offset = hit.x_local[i]
-        ####return (x1,x2,x3,(x3[0]+hit.align_constants[hit.id].x_offset,x3[1]+hit.align_constants[hit.id].y_offset,x3[2]))
+        # -- Now, let's obtain the point (which is in the telescope reference plane)
+        #    into the sensor reference plane in order to compare this point with
+        #    the hit in the plane
+
+        # -- 1st. find the displacement w.r.t the sensor in z (dz)
+        dzc = (zc+self.z0[i])-hit.z[0]
+
+        # -- 2nd. turn around y (omega)
+        r_turn = (hit.cos_turn(hit.id)*r_at_sens[0]-hit.sin_turn(hit.id)*dzc,\
+                r_at_sens[1],\
+                hit.sin_turn(hit.id)*r_at_sens[0]+hit.cos_turn(hit.id)*dzc)
+
+        # -- 3rd. tilt around x (alpha) (Note that the r_tilt[2] should be zero,
+        #    in the dut plane
+        r_tilt = (r_turn[0], \
+                hit.cos_tilt(hit.id)*r_turn[1]+hit.sin_tilt(hit.id)*r_turn[2],\
+                -hit.sin_tilt(hit.id)*r_turn[1]+hit.cos_tilt(hit.id)*r_turn[2])
+        ###if abs(r_tilt[2]) > 1e-9:
+        ###    print r_tilt
+        ###    raise 
+
+        # -- 4th. rotation around z
+        r_rot = (hit.cos_rot(hit.id)*r_tilt[0]+hit.sin_rot(hit.id)*r_tilt[1],\
+                -hit.sin_rot(hit.id)*r_tilt[0]+hit.cos_rot(hit.id)*r_tilt[1],\
+                r_tilt[2])
+
+        # -- 5th. Shifts
+        r = (r_rot[0]-hit.align_constants[hit.id].x_offset,\
+                r_rot[1]-hit.align_constants[hit.id].y_offset,\
+                r_rot[2])
+        
         return r_rot
 
 class processor(object):
@@ -1393,8 +1391,8 @@ class processor(object):
         # -- the turn (around y-axis)
         self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-1.2,1.2),
                 minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;x_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
-        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",50,-1e-4,1e-4,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",50,-1e-4,1e-4,-0.2,0.2) }
+        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;#theta_{x}^{trk};#Deltax_{DUT} [mm]",25,-1e-4,1e-4,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;#theta_{x}^{trk};#Deltax_{REF} [mm]",25,-1e-4,1e-4,-0.2,0.2) }
         # geometry: z
         #----------
         self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
@@ -1402,7 +1400,8 @@ class processor(object):
                 minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
                     51,-5.0,5.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
         
-        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+self.dx_tx_h.values()+self.hplane.values()
+        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+\
+                self.dx_tx_h.values()+self.hplane.values()
 
         # Analysis histos using isolated tracks
         # -------------------------------------
@@ -1439,6 +1438,8 @@ class processor(object):
         # -- Sensors-tracks
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut),
                 minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut)}
+        ## Add it as alignment plot
+        self._alignment_histos += self.hcorr_trkX.values()
         # -- DUT-REF
         self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
         self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
@@ -1560,7 +1561,7 @@ class processor(object):
             #    We trust in the initial measurement, if the diference is higher than a couple of mm, 
             #    deactivate it
             if self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-1e-3,1e-3)
+                new_dz = get_linear_fit(self.dx_tx_h[pl_id],-8e-5,8e-5)
                 # -- XXX Guard to avoid not estable results XXX
                 if abs(new_dz) > 3.0:
                     #align_file_content += "dz: {0}\n".format(self.alignment[pl_id].dz)
@@ -1802,11 +1803,16 @@ class processor(object):
         """Summarize the information
         """
         m = "|-------------------------------------------|\n"
-        m+= " Events with DUT: {0} (eff: {1:.2f}%)\n".format(self.events_with_dut,float(self.events_with_dut)/float(self.total_events)*100.)
-        m+= " Events with REF: {0} (eff: {1:.2f}%)\n".format(self.events_with_ref,float(self.events_with_ref)/float(self.total_events)*100.)
-        m+= "\n Events with DUT but no tracks: {0}\n".format(self.events_with_dut_no_tracks)
-        m+= " Events with REF but no tracks: {0}\n".format(self.events_with_ref_no_tracks)
-        m+= " Events with REF and DUT and tracks: {0}\n".format(self.events_with_ref_dut_tracks)
+        m+= " Events with DUT: {0} (eff: {1:.2f}%)\n".\
+                format(self.events_with_dut,float(self.events_with_dut)/float(self.total_events)*100.)
+        m+= " Events with REF: {0} (eff: {1:.2f}%)\n".\
+                format(self.events_with_ref,float(self.events_with_ref)/float(self.total_events)*100.)
+        m+= "\n Events with DUT but no tracks: {0}  (eff: {1:.2f}%)\n".\
+                format(self.events_with_dut_no_tracks,float(self.events_with_dut_no_tracks)/float(self.total_events)*100.0)
+        m+= " Events with REF but no tracks: {0} (eff: {1:.2f}%)\n".\
+                format(self.events_with_ref_no_tracks,float(self.events_with_ref_no_tracks)/float(self.total_events)*100.0)
+        m+= " Events with REF and DUT and tracks: {0} (eff:{1:.2f}%)\n".\
+                format(self.events_with_ref_dut_tracks,float(self.events_with_ref_dut_tracks)/float(self.total_events)*100.0)
         m+= "\n Total processed events: {0}\n\n".format(self.total_events)
         m+= self.get_raw_sensors_efficiency()
         m+= "|-------------------------------------------|"
