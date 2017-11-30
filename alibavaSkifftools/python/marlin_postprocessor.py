@@ -35,14 +35,13 @@ class branch_list(object):
         tree: ROOT.TTree
         brlist: list(sts)
         """
-        pass
-        #for br in brlist:
-        #    self._active_br.append(br)
-        #    tree.SetBranchStatus(br,1)
-        ## Deactivate all but the active
-        #for b in filter(lambda x: not x.GetName() in self._active_br, \
-        #        tree.GetListOfBranches()):
-        #    tree.SetBranchStatus(b.GetName(),0)
+        for br in brlist:
+            self._active_br.append(br)
+            tree.SetBranchStatus(br,1)
+        # Deactivate all but the active
+        for b in filter(lambda x: not x.GetName() in self._active_br, \
+                tree.GetListOfBranches()):
+            tree.SetBranchStatus(b.GetName(),0)
         # Re-do the attributes list (??)
 
 # The global instance
@@ -321,32 +320,52 @@ class hits_plane_accessor(object):
         
         """
         import ROOT
+        import array
 
         self.id = planeid
         # ----------------------------------
         global ACTIVE_BRS
         # -- De-activate those branches not needed
-        pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal","hit_total_charge","hit_Ncluster"]
+        pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal",\
+                "hit_total_charge","hit_Ncluster","hit_cluster_eta"]
         brnames = map(lambda x: "{0}_{1}".format(x,self.id),pre_brnames)
-        ACTIVE_BRS.update(tree,brnames)
+        ACTIVE_BRS.update(tree,brnames+["RunNumber"])
         # ----------------------------------
         # Check if there is any problem
         if len(filter(lambda br: br.GetName() == "hit_X_{0}".format(self.id) ,tree.GetListOfBranches())) == 0:
             raise RuntimeError("The INDEX '{0}' does not identify any Alibava"\
                     " sensor plane".format(self.id))
         # Activate the tree if wasn't
-        dummy = tree.GetEntry(0)
-        # Fill the elements
-        self.x = getattr(tree,"hit_X_{0}".format(self.id))
-        self.y = getattr(tree,"hit_Y_{0}".format(self.id))
-        self.x_local = getattr(tree,"hit_XLocal_{0}".format(self.id))
-        self.y_local = getattr(tree,"hit_YLocal_{0}".format(self.id))
-        #self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
-        self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
-        self.n_cluster = getattr(tree,"hit_Ncluster_{0}".format(self.id))
-        self.eta = getattr(tree,"hit_cluster_eta_{0}".format(self.id))
+        #dummy = tree.GetEntry(0)
+        ## Fill the elements
+        #self.x = getattr(tree,"hit_X_{0}".format(self.id))
+        #self.y = getattr(tree,"hit_Y_{0}".format(self.id))
+        #self.x_local = getattr(tree,"hit_XLocal_{0}".format(self.id))
+        #self.y_local = getattr(tree,"hit_YLocal_{0}".format(self.id))
+        ##self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
+        #self.charge = getattr(tree,"hit_total_charge_{0}".format(self.id))
+        #self.n_cluster = getattr(tree,"hit_Ncluster_{0}".format(self.id))
+        #self.eta = getattr(tree,"hit_cluster_eta_{0}".format(self.id))
 
-        self.run_number = tree.RunNumber
+        #self.run_number = tree.RunNumber
+        self.x = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_X_{0}".format(self.id),self.x)
+        self.y = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_Y_{0}".format(self.id),self.y)
+        self.x_local = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_XLocal_{0}".format(self.id),self.x_local)
+        self.y_local = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_YLocal_{0}".format(self.id),self.y_local)
+        #self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
+        self.charge = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_total_charge_{0}".format(self.id),self.charge)
+        self.n_cluster = ROOT.std.vector(int)()
+        tree.SetBranchAddress("hit_Ncluster_{0}".format(self.id),self.n_cluster)
+        self.eta = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_cluster_eta_{0}".format(self.id),self.eta)
+
+        self.run_number = 0.0 
+        tree.SetBranchAddress("RunNumber",self._run_number)
 
         # Get the maximum and minimum in x and y (to define the fiducial cuts)
         ROOT.gROOT.SetBatch()
@@ -371,7 +390,9 @@ class hits_plane_accessor(object):
         # Let's assume that z doesn't change between events, as 
         # it is a fixed constrain, so find the first entry with
         # a valid value and then obtain
-        branch_z = getattr(tree,"hit_Z_{0}".format(self.id))
+        #branch_z = getattr(tree,"hit_Z_{0}".format(self.id))
+        branch_z = ROOT.std.vector(float)()
+        tree.SetBranchAddress("hit_Z_{0}".format(self.id),branch_z)
         self.z = dummy_list()
         for i in xrange(tree.GetEntries()):
             dum = tree.GetEntry(i)
@@ -382,6 +403,8 @@ class hits_plane_accessor(object):
             raise RuntimeError("No event was found with a valid value "\
                     "at Z for the {0}-plane. Something in the input file"\
                     " is corrupted")
+        # De-activate the z-branch, not needed anymore
+        tree.SetBranchStatus("hit_Z_{0}".format(self.id),0)
         
         # Initialize resync static variable
         if not hits_plane_accessor.resync.has_key(self.id):
@@ -427,6 +450,22 @@ class hits_plane_accessor(object):
         int
         """
         return self.x.size()
+    
+    @property
+    def run_number(self):
+        """The run number
+
+        Return
+        ------
+        int
+        """
+        return self._run_number[0]
+    @run_number.setter
+    def run_number(self,value):
+        """The setter for the run number
+        """
+        import array
+        self._run_number = array.array('i',[int(value)])
 
     def x_channel(self,i,sizeX,pitch):
         """The equivalent channel number for the
@@ -829,12 +868,24 @@ class track_hits_plane_accessor(object):
         # Activate the tree if wasn't
         dummy = tree.GetEntry(0)
         # Fill the elements
-        self.x = getattr(tree,"{0}_X_{1}".format(prefix,self.id))
-        self.y = getattr(tree,"{0}_Y_{1}".format(prefix,self.id))
-        self.x_local = getattr(tree,"{0}_XLocal_{1}".format(prefix,self.id))
-        self.y_local = getattr(tree,"{0}_YLocal_{1}".format(prefix,self.id))
-        self.z     = getattr(tree,"{0}_Z_{1}".format(prefix,self.id))
-        self.track_index = getattr(tree,"{0}_index_{1}".format(prefix,self.id))
+        self.x = ROOT.std.vector(float)()
+        tree.SetBranchAddress("{0}_X_{1}".format(prefix,self.id),self.x)
+        self.y = ROOT.std.vector(float)()
+        tree.SetBranchAddress("{0}_Y_{1}".format(prefix,self.id),self.y)
+        self.x_local = ROOT.std.vector(float)()
+        tree.SetBranchAddress("{0}_XLocal_{1}".format(prefix,self.id),self.x_local)
+        self.y_local = ROOT.std.vector(float)()
+        tree.SetBranchAddress("{0}_YLocal_{1}".format(prefix,self.id),self.y_local)
+        self.z       = ROOT.std.vector(float)()
+        tree.SetBranchAddress("{0}_Z_{1}".format(prefix,self.id),self.z)
+        self.track_index = ROOT.std.vector(int)()
+        tree.SetBranchAddress("{0}_index_{1}".format(prefix,self.id),self.track_index)
+        ##self.x = getattr(tree,"{0}_X_{1}".format(prefix,self.id))
+        ##self.y = getattr(tree,"{0}_Y_{1}".format(prefix,self.id))
+        ##self.x_local = getattr(tree,"{0}_XLocal_{1}".format(prefix,self.id))
+        ##self.y_local = getattr(tree,"{0}_YLocal_{1}".format(prefix,self.id))
+        ##self.z     = getattr(tree,"{0}_Z_{1}".format(prefix,self.id))
+        ##self.track_index = getattr(tree,"{0}_index_{1}".format(prefix,self.id))
     
     @property
     def n(self):
@@ -1064,6 +1115,7 @@ class tracks_accessor(object):
             The plane index introduced does not belong to any
             (checking the 'trk_hit_meas(|fit)_X_<planeID>' brach)
         """
+        import ROOT
         global ACTIVE_BRS
         # -- De-activate those branches not needed
         brnames = ["trk_hit_fit_X_{0}".format(dut_plane),"trk_hit_fit_X_{0}".format(ref_plane),\
@@ -1090,12 +1142,25 @@ class tracks_accessor(object):
 
         # Track specific
         # Reference point
-        self.x0 = tree.trk_refPoint_X
-        self.y0 = tree.trk_refPoint_Y
-        self.z0 = tree.trk_refPoint_Z
+        ##self.x0 = tree.trk_refPoint_X
+        ##self.y0 = tree.trk_refPoint_Y
+        ##self.z0 = tree.trk_refPoint_Z
+        ### Director vector
+        ##self.dxdz = tree.trk_dxdz
+        ##self.dydz = tree.trk_dydz
+        self.x0 = ROOT.std.vector(float)()
+        tree.SetBranchAddress("trk_refPoint_X",self.x0)
+        self.y0 = ROOT.std.vector(float)()
+        tree.SetBranchAddress("trk_refPoint_Y",self.y0)
+        self.z0 = ROOT.std.vector(float)()
+        tree.SetBranchAddress("trk_refPoint_Z",self.z0)
         # Director vector
-        self.dxdz = tree.trk_dxdz
-        self.dydz = tree.trk_dydz
+        self.dxdz = ROOT.std.vector(float)()
+        tree.SetBranchAddress("trk_dxdz",self.dxdz)
+        self.dydz = ROOT.std.vector(float)()
+        tree.SetBranchAddress("trk_dydz",self.dydz)
+        ##self.dydz = tree.trk_dydz
+        ##self.dydz = tree.trk_dydz
         # -- the associated hits
         # --- telescope
         self.telescope_measured_hits = map(lambda i: track_hits_plane_accessor(tree,i,True,self.refid,self.dutid),self.tel_planes)
@@ -1678,9 +1743,9 @@ class processor(object):
             no need for filling extra histograms
         """
         import math
-        
+
         # Get the number of hits in the DUT and REF plane
-        self.fill_statistics(duthits.n,refhits.n,t.ntracks)
+        self.fill_statistics(duthits.n,refhits.n,trks.n)
 
         # Start new event
         trks.new_event()
