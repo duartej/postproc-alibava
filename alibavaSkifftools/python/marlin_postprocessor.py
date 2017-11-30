@@ -1502,9 +1502,6 @@ class processor(object):
                         "Entries", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
                 minst.ref_plane: ROOT.TH2F("hitmap_mod_ref",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "Entries", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
-        # -- efficiency mod
-        self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
-                        "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
         # Correlations: 
         # -- Sensors-tracks
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut),
@@ -1524,27 +1521,34 @@ class processor(object):
         # efficiency
         self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
         self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
+        self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
+                        "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
 
         # -- Eta distribution for matched, isolated
         self.heta = ROOT.TH1F("eta_2","#eta for isolated,matched cluster size 2;#eta;#frac{dN}{d#eta}",100,-0.1,1.1)
+        self.heta_g = ROOT.TH1F("eta_g","#eta for isolated,matched cluster size #geq 2;#eta;#frac{dN}{d#eta}",100,-0.1,1.1)
+        self.heta_csize = ROOT.TH2F("eta_cluster_size_dut","#eta vs. cluster size for isolated,matched;#eta;N_{cluster};Entries",\
+                100,-0.1,1.1, 10,-0.5,9.5)
         self.hcl_size = { minst.dut_plane: ROOT.TH1F("cluster_size_dut","Isolated, REF-matched hits;N_{cluster};Entries",10,-0.5,9.5),
                 minst.ref_plane: ROOT.TH1F("cluster_size_ref","Isolated-matched hits;N_{cluster};Entries",10,-0.5,9.5) }
 
         self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+\
                 self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
                 self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+\
-                [self.heff_mod]+\
                 self._alignment_histos+\
-                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries,self.hcharge_mod_m,self.hhitmap_mod_m,self.hcluster_size_mod_m]+\
-                [self.heta]+self.hcl_size.values()
+                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries,self.heff_mod]+\
+                [self.hcharge_mod_m,self.hhitmap_mod_m,self.hcluster_size_mod_m]+\
+                [self.heta,self.heta_g,self.heta_csize]+self.hcl_size.values()
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
         # The alignment constants
         self.alignment = {}
 
         # The eta values of the selected dut hits (isolated, matched with
-        # a ref-hit)
+        # a ref-hit), cluster size 2
         self.duthits_matched_eta = []
+        # -- cluster size >=2
+        self.duthits_matched_eta_h = []
 
     def store_histos(self,filename):
         """Actually write the defined histograms to 
@@ -1673,18 +1677,24 @@ class processor(object):
     def fractionary_position_plot(self):
         """Using the eta-distribution obtained 
         in the processing, calculate the fractionary
-        position
+        position for size 2 clusters and beyond
         """
         import ROOT
         from .analysis_functions import frac_position
         # Create a new histogram
+        self.hfrac_pos_2 = ROOT.TH2F("hfrac_pos_2","Fractionary cluster position for"\
+                " cluster-2 size;mod(x)_{pitch};charge [ADC];clusters",100,-0.01,1.01,100,0,1000)
+        self.hfrac_pos_2.SetDirectory(0)
         self.hfrac_pos = ROOT.TH2F("hfrac_pos","Fractionary cluster position for"\
-                " cluster-2 size;mod(x)_{pitch};charge [ADC];clusters",100,-0.01,1.01,100,200,1000)
+                " cluster #geq 2 size;mod(x)_{pitch};charge [ADC];clusters",100,-0.01,1.01,100,0,1000)
         self.hfrac_pos.SetDirectory(0)
+        self._allhistograms.append(self.hfrac_pos_2)
         self._allhistograms.append(self.hfrac_pos)
         # Get the loop
-        dummy = map(lambda (eta,charge): self.hfrac_pos.Fill(frac_position(eta,self.heta),charge),\
+        dummy = map(lambda (eta,charge): self.hfrac_pos_2.Fill(frac_position(eta,self.heta),charge),\
                 self.duthits_matched_eta)
+        dummy = map(lambda (eta,charge): self.hfrac_pos.Fill(frac_position(eta,self.heta),charge),\
+                self.duthits_matched_eta_h)
         # done :)
 
 
@@ -1854,12 +1864,16 @@ class processor(object):
                 # -- charge
                 self.hcharge_mod_m.Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
                 self.hhitmap_mod_m.Fill(xmod*UM,ymod*UM)
-                # -- hitmap
                 # -- Eta distribution for the matched cluster size=2
-                if duthits.n_cluster[duthits.track_link[itrk]] == 2:
+                clustersize = duthits.n_cluster[duthits.track_link[itrk]]
+                if clustersize >= 2:
                     dhit = duthits.track_link[itrk]
-                    self.heta.Fill(duthits.eta[dhit])
-                    self.duthits_matched_eta.append((duthits.eta[dhit],duthits.charge[dhit]))
+                    self.heta_g.Fill(duthits.eta[dhit])
+                    self.heta_csize.Fill(duthits.eta[dhit],clustersize)
+                    self.duthits_matched_eta_h.append((duthits.eta[dhit],duthits.charge[dhit]))
+                    if clustersize == 2:
+                        self.heta.Fill(duthits.eta[dhit])
+                        self.duthits_matched_eta.append(self.duthits_matched_eta_h[-1])
             elif len(dut_match) > 1:
                 raise RuntimeError("This must never happens!! Contact developer, error 3E43")
         self.fill_statistics_matched(matched_hits)
