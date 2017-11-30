@@ -1482,28 +1482,28 @@ class processor(object):
         self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm];y_{DUT}^{pred}-y_{REF}^{pred}",\
                 100,-0.04*MM,0.04*MM,100,-3.5*MM,3.5*MM) 
         self.hcharge = { minst.dut_plane: ROOT.TProfile2D("charge_map_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
-                        "<charge cluster> [ADC]", 300,-sxdut,sxdut,300,-sydut,sydut),
+                        "<charge cluster> [ADC]", 300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
                 minst.ref_plane: ROOT.TProfile2D("charge_map_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
-                        "<charge cluster> [ADC]", 300,-sxref,sxref,300,-syref,syref) }
+                        "<charge cluster> [ADC]", 300,-1.1*sxref,1.1*sxref,300,-1.1*syref,1.1*syref) }
         self.hhitmap = { minst.dut_plane: ROOT.TH2F("hitmap_dut" ,";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];"\
-                        "Entries", 300,-sxdut,sxdut,300,-sydut,sydut),
+                        "Entries", 300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
                 minst.ref_plane: ROOT.TH2F("hitmap_ref",";x_{REF}^{pred} [mm];y_{REF}^{pred} [mm];"\
-                        "Entries", 300,-sxref,sxref,300,-syref,syref) }
+                        "Entries", 300,-1.1*sxref,1.1*sxref,300,-1.1*syref,1.1*syref) }
         # -- Module (2 x pitch X)
-        self.hcluster_size_mod = { minst.dut_plane: ROOT.TProfile2D("cluster_size_mod_dut" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch}"\
-                        "[mm];<cluster size>", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
+        self.hcluster_size_mod = { minst.dut_plane: ROOT.TProfile2D("cluster_size_mod_dut" ,";mod(x_{trk})_{2xpitch} [#mum];mod(y_{trk})_{2xpitch}"\
+                        "[#mum];<cluster size>", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
                 minst.ref_plane: ROOT.TProfile2D("cluster_size_mod_ref" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch} [mm];"\
                         "<cluster size>", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
-        self.hcharge_mod = { minst.dut_plane: ROOT.TProfile2D("charge_mod_dut",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+        self.hcharge_mod = { minst.dut_plane: ROOT.TProfile2D("charge_mod_dut",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
-                minst.ref_plane: ROOT.TProfile2D("charge_mod_ref",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                minst.ref_plane: ROOT.TProfile2D("charge_mod_ref",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
-        self.hhitmap_mod = { minst.dut_plane: ROOT.TH2F("hitmap_mod_dut",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+        self.hhitmap_mod = { minst.dut_plane: ROOT.TH2F("hitmap_mod_dut",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "Entries", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
-                minst.ref_plane: ROOT.TH2F("hitmap_mod_ref",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+                minst.ref_plane: ROOT.TH2F("hitmap_mod_ref",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "Entries", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
         # -- efficiency mod
-        self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [mm];"\
+        self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
         # Correlations: 
         # -- Sensors-tracks
@@ -1514,9 +1514,16 @@ class processor(object):
         # -- DUT-REF
         self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
         self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
+        
+        self.hcharge_mod_m = ROOT.TProfile2D("charge_mod_dut_matched",";mod(x_{trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [#mum];"\
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM)
+        self.hhitmap_mod_m = ROOT.TH2F("hitmap_mod_dut_matched",";mod(x_trk})_{2xpitch} [mm]; mod(y_{trk})_{2xpitch} [#mum];"\
+                        "Entries", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM)
+        self.hcluster_size_mod_m = ROOT.TProfile2D("cluster_size_mod_dut_m" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch} [#mum];"\
+                        "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM)
         # efficiency
-        self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
-        self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-sxdut,sxdut,50,-sydut,sydut)
+        self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
+        self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
 
         # -- Eta distribution for matched, isolated
         self.heta = ROOT.TH1F("eta_2","#eta for isolated,matched cluster size 2;#eta;#frac{dN}{d#eta}",100,-0.1,1.1)
@@ -1525,9 +1532,10 @@ class processor(object):
 
         self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+\
                 self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
-                self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+[self.heff_mod]+\
+                self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+\
+                [self.heff_mod]+\
                 self._alignment_histos+\
-                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries]+\
+                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries,self.hcharge_mod_m,self.hhitmap_mod_m,self.hcluster_size_mod_m]+\
                 [self.heta]+self.hcl_size.values()
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
@@ -1811,7 +1819,7 @@ class processor(object):
             # Cluster size for track matched ref hits
             self.hcl_size[refhits.id].Fill(refhits.n_cluster[ihit_ref])
             # Get the track predicted points at the DUT plane
-            xpred_dut,ypred_dut,zpred_dut = trks.get_point_in_sensor_frame(itrk,duthits)
+            ((xpred_dut,ypred_dut,zpred_dut),rtel) = trks.get_point_in_sensor_frame(itrk,duthits)
             # Only within fiducial  (note that we don't have coordinate Y)
             if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin:
                 continue
@@ -1828,7 +1836,7 @@ class processor(object):
             self.heff_entries.Fill(xpred_dut,ypred_dut)
             if len(dut_match) > 0:
                 # Get the track predicted points at the REF plane
-                xpred_at_ref,ypred_at_ref,zpred_at_ref = trks.get_point_in_sensor_frame(itrk,refhits)
+                ((xpred_at_ref,ypred_at_ref,zpred_at_ref),rptel) = trks.get_point_in_sensor_frame(itrk,refhits)
                 # And some correlation plots of the predicted values between
                 # the DUT and REF sensors
                 # Note that the expected gaussian could be not centered at zero,
@@ -1837,10 +1845,16 @@ class processor(object):
                 self.hcorrX.Fill(xpred_dut,xpred_at_ref)
                 # Not measured elements at Y, so using the predictions
                 self.hcorrY.Fill(ypred_dut,ypred_at_ref)
-                ## Residuals only for the DUT-REF matched tracks
+                ## Residuals only for the DUT-REF matched tracks, i.e gives the 
+                ## relative position between ref and dut
                 self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
-                # Cluster size
+                # Cluster size 
                 self.hcl_size[duthits.id].Fill(duthits.n_cluster[duthits.track_link[itrk]])
+                self.hcluster_size_mod_m.Fill(xmod*UM,ymod*UM,duthits.n_cluster[duthits.track_link[itrk]])
+                # -- charge
+                self.hcharge_mod_m.Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
+                self.hhitmap_mod_m.Fill(xmod*UM,ymod*UM)
+                # -- hitmap
                 # -- Eta distribution for the matched cluster size=2
                 if duthits.n_cluster[duthits.track_link[itrk]] == 2:
                     dhit = duthits.track_link[itrk]
