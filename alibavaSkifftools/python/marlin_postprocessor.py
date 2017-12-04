@@ -714,7 +714,7 @@ class hits_plane_accessor(object):
         ISOLATION = 0.6*MM
 
         # Get the histograms
-        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz,hplane = histos
+        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz,hplane,hiso,hmatch_eff = histos
 
         matched_hits = []
         # non isolated tracks and already used: keep them listed 
@@ -728,22 +728,28 @@ class hits_plane_accessor(object):
             for i_at_list,itrk in enumerate(not_used_track_indices):
                 # Isolation: be sure there is no other track surrounding this one
                 ((xpred,ypred,zpred),rtel0) = track_acc.get_point_in_sensor_frame(itrk,self)
+                dummy = map(lambda ((o_x,o_y,o_z),_tel): hiso.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+                        map(lambda other_i:  track_acc.get_point_in_sensor_frame(other_i,self),\
+                        not_used_track_indices[i_at_list+1:]))
                 # note tha i_at_list catchs the indice at `not_used_track_indices`
                 # list, therefore in order to evaluate only those tracks not previously
                 # evaluated just use the remaining elements after the current track index
-                non_isolated = filter(lambda ((o_x,o_y,o_z),_tel): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < ISOLATION,\
-                        map(lambda other_i:  track_acc.get_point_in_sensor_frame(other_i,self),\
+                non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < ISOLATION,\
+                        map(lambda other_i:  (other_i,track_acc.get_point_in_sensor_frame(other_i,self)),\
                             not_used_track_indices[i_at_list+1:]))
                 if len(non_isolated) > 0 :
                     # Another track has been found sourrounding this one, 
                     # not isolated, remove them from the available tracks
                     used_tracks.append(itrk)
-                    dummy = map(lambda i: used_tracks.append(i), non_isolated)
+                    dummy = map(lambda (i,other_stuff): used_tracks.append(i), non_isolated)
                     continue
                 # Fill the alignment histograms
                 closest[abs(self.x_local[ihit]-xpred)] = itrk
             if len(closest) == 0:
+                hmatch_eff.Fill(self.x_local[ihit],0)
                 continue
+            # The hit was matched by at least one track
+            hmatch_eff.Fill(self.x_local[ihit],1)
             # Get the closest track (in x)
             distance_abs,trk_el =sorted(closest.iteritems())[0]
             #rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
@@ -759,7 +765,7 @@ class hits_plane_accessor(object):
             # -- resolution histogram
             dx = self.x_local[ihit]-rsensor[0]
             ###dx = self.x[ihit]-rsensor[0]
-            hres.Fill(dx)
+            hres.Fill(self.x_local[ihit],dx)
             # Alignment histos: x-offset
             # -- Pre-alignment, rot, tilt an turn but no shift
             hdx.Fill((self.x_local[ihit]+self.align_constants[self.id].x_offset)-rsensor[0])
@@ -1476,8 +1482,6 @@ class processor(object):
 
         # Analysis histos using isolated tracks
         # -------------------------------------
-        self.residual_projection = { minst.dut_plane: ROOT.TH1F("res_projection_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM),
-                minst.ref_plane: ROOT.TH1F("res_projection_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-3.5*MM,3.5*MM) }
         # Residuals between REF-DUT (matched tracks family)
         self.residual_sensor = ROOT.TH2F("res_sensor_projection"," ; x_{DUT}^{pred}-x_{REF}^{pred} [mm];y_{DUT}^{pred}-y_{REF}^{pred}",\
                 100,-0.04*MM,0.04*MM,100,-3.5*MM,3.5*MM) 
@@ -1502,6 +1506,33 @@ class processor(object):
                         "Entries", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM),
                 minst.ref_plane: ROOT.TH2F("hitmap_mod_ref",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "Entries", 40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
+        
+        # -- Diagnostics
+        self.residual_projection = { minst.dut_plane: ROOT.TH2F("res_projection_dut",";x_{DUT} [mm];x_{DUT}-x_{trk}^{pred} [mm]",\
+                    200,-sxdut,sxdut,200,-3.5*MM,3.5*MM),
+                minst.ref_plane: ROOT.TH2F("res_projection_ref",";x_{REF} [mm];x_{REF}-x_{trk}^{pred} [mm]",\
+                    200,-sxref,sxref,200,-3.5*MM,3.5*MM) }
+        self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
+                "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
+                minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same"\
+                    "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
+        self.ntracks = ROOT.TH1F("ntracks",";N_{tracks};Triggers",40,-0.5,39.5)
+        self.nmatched = ROOT.TH2F("nmatched","Number of isolated track-matched hits per trigger/event;N_{DUT};N_{REF};Triggers",9,-0.5,8.5,\
+                9,-0.5,8.5)
+        self.hmatch_eff = { minst.dut_plane: ROOT.TProfile("match_eff_dut","Track-matching hit efficiency;x_{DUT};#varepsilon",\
+                    100,-sxdut,sxdut,0,1),
+                minst.ref_plane: ROOT.TProfile("match_eff_ref","Track-matching hit efficiency;x_{REF};#varepsilon",\
+                    100,-sxref,sxref,0,1) }
+        self.dutref_match_eff = ROOT.TProfile("match_dutref_eff","REF-matching DUT-hit efficiency;x_{DUT};#varepsilon",\
+                                    100,-sxdut,sxdut,0,1)
+        self.dutref_pure_match_eff = ROOT.TProfile("purematch_dutref_eff","REF-matching DUT-hit efficiency (REF hit present);x_{DUT};#varepsilon",\
+                                    100,-sxdut,sxdut,0,1)
+        self.dutref_distance = ROOT.TH1F("dutref_distance","Distance between tracks matched with DUT and REF;"\
+                "x^{pred,DUT}_{DUT}-x^{pred,REF}_{DUT} [mm];a.u.",200,-6.5,6.5)
+
+        diagnostics = self.residual_projection.values()+self.trk_iso.values()+[self.ntracks,self.nmatched]+\
+                self.hmatch_eff.values()+[self.dutref_match_eff,self.dutref_pure_match_eff,self.dutref_distance]
+
         # Correlations: 
         # -- Sensors-tracks
         self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut),
@@ -1523,6 +1554,7 @@ class processor(object):
         self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
         self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
+        dut_eff = [self.heff,self.heff_mod,self.heff_entries]
 
         # -- Eta distribution for matched, isolated
         self.heta = ROOT.TH1F("eta_2","#eta for isolated,matched cluster size 2;#eta;#frac{dN}{d#eta}",100,-0.1,1.1)
@@ -1531,14 +1563,16 @@ class processor(object):
                 100,-0.1,1.1, 10,-0.5,9.5)
         self.hcl_size = { minst.dut_plane: ROOT.TH1F("cluster_size_dut","Isolated, REF-matched hits;N_{cluster};Entries",10,-0.5,9.5),
                 minst.ref_plane: ROOT.TH1F("cluster_size_ref","Isolated-matched hits;N_{cluster};Entries",10,-0.5,9.5) }
+        dut_matched_iso = [self.hcharge_mod_m,self.hhitmap_mod_m,self.hcluster_size_mod_m,\
+                self.heta,self.heta_g,self.heta_csize]+self.hcl_size.values()
 
-        self._allhistograms = self.residual_projection.values()+[self.residual_sensor]+\
+        # Keep track of all histograms which should be stored in the file
+        self._allhistograms = [self.residual_sensor]+\
                 self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
                 self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+\
                 self._alignment_histos+\
-                [self.hcorrX,self.hcorrY,self.heff,self.heff_entries,self.heff_mod]+\
-                [self.hcharge_mod_m,self.hhitmap_mod_m,self.hcluster_size_mod_m]+\
-                [self.heta,self.heta_g,self.heta_csize]+self.hcl_size.values()
+                [self.hcorrX,self.hcorrY]+\
+                dut_matched_iso+dut_eff+diagnostics
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
         # The alignment constants
@@ -1781,14 +1815,22 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id])
+                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
+                self.trk_iso[duthits.id],self.hmatch_eff[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id])
+                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
+                self.trk_iso[refhits.id],self.hmatch_eff[refhits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
         matched_hits = { duthits.id: duthits.match_isolated(trks,histos_dut),
                 refhits.id: refhits.match_isolated(trks,histos_ref,True) }
+        
+        # Some diagnostic plots
+        # -- number of tracks in the event
+        self.ntracks.Fill(trks.n)
+        # -- number of matched,isolated hits in the event
+        self.nmatched.Fill(len(matched_hits[duthits.id]),len(matched_hits[refhits.id]))
 
         # If alignment, just return here, trying to avoid extra processing time
         if is_alignment:
@@ -1825,6 +1867,17 @@ class processor(object):
         # Loop over all the measured hits in the REF, matching to a
         # track, using the track as common element in the DUT-REF match
         # XXX Just using those within the fiducial cut of the DUT XXX
+        # First check the ref matching efficiency
+        for ihit_dut,itrk_d in matched_hits[duthits.id]:
+            ref_match = filter(lambda (ir,itrk_r): itrk_d == itrk_r,matched_hits[refhits.id])
+            self.dutref_match_eff.Fill(duthits.x_local[ihit_dut],(len(ref_match) > 0))
+            # Track efficiencies incorporated
+            if len(matched_hits[refhits.id]) > 0:
+                self.dutref_pure_match_eff.Fill(duthits.x_local[ihit_dut],(len(ref_match) > 0))
+            # Whats the position the track matched with the REF gives in the DUT?
+            for ihit_ref,itrk_r in matched_hits[refhits.id]:
+                self.dutref_distance.Fill(trks.get_point_in_sensor_frame(itrk_d,duthits)[0][0]-\
+                        trks.get_point_in_sensor_frame(itrk_r,refhits)[0][0])
         for ihit_ref,itrk in matched_hits[refhits.id]:
             # Cluster size for track matched ref hits
             self.hcl_size[refhits.id].Fill(refhits.n_cluster[ihit_ref])
@@ -1857,6 +1910,7 @@ class processor(object):
                 self.hcorrY.Fill(ypred_dut,ypred_at_ref)
                 ## Residuals only for the DUT-REF matched tracks, i.e gives the 
                 ## relative position between ref and dut
+                ## XXX
                 self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
                 # Cluster size 
                 self.hcl_size[duthits.id].Fill(duthits.n_cluster[duthits.track_link[itrk]])
