@@ -247,6 +247,21 @@ class memoize:
         if not args in self.memo:
             self.memo[args] = self.f(*args)
         return self.memo[args]
+    
+def matmult(a,b):
+    """PROVISIONAL
+    Just copied from https://stackoverflow.com/questions/10508021/matrix-multiplication-in-python
+    """
+    zip_b = zip(*b)
+    return [[sum(ele_a*ele_b for ele_a,ele_b in zip(row_a,col_b))\
+            for col_b in zip_b] for row_a in a]
+
+def matvectmult(a,b):
+    """PROVISIONAL
+    a matrix
+    b vector assuming same number of elements than the matrix row length
+    """
+    return tuple([sum(el_a*b[j] for (j,el_a) in enumerate(row_a)) for row_a in a])
 
 class hits_plane_accessor(object):
     """Access to the TBranches contained in a 
@@ -663,13 +678,13 @@ class hits_plane_accessor(object):
           [float,float,float],
           [float,float,float]]
         """
-        return  [ [hits_plane_accesor.cos_turn(pid), 0.0, hits_plane_accessor.sin_turn(pid)],\
+        return  [ [hits_plane_accessor.cos_turn(pid), 0.0, hits_plane_accessor.sin_turn(pid)],\
                   [0.0,1.0,0.0],
-                  [-hits_plane_accesor.sin_turn(pid), 0.0, hits_plane_accessor.cos_turn(pid)]]
+                  [-hits_plane_accessor.sin_turn(pid), 0.0, hits_plane_accessor.cos_turn(pid)]]
 
     @staticmethod
     @memoize
-    def matrix_titl(pid):
+    def matrix_tilt(pid):
         """Memorize tilt matrix angle in the telescope plane
 
         Parameters
@@ -683,9 +698,9 @@ class hits_plane_accessor(object):
           [float,float,float],
           [float,float,float]]
         """
-        return  [ [1.0, 0.0, 1.0],\
-                  [0.0, hits_plane_accessor.cos_tilt(pid),-hits.plane_accessor.sin_tilt(pid)],\
-                  [0.0,hits_plane_accesor.sin_tilt(pid), 0.0, hits_plane_accessor.cos_titl(pid)] ]
+        return  [ [1.0, 0.0, 0.0],\
+                  [0.0, hits_plane_accessor.cos_tilt(pid),-hits_plane_accessor.sin_tilt(pid)],\
+                  [0.0,hits_plane_accessor.sin_tilt(pid), hits_plane_accessor.cos_tilt(pid)] ]
 
     @staticmethod
     @memoize
@@ -703,8 +718,68 @@ class hits_plane_accessor(object):
           [float,float,float],
           [float,float,float]]
         """
-        return  [ [hits_plane_accesor.cos_rot(pid), -hits_plane_accessor.sin_rot(pid),0.0],\
-                  [hits_plane_accesor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
+        return  [ [hits_plane_accessor.cos_rot(pid), -hits_plane_accessor.sin_rot(pid),0.0],\
+                  [hits_plane_accessor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
+                  [0.0,0.0,1.0] ]
+
+    @staticmethod
+    @memoize
+    def matrix_turn_rec(pid):
+        """Memorize turn matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [hits_plane_accessor.cos_turn(pid), 0.0, -hits_plane_accessor.sin_turn(pid)],\
+                  [0.0,1.0,0.0],
+                  [hits_plane_accessor.sin_turn(pid), 0.0, hits_plane_accessor.cos_turn(pid)]]
+
+    @staticmethod
+    @memoize
+    def matrix_tilt_rec(pid):
+        """Memorize tilt matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [1.0, 0.0, 0.0],\
+                  [0.0,hits_plane_accessor.cos_tilt(pid),hits_plane_accessor.sin_tilt(pid)],\
+                  [0.0,-hits_plane_accessor.sin_tilt(pid),hits_plane_accessor.cos_tilt(pid)] ]
+
+    @staticmethod
+    @memoize
+    def matrix_rot_rec(pid):
+        """Memorize rot matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [hits_plane_accessor.cos_rot(pid), hits_plane_accessor.sin_rot(pid),0.0],\
+                  [-hits_plane_accessor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
                   [0.0,0.0,1.0] ]
 
     @staticmethod
@@ -723,12 +798,35 @@ class hits_plane_accessor(object):
           [float,float,float],
           [float,float,float]]
         """
-        import numpy as np
-        pass
-        #return  [ [hits_plane_accesor.cos_rot(pid), -hits_plane_accessor.sin_rot(pid),0.0],\
-        #          [hits_plane_accesor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
-        #          [0.0,0.0,1.0] ]
+        #import numpy as np
+        # np.matrix(hits_plane_accessor.matrix_turn(pid))*\
+        #   np.matrix(hits_plane_accessor.matrix_tilt(pid))*\
+        #   np.matrix(hits_plane_accessor.matrix_rot(pid))
+        pr = matmult(hits_plane_accessor.matrix_tilt(pid),hits_plane_accessor.matrix_rot(pid))
+        return matmult(hits_plane_accessor.matrix_turn(pid),pr)
+    
+    @staticmethod
+    @memoize
+    def matrix_sensor_rec(pid):
+        """Memorize reciprocal transformation matrix to the sensor reference frame
 
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        #import numpy as np
+        # np.matrix(hits_plane_accessor.matrix_turn(pid))*\
+        #   np.matrix(hits_plane_accessor.matrix_tilt(pid))*\
+        #   np.matrix(hits_plane_accessor.matrix_rot(pid))
+        pr = matmult(hits_plane_accessor.matrix_tilt_rec(pid),hits_plane_accessor.matrix_turn_rec(pid))
+        return matmult(hits_plane_accessor.matrix_rot_rec(pid),pr)
     
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
@@ -739,7 +837,7 @@ class hits_plane_accessor(object):
         i: int
             The hit index of this (self) instance to be 
             compare
-        other: hit_plane_accesor instance (or any other instance
+        other: hit_plane_accessor instance (or any other instance
             with a method 'z.__getitem__')
             The other instance to compare with
         j: int
@@ -1008,7 +1106,7 @@ class track_hits_plane_accessor(object):
         i: int
             The hit index of this (self) instance to be 
             compare
-        other: track_hits_plane_accesor instance (or any other instance
+        other: track_hits_plane_accessor instance (or any other instance
             with a method 'z.__getitem__')
             The other instance to compare with
         j: int
@@ -1160,26 +1258,26 @@ class tracks_accessor(object):
         The vector director (x component)
     dydz: float
         The vector director (y component)
-    telescope_measured_hits: list(track_hits_plane_accesor)
+    telescope_measured_hits: list(track_hits_plane_accessor)
         The telescope (measured) hits organized by planes
-    telescope_fitted_hits: list(track_hits_plane_accesor)
+    telescope_fitted_hits: list(track_hits_plane_accessor)
         The telescope (fitted) hits organized by planes
-    dut_measured_hits: track_hits_plane_accesor
+    dut_measured_hits: track_hits_plane_accessor
         The DUT (measured hits), note that this data member
         is only usable if the tracks were fitted in the 
         Marlin processor using the DUT sensor as telescope
         plane
-    dut_fitted_hits: track_hits_plane_accesor
+    dut_fitted_hits: track_hits_plane_accessor
         The DUT (fitted hits), note that this data member
         is only usable if the tracks were fitted in the 
         Marlin processor using the DUT sensor as telescope
         plane
-    ref_measured_hits: track_hits_plane_accesor
+    ref_measured_hits: track_hits_plane_accessor
         The REF (measured hits), note that this data member
         is only usable if the tracks were fitted in the 
         Marlin processor using the DUT sensor as telescope
         plane
-    ref_fitted_hits: track_hits_plane_accesor
+    ref_fitted_hits: track_hits_plane_accessor
         The REF (fitted hits), note that this data member
         is only usable if the tracks were fitted in the 
         Marlin processor using the DUT sensor as telescope
