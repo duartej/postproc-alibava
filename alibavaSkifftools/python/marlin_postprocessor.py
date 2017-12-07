@@ -13,7 +13,7 @@ __status__ = "Development"
 # 4. Be sure plots are in the LOCAL coordinates of the plane as well, i.e. channel (see the formula to convert in biblio)
 # 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so) ??
 
-DEBUG=True
+DEBUG=False
 
 # Be sure use the same alignment files: ct
 ALIGN_FILE_FORMAT= "aligncts_plane_{0}_{1}.txt"
@@ -531,10 +531,12 @@ class hits_plane_accessor(object):
         vector normal: (float,float,float)
         """
         if not hits_plane_accessor.normal.has_key(self.id):
-            # Calculate it and momorize
+            # Calculate it and memorize
             hits_plane_accessor.normal[self.id] = (self.cos_tilt(self.id)*self.sin_turn(self.id),\
-                    self.sin_tilt(self.id),\
+                    -self.sin_tilt(self.id),\
                     -self.cos_tilt(self.id)*self.cos_turn(self.id))
+            # Do calculations with matricially and compare
+            #print self.id,hits_plane_accessor.normal[self.id]
         return hits_plane_accessor.normal[self.id]
     
     @staticmethod
@@ -645,6 +647,89 @@ class hits_plane_accessor(object):
         
         return sin(hits_plane_accessor.align_constants[pid].rot)
     
+    @staticmethod
+    @memoize
+    def matrix_turn(pid):
+        """Memorize turn matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [hits_plane_accesor.cos_turn(pid), 0.0, hits_plane_accessor.sin_turn(pid)],\
+                  [0.0,1.0,0.0],
+                  [-hits_plane_accesor.sin_turn(pid), 0.0, hits_plane_accessor.cos_turn(pid)]]
+
+    @staticmethod
+    @memoize
+    def matrix_titl(pid):
+        """Memorize tilt matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [1.0, 0.0, 1.0],\
+                  [0.0, hits_plane_accessor.cos_tilt(pid),-hits.plane_accessor.sin_tilt(pid)],\
+                  [0.0,hits_plane_accesor.sin_tilt(pid), 0.0, hits_plane_accessor.cos_titl(pid)] ]
+
+    @staticmethod
+    @memoize
+    def matrix_rot(pid):
+        """Memorize rot matrix angle in the telescope plane
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        return  [ [hits_plane_accesor.cos_rot(pid), -hits_plane_accessor.sin_rot(pid),0.0],\
+                  [hits_plane_accesor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
+                  [0.0,0.0,1.0] ]
+
+    @staticmethod
+    @memoize
+    def matrix_sensor(pid):
+        """Memorize transformation matrix to the sensor reference frame
+
+        Parameters
+        ----------
+        pid: int
+            The plane id
+
+        Returns
+        -------
+        [ [float,float,float],
+          [float,float,float],
+          [float,float,float]]
+        """
+        import numpy as np
+        pass
+        #return  [ [hits_plane_accesor.cos_rot(pid), -hits_plane_accessor.sin_rot(pid),0.0],\
+        #          [hits_plane_accesor.sin_rot(pid), hits_plane_accessor.cos_rot(pid),0.0 ],\
+        #          [0.0,0.0,1.0] ]
+
+    
     def equal(self,i,other,j):
         """Allow comparation beetween hits, we assume equal
         if (x,z) are equal
@@ -712,6 +797,9 @@ class hits_plane_accessor(object):
         if not res:
             res=RESOLUTION[self.id]
         ISOLATION = 0.6*MM
+    
+        #if track_acc.n != 20 or self.n != 1: 
+        #    return []
 
         # Get the histograms
         hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz,hplane,hiso,hmatch_eff = histos
@@ -1299,7 +1387,7 @@ class tracks_accessor(object):
         from math import sqrt
 
         # Obtain the normal vector of the plane (defined in opposite direction to the beam)
-        # With perfect alignment: (0,0,-1)
+        # With perfect alignment would be: (0,0,-1)
         n = hit.get_normal_vector()
         # Intersect the track with the sensor plane (to obtain the diferent z-values depending 
         # the x or y). Plane equat
@@ -1514,8 +1602,12 @@ class processor(object):
                     200,-sxref,sxref,200,-3.5*MM,3.5*MM) }
         self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
                 "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
-                minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same"\
+                minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
                     "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
+        self.nhits_ntrks = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_dut","at least 1 hit matched-isolated;N_{hits}:N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
+                minst.ref_plane: ROOT.TH2F("nhits_ntracks_ref","At least 1 hit matched-isolated ;N_{hits}:N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
+        self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut",";N_{hits}:N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
+                minst.ref_plane: ROOT.TH2F("nhits_ntracks_all_ref",";N_{hits}:N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
         self.ntracks = ROOT.TH1F("ntracks",";N_{tracks};Triggers",40,-0.5,39.5)
         self.nmatched = ROOT.TH2F("nmatched","Number of isolated track-matched hits per trigger/event;N_{DUT};N_{REF};Triggers",9,-0.5,8.5,\
                 9,-0.5,8.5)
@@ -1530,7 +1622,8 @@ class processor(object):
         self.dutref_distance = ROOT.TH1F("dutref_distance","Distance between tracks matched with DUT and REF;"\
                 "x^{pred,DUT}_{DUT}-x^{pred,REF}_{DUT} [mm];a.u.",200,-6.5,6.5)
 
-        diagnostics = self.residual_projection.values()+self.trk_iso.values()+[self.ntracks,self.nmatched]+\
+        diagnostics = self.residual_projection.values()+self.trk_iso.values()+self.nhits_ntrks.values()+\
+                self.nhits_ntrks_all.values()+[self.ntracks,self.nmatched]+\
                 self.hmatch_eff.values()+[self.dutref_match_eff,self.dutref_pure_match_eff,self.dutref_distance]
 
         # Correlations: 
@@ -1539,6 +1632,7 @@ class processor(object):
                 minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut)}
         ## Add it as alignment plot
         self._alignment_histos += self.hcorr_trkX.values()
+
         # -- DUT-REF
         self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
         self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
@@ -1568,7 +1662,7 @@ class processor(object):
 
         # Keep track of all histograms which should be stored in the file
         self._allhistograms = [self.residual_sensor]+\
-                self.hcharge.values()+self.hhitmap.values()+self.hcorr_trkX.values()+\
+                self.hcharge.values()+self.hhitmap.values()+\
                 self.hcluster_size_mod.values()+self.hcharge_mod.values()+self.hhitmap_mod.values()+\
                 self._alignment_histos+\
                 [self.hcorrX,self.hcorrY]+\
@@ -1812,6 +1906,10 @@ class processor(object):
         
         # - a dict to get the sensors by its plane ID
         sensor_hits = { refhits.id: refhits, duthits.id: duthits }
+
+        # --- XX
+        self.nhits_ntrks_all[refhits.id].Fill(refhits.n,trks.n)
+        self.nhits_ntrks_all[duthits.id].Fill(duthits.n,trks.n)
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
@@ -1862,6 +1960,7 @@ class processor(object):
                 self.hcluster_size_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.n_cluster[hit_el])
                 self.hcharge_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
                 self.hhitmap_mod[sensorID].Fill(xmod*UM,ymod*UM)
+                self.nhits_ntrks[sensorID].Fill(hits.n,trks.n)
                 ## INCLUDE IT IN HERE
         # Matching beetwen DUT and REF: hits with the same track ID
         # Loop over all the measured hits in the REF, matching to a
@@ -2082,7 +2181,7 @@ def sensor_alignment(fname,verbose):
 
     # Get the data, build clusters, do the actual analysis, 
     # but only the first 50k events
-    proc_inst = sensor_map_production(fname,entries_proc=60000,alignment=True)
+    proc_inst = sensor_map_production(fname,entries_proc=60000,alignment=True,verbose=verbose)
     # Considered aligned if the aligned constants doesn't change (within some 
     # tolerance): then extract the alignment constants before
     aligned_sensors = 0
@@ -2105,7 +2204,7 @@ def sensor_alignment(fname,verbose):
     return (aligned_sensors == len(proc_inst.alignment.keys()))
 
 
-def sensor_map_production(fname,entries_proc=-1,alignment=False):
+def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     """Produce the charge maps and the efficiency maps (hit 
     reconstruction efficiency) for the sensor included in the 
     NTUPLE.
@@ -2142,6 +2241,9 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False):
     from .SPS2017TB_metadata import sensor_name_spec_map as specs
     # probably provisional XXX
     global RESOLUTION
+
+    global DEBUG
+    DEBUG=verbose
 
 
     # Get the name of the sensor and some other useful info
