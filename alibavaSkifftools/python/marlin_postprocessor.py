@@ -548,7 +548,7 @@ class hits_plane_accessor(object):
         if not hits_plane_accessor.normal.has_key(self.id):
             # Calculate it and memorize
             hits_plane_accessor.normal[self.id] = (self.cos_tilt(self.id)*self.sin_turn(self.id),\
-                    self.sin_tilt(self.id),\
+                    -self.sin_tilt(self.id),\
                     -self.cos_tilt(self.id)*self.cos_turn(self.id))
             # Do calculations with matricially and compare
             #print self.id,hits_plane_accessor.normal[self.id]
@@ -1484,55 +1484,91 @@ class tracks_accessor(object):
         """
         from math import sqrt
 
-        # Obtain the normal vector of the plane (defined in opposite direction to the beam)
-        # With perfect alignment would be: (0,0,-1)
+        # |--- Telescope coordinates -----------------------------------------|
+        # Normal vector of the plane (defined in opposite direction to the 
+        # beam). With perfect alignment would be: (0,0,-1)
         n = hit.get_normal_vector()
-        # Intersect the track with the sensor plane (to obtain the diferent z-values depending 
-        # the x or y). Plane equat
-        #  - the plane vector: n
-        #  - the plane position  r_{p}= (0,0,z_p-z0)
-        rpp = (0.0,0.0,hit.z[0]+hit.align_constants[hit.id].dz-self.z0[i])
-        # The point rcc is in the plane defined by n and the point r_p, if only if, fulfill
-        #      n (rcc-rp) = 0, i.e nx(xcc-0)+ny(ycc-0)+nz(zcc-zp) = 0
+        #  - the sensor position: (including alignment corrections)
+        rpp = (hit.align_constants[hit.id].x_offset,\
+                hit.align_constants[hit.id].y_offset,\
+                hit.z[i]+hit.align_constants[hit.id].dz)
+        # Helper vectors: the reference point of the tracks
+        r0  = (self.x0[i],self.y0[i],self.z0[i])
+        # Helper vectors: the track slopes, or the vector director of the track
+        ts = (self.dxdz[i],self.dydz[i],1.0)
+        # Track predicted points (given the distance from the center of the 
+        # sensor: zc:=z-z0))
+        track = lambda _zc: map(lambda (_r,_t): _r+_t*_zc, zip(r0,ts))
         # Let us to redefine zc := zcc-z0 
-        zc = (n[2]*rpp[2]-n[1]*(self.y0[i]-rpp[1])-n[0]*(self.x0[i]-rpp[0]))/(n[0]*self.dxdz[i]+n[1]*self.dydz[i]+n[2])
-        # -- As we obtain the the zc which the point is (after correcting
-        #    by the sensor plane position), now we can propagate the track
-        #    up to that zc (instead of the nominal z)
-        # -- The predicted coordinates at the intersection point of the sensor
-        rpred = (self.x0[i]+self.dxdz[i]*zc,self.y0[i]+self.dydz[i]*zc,zc)
+        # Being a: vector over the sensor pointing from the center to the hit,
+        # can be expressed in function of the sensor position vector plus the 
+        # track vector at the crossing point zc --> a = track-rpp, as a is on
+        # the plane, is perpendicular to n, therefore solving:  
+        #   (track(zc)-rpp) \cdot n = 0 
+        # the crossing z point is obtained
+        zc = -sum(map(lambda i: n[i]*(r0[i]-rpp[i]),xrange(len(n))))/sum(map(lambda i: n[i]*ts[i],xrange(len(n))))
+        # Re-write rpp in zc coordinates (zcc-z0)
+        #rppc = (rpp[0],rpp[1],rpp[2]-zc)
+        # The point 
+        rpred = track(zc)
 
-        # -- Now, let's obtain the point (which is in the telescope reference plane)
-        #    into the sensor reference plane in order to compare this point with
-        #    the hit in the plane
-
-        # -- 1st. find the displacement w.r.t the sensor in z (dz)
-        dzc = zc-rpp[2]
-
-        # -- 2nd. turn around y (-omega)
-        r_turn = (hit.cos_turn(hit.id)*rpred[0]+hit.sin_turn(hit.id)*dzc,\
-                rpred[1],\
-                -hit.sin_turn(hit.id)*rpred[0]+hit.cos_turn(hit.id)*dzc)
-        # -- 3rd. tilt around x (-alpha) (Note that the r_tilt[2] should be zero,
-        #    in the dut plane
-        r_tilt = (r_turn[0], \
-                hit.cos_tilt(hit.id)*r_turn[1]-hit.sin_tilt(hit.id)*r_turn[2],\
-                hit.sin_tilt(hit.id)*r_turn[1]+hit.cos_tilt(hit.id)*r_turn[2])
-        if abs(r_tilt[2]) > 1e-9:
-            raise RuntimeError("Z-component is not ZERO!!!! INCONSISTENT ERROR.")
-
-
-        # -- 4th. rotation around z
-        r_rot = (hit.cos_rot(hit.id)*r_tilt[0]+hit.sin_rot(hit.id)*r_tilt[1],\
-                -hit.sin_rot(hit.id)*r_tilt[0]+hit.cos_rot(hit.id)*r_tilt[1],\
-                r_tilt[2])
-
-        # -- 5th. Shifts
-        r = (r_rot[0]+hit.align_constants[hit.id].x_offset,\
-                r_rot[1]+hit.align_constants[hit.id].y_offset,\
-                r_rot[2])
+        # |--- Sensor plane coordinates --------------------------------------| 
+        # As the sensor reference system is defined (wrt to the telescope 
+        # plane) as  e0=(-1,0,0), e1=(0,1,0), n=(0,0,-1), we will need to 
+        # correct the sign in the transformations 
+        sign_c = (-1.0,1.0,-1.0)
         
-        return r,rpred
+        # Getting the hit position vector in the sensor coordinates:
+        # a = track-rpp
+        a = matvectmult(hit.matrix_sensor_rec(hit.id), \
+                map(lambda (i,x): sign_c[i]*(rpred[i]-x),enumerate(rpp)))
+
+        ### -- Now, let's obtain the point (which is in the telescope reference plane)
+        ###    into the sensor reference plane in order to compare this point with
+        ###    the hit in the plane
+
+        ### -- 1st. find the displacement w.r.t the sensor in z (dz)
+        #dzc = zc-rpp[2]
+
+        ## -- 2nd. turn around y (-omega)
+        #r_turn = (hit.cos_turn(hit.id)*rpred[0]-hit.sin_turn(hit.id)*dzc,\
+        #        rpred[1],\
+        #        hit.sin_turn(hit.id)*rpred[0]+hit.cos_turn(hit.id)*dzc)
+        ## -- 3rd. tilt around x (-alpha) (Note that the r_tilt[2] should be zero,
+        ##    in the dut plane)
+        #r_tilt = (r_turn[0], \
+        #        hit.cos_tilt(hit.id)*r_turn[1]+hit.sin_tilt(hit.id)*r_turn[2],\
+        #        -hit.sin_tilt(hit.id)*r_turn[1]+hit.cos_tilt(hit.id)*r_turn[2])
+        #if abs(r_tilt[2]) > 1e-9:
+        #    raise RuntimeError("Z-component is not ZERO!!!! INCONSISTENT ERROR.")
+
+
+        ## -- 4th. rotation around z
+        #r_rot = (hit.cos_rot(hit.id)*r_tilt[0]+hit.sin_rot(hit.id)*r_tilt[1],\
+        #        -hit.sin_rot(hit.id)*r_tilt[0]+hit.cos_rot(hit.id)*r_tilt[1],\
+        #        r_tilt[2])
+
+        ## -- 5th. Shifts
+        #r = (r_rot[0]-hit.align_constants[hit.id].x_offset,\
+        #        r_rot[1]-hit.align_constants[hit.id].y_offset,\
+        #        r_rot[2])
+        ###print 
+        ###print r,rpred
+
+        ##print
+        ###print "Telescope , Sensor frame:"
+        ### The rpp
+        #print "KK",a,r,map(lambda (i,(_a,_b)): _a-sign_c[i]*_b,enumerate(zip(a,r)))
+    
+        ##print "N:",n,n_u
+        ##print "Sensor position:",rpp,rpp_u
+        ##print "Track reference point:",r0,r0_u
+        ##print "Track slope",ts,ts_u
+        ##print "Crossing point z",zc,zc_u
+        ##print "Position:",rpred,tuple(map(lambda i: r0_u[i]+ts_u[i]*zc_u,xrange(len(ts_u))))
+        ##print "Position the same should be:",r,tuple(map(lambda i: r0_u[i]+ts_u[i]*zc_u,xrange(len(ts_u))))
+        
+        return a,rpred #r,rpred
 
 class processor(object):
     """Results extractor. Main class where statistics and histograms 
