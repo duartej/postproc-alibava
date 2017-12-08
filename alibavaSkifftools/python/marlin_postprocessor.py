@@ -873,9 +873,13 @@ class hits_plane_accessor(object):
             - A ROOT.TProfile to store the variation of the residual in y
               (see last histo) vs. the x-prediction. See `dx_y_h` in the 
               processor class. This histo is used for alignment (rotation)            
-            - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the y-prediction. See `dx_y_h` in the 
-              processor class. This histo is used for alignment (tilt)
+            - A ROOT.TProfile to store the variation of the residual in x
+              (see last histo) vs. the y-prediction times the slope of the
+              track (x). See `dx_ytx_h` in the processor class. This histo
+              is used for alignment (tilt)
+            - A ROOT.TProfile to store the variation of the residual in x
+              (see last histo) vs. the x-prediction. See `dx_xtx_h` in the 
+              processor class. This histo is used for alignment (turn)
             - A ROOT.TProfile to store the variation of the residual in y
               (see last histo) vs. the y-slope. See `dx_tx_h` in the 
               processor class. This histo is used for alignment (z-shift)
@@ -900,7 +904,7 @@ class hits_plane_accessor(object):
         #    return []
 
         # Get the histograms
-        hcorr,hres,hdx,hdx_finer,hrot,hturn,hdz,hplane,hiso,hmatch_eff = histos
+        hcorr,hres,hdx,hdx_finer,hrot,htilt,hturn,hdz,hplane,hiso,hmatch_eff = histos
 
         matched_hits = []
         # non isolated tracks and already used: keep them listed 
@@ -970,10 +974,12 @@ class hits_plane_accessor(object):
                 #  as providing from the hit
                 ## -- rot
                 hrot.Fill(rsensor[1],dx)
+                ## -- tilt
+                htilt.Fill(rsensor[1]*track_acc.dxdz[trk_el]*UM,dx)
                 # -- turn
-                hturn.Fill(rsensor[0],dx)
+                hturn.Fill(rsensor[0]*track_acc.dxdz[trk_el]*UM,dx)
                 ## -- dz 
-                hdz.Fill(track_acc.dxdz[trk_el],dx)
+                hdz.Fill(track_acc.dxdz[trk_el]*UM,dx)
         return matched_hits
     
 
@@ -1685,22 +1691,33 @@ class processor(object):
         self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
                 minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5) }
         # -- the rot (around z-axis)
-        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
+        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",\
+                        50,-6.0,6.0,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",\
+                        50,-6.0,6.0,-0.2,0.2) }
+        # -- the tilt (around x-axis)
+        self.dx_ytx_h = { minst.dut_plane: ROOT.TProfile("dx_ytx_dut"," ;y_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [mm]",\
+                        50,-0.1,0.1,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_ytx_ref"," ;y_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{REF} [mm]",\
+                        50,-0.1,0.1,-0.2,0.2) }
         # -- the turn (around y-axis)
-        self.dx_x_h = { minst.dut_plane: ROOT.TProfile("dx_x_dut"," ;x_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",50,-6.0,6.0,-1.2,1.2),
-                minst.ref_plane: ROOT.TProfile("dx_x_ref"," ;x_{trk}^{pred} [mm];#Deltax_{REF} [mm]",50,-6.0,6.0,-0.2,0.2) }
-        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;tan(#theta_{x}^{trk});#Deltax_{DUT} [mm]",50,-0.2e-3,0.2e-3,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;tan(#theta_{x}^{trk});#Deltax_{REF} [mm]",50,-0.2e-3,0.2e-3,-0.2,0.2) }
+        self.dx_xtx_h = { minst.dut_plane: ROOT.TProfile("dx_xtx_dut"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [mm]",\
+                        50,-0.1,0.1,-1.2,1.2),
+                minst.ref_plane: ROOT.TProfile("dx_xtx_ref"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{REF} [mm]",\
+                        50,-0.1,0.1,-1.2,1.2) }
+        # -- the delta-z
+        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;tan(#theta_{x}^{trk})#cdot1^{-3};#Deltax_{DUT} [mm]",50,-0.2,0.2,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;tan(#theta_{x}^{trk})#cdot1^{-3};#Deltax_{REF} [mm]",50,-0.2,0.2,-0.2,0.2) }
         # geometry: z
         #----------
         self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
-                    51,-5.0,5.0,50,-sxdut*1.5,sxdut*1.5,50,-1.5*sydut,1.5*sydut),
+                    51,-1.0,1.0,50,-sxdut*1.5,sxdut*1.5,50,-1.5*sydut,1.5*sydut),
                 minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
-                    51,-5.0,5.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
+                    51,-1.0,1.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
         
-        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+self.dx_x_h.values()+\
-                self.dx_tx_h.values()+self.hplane.values()
+        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+\
+                self.dx_xtx_h.values()+self.dx_ytx_h.values()+self.dx_tx_h.values()+\
+                self.hplane.values()
 
         # Analysis histos using isolated tracks
         # -------------------------------------
@@ -1844,7 +1861,6 @@ class processor(object):
             # Update the counter
             self.alignment[pl_id].iteration += 1
             new_align.iteration=self.alignment[pl_id].iteration
-            #align_file_content='iteration: {0}\n'.format(int(self.alignment[pl_id].iteration))
             # check the new offset
             new_x_offset = self.alignment[pl_id].x_offset
             # Some checks first: do a gross alignment first (before the shift)
@@ -1860,7 +1876,6 @@ class processor(object):
             else:
                 new_align.x_offset = self.alignment[pl_id].x_offset
             # -- The y-offset (We don't have y-coordinate so far)
-            #align_file_content += "y_offset: {0}\n".format(0.0)
             new_align.y_offset = 0.0
             # -- The rotation
             # XXX --- Maybe if the change is less than 0.1 degrees (or some % of the previous one)
@@ -1871,29 +1886,26 @@ class processor(object):
                 # converged (not checked in the first iteration)
                 if self.alignment[pl_id].iteration > 1 \
                         and abs(self.alignment[pl_id].rot-new_align_rot) < 0.0087:
-                    #processor.align_allow_rot = False
-                    #align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
                     new_align.rot = self.alignment[pl_id].rot
                 else:
-                    #align_file_content += "rot: {0}\n".format(new_align_rot)
                     new_align.rot = new_align_rot
             else:
-                #align_file_content += "rot: {0}\n".format(self.alignment[pl_id].rot)
                 new_align.rot = self.alignment[pl_id].rot
             # -- The tilt: we don't have coordinate to deal with, just using whatever 
             #    the user introduced
-            #align_file_content += "tilt: {0}\n".format(self.alignment[pl_id].tilt)
+            # self.dx_ytx_h --->
             new_align.tilt = self.alignment[pl_id].tilt
             # -- The turn (only evaluate it if greater than 1 degrees: 0.018 rad.
             if abs(self.alignment[pl_id].turn) > 0.02 \
-                    and self.dx_x_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_turn = get_linear_fit(self.dx_x_h[pl_id])
+                    and self.dx_xtx_h[pl_id].GetEntries() > MIN_ENTRIES:
+                # In mmrad
+                new_turn = get_linear_fit(self.dx_xtx_h[pl_id])*1e3
                 # GUARD for stability problems
                 if abs(new_turn) > 1e-3:
                     new_align.turn = 0.0
                 else:
-                    #align_file_content += "turn: {0}\n".format(self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn))
-                    new_align.turn = self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn)
+                    #new_align.turn = self.alignment[pl_id].turn+new_turn/sin(self.alignment[pl_id].turn)
+                    new_align.turn = self.alignment[pl_id].turn+new_turn
             else:
                 # Compatible with zero (so, the resolution we have in this angle is 1 degree)
                 # Going down, it could drive to unsense results (because of the division)
@@ -1904,13 +1916,15 @@ class processor(object):
             #    deactivate it
             if self.alignment[pl_id].iteration > 1 \
                     and self.dx_tx_h[pl_id].GetEntries() > MIN_ENTRIES:
-                new_dz = get_linear_fit(self.dx_tx_h[pl_id],xmin=-0.1e-3,xmax=0.1e-3,robval=0.6)
+                # Slope in um/mm
+                new_dz = get_linear_fit(self.dx_tx_h[pl_id],xmin=-0.1,xmax=0.1,robval=0.6)*1e3
                 # -- XXX Guard to avoid not estable results: changes in 10 mm makes no sense
                 #        Note that the fit turns out not to be too stable...
                 if abs(new_dz) > 10.0:
                     new_align.dz = self.alignment[pl_id].dz
                 else:
-                    new_align.dz = self.alignment[pl_id].dz+new_dz
+                    #new_align.dz = self.alignment[pl_id].dz+new_dz
+                    new_align.dz = self.alignment[pl_id].dz-new_dz
             else:
                 new_align.dz = self.alignment[pl_id].dz
             # Update the module
@@ -2047,10 +2061,12 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_x_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
+                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dx_ytx_h[duthits.id],\
+                self.dx_xtx_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
                 self.trk_iso[duthits.id],self.hmatch_eff[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_x_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
+                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dx_ytx_h[refhits.id],\
+                self.dx_xtx_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
                 self.trk_iso[refhits.id],self.hmatch_eff[refhits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
