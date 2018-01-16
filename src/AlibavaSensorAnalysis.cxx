@@ -27,6 +27,7 @@
 #include <cmath>
 #include <iostream>
 #include <iomanip>
+#include <numeric>
 
 // XXX: Better to have a centralized pool of functions, but if
 //      I use the AlibavaPostProcessor versions, I have to link
