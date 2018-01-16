@@ -15,6 +15,7 @@
 // System headers
 #include <algorithm>
 #include <map>
+#include <numeric>
 
 StripCluster::StripCluster():
     _signal_polarity(0),
