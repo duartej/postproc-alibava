@@ -759,9 +759,8 @@ class hits_plane_accessor(object):
             hplane.Fill(rtel[2]-self.z[0],rtel[0],rtel[1])
             #rsensor = track_acc.get_point(trk_el,self.z[ihit])
             # And fill some histograms
-            # Fill correlation histograms
+            # Fill correlation histograms using only the closest isolated tracks
             hcorr.Fill(self.x_local[ihit],rsensor[0])
-            ###hcorr.Fill(self.x[ihit],rsensor[0])
             # -- resolution histogram
             dx = self.x_local[ihit]-rsensor[0]
             ###dx = self.x[ihit]-rsensor[0]
@@ -1535,8 +1534,8 @@ class processor(object):
 
         # Correlations: 
         # -- Sensors-tracks
-        self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut),
-                minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sydut,sydut)}
+        self.hcorr_trkX = { minst.dut_plane: ROOT.TH2F("corr_trkX_dut",";x_{DUT} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxdut,sxdut,200,-sxdut,sxdut),
+                minst.ref_plane: ROOT.TH2F("corr_trkX_ref",";x_{REF} [mm]; x_{pred}^{trk} [mm]; Entries",200,-sxref,sxref,200,-sxref,sxref)}
         ## Add it as alignment plot
         self._alignment_histos += self.hcorr_trkX.values()
         # -- DUT-REF
@@ -1848,6 +1847,7 @@ class processor(object):
                 # Remember: it_el=index of the measured hit at the corrent sensor (sensorID)
                 #           trk_index= index of the track
                 ((xpred,ypred,zpred),rtel) = trks.get_point_in_sensor_frame(trk_index,hits)
+                # XXX TO CODE: Fiducial cut: some percentange from the edges
                 # Event and charge maps (using track predictions)
                 # --- Some histograms should use the measured values (at least when possible)
                 self.hcharge[sensorID].Fill(xpred,ypred,hits.charge[hit_el])
