@@ -19,6 +19,13 @@ if(PYTHON)
                        DEPENDS ${DEPS})
 
     add_custom_target(target ALL DEPENDS ${OUTPUT})
+    
+    # -- Not installed in the user area
+    if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
+        set(USER_PATH_OPT "--user")
+    else()
+        set(USER_PATH_OPT "--prefix ${CMAKE_INSTALL_PREFIX}")
+    endif()
 
-    install(CODE "execute_process(COMMAND ${PYTHON} ${SETUP_PY} install --user)")
+    install(CODE "execute_process(COMMAND ${PYTHON} ${SETUP_PY} install ${USER_PATH_OPT})")
 endif()
