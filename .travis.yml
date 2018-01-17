@@ -10,7 +10,8 @@ before_script:
     - tar -xvf /tmp/root.v6.08.06.tar.gz
     - export PATH=$PATH:$PWD/root/bin:$HOME/bin
     - export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/lib
-    - export PYTHONPATH=$PYTHONPATH:$HOME/lib
+    - export PYSITE=`python -c "import sys; print 'python{0}/site-packages'.format(sys.version[0:3])"`
+    - export PYTHONPATH=$PYTHONPATH:$HOME/lib/$PYSITE
     - source $PWD/root/bin/thisroot.sh
 
 # command to run tests
