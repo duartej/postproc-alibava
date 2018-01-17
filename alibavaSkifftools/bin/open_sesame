@@ -188,7 +188,7 @@ def sensor_alignment(ntuplename,verbose):
     # Just do the job
     return sensor_alignment(ntuplename,verbose)
 
-def sensor_map_production(ntuplename):
+def sensor_map_production(ntuplename,verbose):
     """Produce the charge maps and the efficiency maps (hit 
     reconstruction efficiency) for the sensor included in the 
     NTUPLE. Wrapper to the method at alibavaSkifftools.marlin_postprocessor
@@ -200,11 +200,13 @@ def sensor_map_production(ntuplename):
         The name of the ROOT ntuple. The filename MUST follow
         the standard notation defined through the class 
         alibavaSkifftools.SPS2017TB_metadata.filename_parser 
+    verbose: bool
+        Whether or not activate verbose print-outs
     """
     from alibavaSkifftools.marlin_postprocessor import sensor_map_production
     
     # Just do the job
-    sensor_map_production(ntuplename)
+    sensor_map_production(ntuplename,verbose=verbose)
 
 
 def merge_files(lcio_files,output_name):
@@ -730,6 +732,8 @@ if __name__ == '__main__':
     sm_parser.add_argument('--align-auto',dest="align_auto",action="store_true",\
             help="Same as '-a','--align' option, except the alignment" \
             " is performed automatically. WARNING: use it carefully")
+    sm_parser.add_argument('-v','--verbose',dest="verbose",action="store_true",\
+            help="Verbose mode for debugging porpurses")
     sm_parser.set_defaults(which='sensor_maps',align=False,align_auto=False)
     
     # -- Subparser: simple file merger when dealing with EORE extra events
@@ -817,7 +821,7 @@ if __name__ == '__main__':
             print "\033[1;34mPerforming DUT and REF alignment\033[1;m..."
             # do the alignment if the user says so 
             while user_answer[0].lower() == 'y':
-                alignment_status = sensor_alignment(args.ntuple,True)
+                alignment_status = sensor_alignment(args.ntuple,args.verbose)
                 print "\033[1;34mINFO ALIGNMENT\033[1;m  ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
                 if args.align_auto and alignment_status:
                     break
@@ -827,7 +831,7 @@ if __name__ == '__main__':
                 iteration+=1
         else:
             # Create the maps
-            sensor_map_production(args.ntuple)
+            sensor_map_production(args.ntuple,args.verbose)
     elif args.which == 'merge_eore':
         steering_filename=merge_files(args.lcio_files,args.output)
         print "\033[1;34mTo create the merged file, run: \033[1;m\n"\
