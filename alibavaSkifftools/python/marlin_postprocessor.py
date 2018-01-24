@@ -119,6 +119,7 @@ class dummy_list(list):
     
 class alignment_cts(object):
     """Container for the alignment constants
+
     """
     from math import pi
     # Dictionaries present into a alignment file
@@ -129,14 +130,21 @@ class alignment_cts(object):
     # hyperplane definition : 
     #   x_mis-x_old = d_x - slope_x*d_z - y*slope_x*d_tilt + x*slope_x*d_turn - y*d_rot
     # xoffset, -dz, -titl, +turn, -rot
-    hyp_par = ( (0,("x_offset",1.0)), \
-                    (1,("dz",-1.0)), \
-                    (2,("tilt",-1.0)),\
-                    (3,("turn",1.0)),\
-                    (4,("rot",-1.0)) )
-    def __init__(self):
+    hyp_par = [ [0,["x_offset",1.0]], \
+                    [1,["dz",-1.0]], \
+                    [2,["tilt",-1.0]],\
+                    [3,["turn",1.0]],\
+                    [4,["rot",-1.0]] ]
+    def __init__(self,sensitive_direction):
         """Initialize the data-members
+    
+        Parameters
+        ----------
+        sensitive_direction: str
+            The direction where the sensor is sensitive. Valid
+            words: x|y
         """
+        self.sensitive_direction=sensitive_direction
         self.iteration = int(0)
         self.x_offset = 0.0
         self.y_offset = 0.0
@@ -144,6 +152,8 @@ class alignment_cts(object):
         self.tilt = 0.0
         self.rot  = 0.0
         self.dz   = 0.0
+        if self.sensitive_direction == "y":
+            self.hyp_par[0][1][0] = "y_offset"
 
     def __str__(self):
         """Just the print out of the alignment constants
@@ -176,7 +186,7 @@ class alignment_cts(object):
             try:
                 factor = filter(lambda (i,(name,fact)): name == attr,self.hyp_par)[0][0]
             except IndexError:
-                # y_offset
+                # the other offset 
                 factor = 1.0
             prov = getattr(self,attr)+getattr(other,attr)
             setattr(self,attr,prov)
@@ -406,16 +416,23 @@ class hits_plane_accessor(object):
         # Get the maximum and minimum in x and y (to define the fiducial cuts)
         ROOT.gROOT.SetBatch()
         prv_c = ROOT.TCanvas()
+        # Auto-obtain the sensitive direction (assuming x)
+        self._sensitive_direction = "x"
         dummy = tree.Draw("hit_X_{0}>>hdum(100)".format(self.id))
         hdummy = ROOT.gDirectory.Get("hdum")
-        self.xmin = hdummy.GetXaxis().GetBinLowEdge(1)
-        self.xmax = hdummy.GetXaxis().GetBinUpEdge(100)
-        # Dont have this coordinate!!!
-        #dummy2 = tree.Draw("hit_Y_{0}>>hdum2".format(self.id))
-        #hdummy2 = ROOT.gDirectory.Get("hdum2")
-        #self.ymin = hdummy2.GetXaxis().GetBinLowEdge(1)
-        #self.ymax = hdummy2.GetXaxis().GetBinUpEdge(hdummy2.GetNbinsX())
-
+        # If everything is just in one bin -> No sensitive
+        tot_entries = hdummy.GetEntries()
+        for i in xrange(1,hdummy.GetNbinsX()+1):
+            if tot_entries == hdummy.GetBinContent(i):
+                # -- this is not the sensitive axis,
+                #    found a bin with all the entries
+                dummy = tree.Draw("hit_Y_{0}>>hdumY(100)".format(self.id))
+                hdummy = ROOT.gDirectory.Get("hdumY")
+                self._sensitive_direction = "y"
+                break
+        self.rmin = hdummy.GetXaxis().GetBinLowEdge(1)
+        self.rmax = hdummy.GetXaxis().GetBinUpEdge(100)
+        
         # -- For the modulo definition, let's be sure we don't use any masked region
         #    or channels
         del prv_c
@@ -441,7 +458,7 @@ class hits_plane_accessor(object):
                     " is corrupted")
         # De-activate the z-branch, not needed anymore
         tree.SetBranchStatus("hit_Z_{0}".format(self.id),0)
-        
+
         # Initialize resync static variable
         if not hits_plane_accessor.resync.has_key(self.id):
             hits_plane_accessor.resync[self.id] = True
@@ -451,11 +468,11 @@ class hits_plane_accessor(object):
             print "ALIGNMENT INPUT [PLANE:{0}]".format(self.id)
             # Just do it if there weren't initialized previously
             if not hits_plane_accessor.align_constants.has_key(self.id):
-                hits_plane_accessor.align_constants[self.id] = alignment_cts()
+                hits_plane_accessor.align_constants[self.id] = alignment_cts(self.sensitive_direction)
             filename = ALIGN_FILE_FORMAT.format(self.id,self.run_number)
             try:
                 with open(filename) as f:
-                    align = alignment_cts()
+                    align = alignment_cts(self.sensitive_direction)
                     align.parse_alignment(f)
                     # Update the alignment constants
                     hits_plane_accessor.align_constants[self.id] = align
@@ -467,7 +484,10 @@ class hits_plane_accessor(object):
                 while self.x_local.size() == 0:
                     dummy = tree.GetEntry(_k)
                     _k+=1
-                hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]-self.x[0]
+                if self.sensitive_direction == "x":
+                    hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]-self.x[0]
+                elif self._sensitive_direction == "y":
+                    hits_plane_accessor.align_constants[self.id].y_offset = self.y_local[0]-self.y[0]
                 # And give an extra turn allowing to perform an initial 
                 # adjustment (1.15 degrees)
                 #hits_plane_accessor.align_constants[self.id].turn = 0.021
@@ -475,6 +495,14 @@ class hits_plane_accessor(object):
             print hits_plane_accessor.align_constants[self.id]
             hits_plane_accessor.resync[self.id] = False
         
+        # Defining the sensitive axis and useful accessors
+        if self.sensitive_direction == "x":         
+            self.sC = self.x
+            self.sC_local = self.x_local
+        elif self.sensitive_direction == "y":
+            self.sC = self.y
+            self.sC_local = self.y_local
+
     @property
     def n(self):
         """The number of hit elements
@@ -484,6 +512,16 @@ class hits_plane_accessor(object):
         int
         """
         return self.x.size()
+
+    @property
+    def sensitive_direction(self):
+        """The sensitive direction of the sensor
+
+        Return
+        ------
+        str: x|y
+        """
+        return self._sensitive_direction
     
     @property
     def run_number(self):
@@ -866,7 +904,7 @@ class hits_plane_accessor(object):
         ------
         bool
         """
-        return abs(self.x[i]-other.x[j]) < 1e-9 \
+        return abs(self.sC[i]-other.sC[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
     def match_isolated(self,track_acc,histos,is_ref=False,res=None):
@@ -926,6 +964,28 @@ class hits_plane_accessor(object):
         # Get the histograms
         hcorr,hres,hdx,hdx_finer,hrot,htilt,hturn,hdz,hplane,hiso,hmatch_eff,fitter = histos
 
+        # The index of the needed coordinated and some
+        # other data members dependent of the sensitive direction
+        if self.sensitive_direction == "x":
+            # -- the sensitive
+            ic = 0
+            # -- the complementary
+            iccom = 1
+            # -- the offset
+            r_offset = self.align_constants[self.id].x_offset
+            # -- the proper track slope
+            track_slope = track_acc.dxdz
+            
+        elif self.sensitive_direction == "y":
+            # -- the sensitive
+            ic = 1
+            # -- the complementary
+            iccom = 0
+            # -- the offset
+            r_offset = self.align_constants[self.id].y_offset
+            # -- the proper track slope
+            track_slope = track_acc.dydz
+
         matched_hits = []
         # non isolated tracks and already used: keep them listed 
         # to avoid re-processing
@@ -937,14 +997,14 @@ class hits_plane_accessor(object):
             not_used_track_indices = filter(lambda i: i not in used_tracks,xrange(track_acc.n))
             for i_at_list,itrk in enumerate(not_used_track_indices):
                 # Isolation: be sure there is no other track surrounding this one
-                ((xpred,ypred,zpred),rtel0) = track_acc.get_point_in_sensor_frame(itrk,self)
-                dummy = map(lambda ((o_x,o_y,o_z),_tel): hiso.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+                (rpred,rtel0) = track_acc.get_point_in_sensor_frame(itrk,self)
+                dummy = map(lambda ((o_x,o_y,o_z),_tel): hiso.Fill(sqrt((o_x-rpred[0])**2.0+(o_y-rpred[1])**2.0)),\
                         map(lambda other_i:  track_acc.get_point_in_sensor_frame(other_i,self),\
                         not_used_track_indices[i_at_list+1:]))
                 # note tha i_at_list catchs the indice at `not_used_track_indices`
                 # list, therefore in order to evaluate only those tracks not previously
                 # evaluated just use the remaining elements after the current track index
-                non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < ISOLATION,\
+                non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-rpred[0])**2.0+(o_y-rpred[1])**2.0) < ISOLATION,\
                         map(lambda other_i:  (other_i,track_acc.get_point_in_sensor_frame(other_i,self)),\
                             not_used_track_indices[i_at_list+1:]))
                 if len(non_isolated) > 0 :
@@ -954,12 +1014,12 @@ class hits_plane_accessor(object):
                     dummy = map(lambda (i,other_stuff): used_tracks.append(i), non_isolated)
                     continue
                 # Fill the alignment histograms
-                closest[abs(self.x_local[ihit]-xpred)] = itrk
+                closest[abs(self.sC_local[ihit]-rpred[ic])] = itrk
             if len(closest) == 0:
-                hmatch_eff.Fill(self.x_local[ihit],0)
+                hmatch_eff.Fill(self.sC_local[ihit],0)
                 continue
             # The hit was matched by at least one track
-            hmatch_eff.Fill(self.x_local[ihit],1)
+            hmatch_eff.Fill(self.sC_local[ihit],1)
             # Get the closest track (in x)
             distance_abs,trk_el =sorted(closest.iteritems())[0]
             #rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
@@ -972,17 +1032,17 @@ class hits_plane_accessor(object):
             #rsensor = track_acc.get_point(trk_el,self.z[ihit])
             # And fill some histograms
             # Fill correlation histograms using only the closest isolated tracks
-            hcorr.Fill(self.x_local[ihit],rsensor[0])
+            hcorr.Fill(self.sC_local[ihit],rsensor[ic])
             # -- resolution histogram
-            dx = self.x_local[ihit]-rsensor[0]
+            dc = self.sC_local[ihit]-rsensor[ic]
             ###dx = self.x[ihit]-rsensor[0]
-            hres.Fill(self.x_local[ihit],dx)
+            hres.Fill(self.sC_local[ihit],dc)
             # Alignment histos: x-offset
             # -- Pre-alignment, rot, tilt an turn but no shift
-            hdx.Fill((self.x_local[ihit]+self.align_constants[self.id].x_offset)-rsensor[0])
+            hdx.Fill((self.sC_local[ihit]+r_offset)-rsensor[ic])
             ###hdx.Fill(self.x[ihit]-rsensor[0])
             # -- finer
-            hdx_finer.Fill(dx)
+            hdx_finer.Fill(dc)
             # Fill only those passing the cuts 
             if distance_abs < res:
                 # Fill the matched hits
@@ -994,17 +1054,17 @@ class hits_plane_accessor(object):
                 ## Fill the alignment histograms after being accepted
                 #  as providing from the hit
                 ## -- rot
-                hrot.Fill(rsensor[1],dx)
+                hrot.Fill(rsensor[iccom],dc)
                 ## -- tilt
-                htilt.Fill(rsensor[1]*track_acc.dxdz[trk_el]*UM,dx)
+                htilt.Fill(rsensor[iccom]*track_slope[trk_el]*UM,dc)
                 # -- turn
-                hturn.Fill(rsensor[0]*track_acc.dxdz[trk_el]*UM,dx)
+                hturn.Fill(rsensor[ic]*track_slope[trk_el]*UM,dc)
                 ## -- dz 
-                hdz.Fill(track_acc.dxdz[trk_el]*UM,dx)
+                hdz.Fill(track_slope[trk_el]*UM,dc)
                 ## -- to perform the alignment fit
-                coord = array.array('d',[-track_acc.dxdz[trk_el],-track_acc.dxdz[trk_el]*rsensor[1],\
-                        track_acc.dxdz[trk_el]*rsensor[0],-rsensor[1]])
-                fitter.AddPoint(coord,dx)
+                coord = array.array('d',[-track_slope[trk_el],-track_slope[trk_el]*rsensor[iccom],\
+                        track_slope[trk_el]*rsensor[ic],-rsensor[iccom]])
+                fitter.AddPoint(coord,dc)
         return matched_hits
     
 
@@ -1148,6 +1208,7 @@ class track_hits_plane_accessor(object):
         bool
         """
         return abs(self.x[i]-other.x[j]) < 1e-9 \
+                and abs(self.y[i]-other.x[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
 
     def get_hits_with_same_track_indices(self,itrk):
@@ -1982,16 +2043,22 @@ class processor(object):
             #self.dx_hyp[pl_id].GetErrors(errors)
 
             # an alignment instance
-            new_align = alignment_cts()
+            new_align = alignment_cts(self.alignment[pl_id].sensitive_direction)
+
+            # -- using the proper axis
+            if new_align.sensitive_direction == "x":
+                r_offset = new_align.x_offset
+            elif new_align.sensitive_direction == "y":
+                r_offset = new_align.y_offset
 
             for (argi,(name,pre)) in new_align.hyp_par:
                 v = pre*params[argi]
-                # Finer alignment, check after the x_offset is evaluated
+                # Finer alignment, check after the r_offset is evaluated
                 # if the correction is small enough
                 if argi == 0 and \
-                        (abs(new_align.x_offset) > 0.1 or \
+                        (abs(r_offset) > 0.1 or \
                         self.dx_h[pl_id].GetEntries() < MIN_ENTRIES):
-                    new_align.x_offset = v
+                    r_offset = v
                     break
                 if name not in ["x_offset", "y_offset"]:
                     print "="*80
@@ -2022,6 +2089,7 @@ class processor(object):
                 #        new_align.units[name][1],\
                 #        new_align.units[name][0]*errors[argi])
                 #print "   --- t-value:{0}, significance:{1}".format(self.dx_hyp[pl_id].GetParTValue(argi),self.dx_hyp[pl_id].GetParSignificance(argi))
+        
             print
             print "Extra alignment (PL:{0})".format(pl_id)
             print new_align
@@ -2242,9 +2310,10 @@ class processor(object):
             self.hcl_size[refhits.id].Fill(refhits.n_cluster[ihit_ref])
             # Get the track predicted points at the DUT plane
             ((xpred_dut,ypred_dut,zpred_dut),rtel) = trks.get_point_in_sensor_frame(itrk,duthits)
-            # Only within fiducial  (note that we don't have coordinate Y)
-            if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin:
-                continue
+            # Only within fiducial  
+            ###
+            ### if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin: XXX USE proper coordinate with rmin rmax
+            ###    continue
             # Modulo pitch
             xmod = (32.0+xpred_dut)%(2.0*self.pitchX[duthits.id])
             ymod = (32.0+ypred_dut)%(2.0*self.pitchY[duthits.id])
@@ -2451,7 +2520,7 @@ def sensor_alignment(fname,verbose):
     aligned_sensors = 0
     for pl_id,current_align in proc_inst.alignment.iteritems():
         align_f = ALIGN_FILE_FORMAT.format(pl_id,proc_inst.run_number)
-        old_align = alignment_cts()
+        old_align = alignment_cts(current_align.sensitive_direction)
         try:
             with open(align_f) as f:
                 old_align.parse_alignment(f)
