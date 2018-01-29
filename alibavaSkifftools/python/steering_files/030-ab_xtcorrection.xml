@@ -106,7 +106,7 @@
              telescope is X. If sensitive axis is Y then set this parameter to 
              zero (0). Any other value will be disregarded and sensitive axis 
              will assumed to be "X" -->
-        <parameter name="IsSensitiveAxisX" type="int"> 1 </parameter>
+        <parameter name="IsSensitiveAxisX" type="int"> 0 </parameter>
         <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
         <!--parameter name="Verbosity" type="string">DEBUG </parameter-->
     </processor>

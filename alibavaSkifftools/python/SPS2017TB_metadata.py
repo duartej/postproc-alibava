@@ -315,23 +315,30 @@ class specs_sensor():
         # the processors: XXX This introduce a fake size for the iLGAD and LGAD,
         # which they do not have this amount of strips
         force_strips = 128
-        self.sizeX = force_strips*pitchX #sizeX
-        self.sizeY = sizeY
+        self.sizeX = sizeX #force_strips*pitchX #sizeX
+        self.sizeY = force_strips*pitchY        #sizeY
         self.pitchX = pitchX
         self.pitchY = pitchY
         self.thickness = thickness
         self.polarity = polarity 
         self.resolution = _binary_resolution(self.pitchX)
+
 # Instances
+# --- XXX TO BE DEPRECATED: NOTE THE BUG IN THE SENSITIVE AXIS
 # Note tha twe are using the 3D as micro-strip sensors, forcing
 # the pitch in Y be all the Y-sensor size 
-#mtype = specs_sensor(6.4,7.5,0.05,0.05,0.23)
-#ntype = specs_sensor(3.2,7.5,0.0250,0.100,0.23)
-mtype = specs_sensor(6.4,7.5,0.05,7.5,0.23)
-ntype = specs_sensor(3.2,7.5,0.0250,7.5,0.23)
-lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
-ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,polarity=1.0)
-ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3,polarity=1.0)
+###mtype = specs_sensor(6.4,7.5,0.05,7.5,0.23)
+###ntype = specs_sensor(3.2,7.5,0.0250,7.5,0.23)
+###lgad  = specs_sensor(5.12,5.12,0.160,5.12,0.3)
+###ilgad = specs_sensor(7.2,7.2,0.160,7.2,0.3,polarity=1.0)
+###ref   = specs_sensor(10.24,10.24,0.08,10.24,0.3,polarity=1.0)
+# Note tha we are using the 3D as micro-strip sensors, forcing
+# the pitch in X be all the X-sensor size -> SENSITIVE AXIS: Y
+mtype = specs_sensor(7.5,6.4,7.5,0.05,0.23)
+ntype = specs_sensor(3.2,7.5,7.5,0.0250,0.23)
+lgad  = specs_sensor(5.12,5.12,5.12,0.160,0.3)
+ilgad = specs_sensor(7.2,7.2,7.2,0.160,0.3,polarity=1.0)
+ref   = specs_sensor(10.24,10.24,10.24,0.08,0.3,polarity=1.0)
 
 # Maps the name of the sensor with the proper specs_sensor instance
 sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
@@ -339,6 +346,7 @@ sensor_name_spec_map = { 'REF_0_b1': ref, 'LGAD7859W1H6_0_b1': lgad,\
         'M2-3_1e16_b2' : mtype, 'M1-5_0_b2': mtype, 'M1-8_7e15_b2': mtype, \
         'N1-3_0_b1': ntype, 'N1-7_7e15_b2': ntype, 'N1-8_1e16_b1': ntype
         }
+# -- update the orientation for the iLGAD and the N1-7
 
 # list of active sensors per run number. They are ordered with the
 # beam hitting in increasing z-plane (Motherboard). The first 
@@ -498,9 +506,9 @@ gear_content_template = """
 # 5: pitch in Y-direction
 # 6: spatial resolution (just the binary resolution)
 # 7: thickness
-# NOTE the rotation4 is set as the Telescope in order to place 
-#      sensors planes and telescope planes to the same reference
-#      system
+# 8: position at Z
+# 9: Id of the sensor
+# 10: rotation orientation for rotation1 and rotation4
 gear_dut_template="""<!--{0} - chip {1} -->
         <!-- WARNING, not sure about specs, first tentative values collected from several 
              sources. Resolution: (binary resolution, i.e. p/sqrt(12))-->
@@ -514,10 +522,10 @@ gear_dut_template="""<!--{0} - chip {1} -->
           <sensitive      ID="{9}"
                           positionX="0.00"        positionY="0.00"      positionZ="{8}" 
                           sizeX="{2}"             sizeY="{3}"           thickness="0.230"
-                          npixelX="128"           npixelY="1" 
+                          npixelX="1"           npixelY="128" 
                           pitchX="{4}"           pitchY="{5}"        resolution="{6}" 
-                          rotation1="1.0"        rotation2="0.0" 
-                          rotation3="0.0"         rotation4="1.0" 
+                          rotation1="{10}"        rotation2="0.0" 
+                          rotation3="0.0"         rotation4="{10}" 
                           radLength="93.660734"
                           />
         </layer>"""
@@ -693,6 +701,39 @@ def get_geo_id(run_number,sensor_name=""):
     else:
         return int("2{0}{1}".format(equivalent_run_number(run_number),sensor_ids[sensor_name]))
 
+def get_orientation(name,run):
+    """The orientation of the sensor (with respect the beam)
+        is provided by the rotation1, rotation2, rotation3 and 
+        rotation4 keywords at the gear files. By studying the
+        correlation between planes, it can be inferred their relative
+        orientation: 
+            * Telescope planes have -1   0 orientation 
+                                     0  -1 
+            * REF sensor has inverse correlation with the telescope planes,
+              then   1  0 orientation
+                     0  1
+            * all sensors (but iLGAD and some runs of N1-7_7e15) have same
+              orientation than REF:  1 0
+                                     0 1
+            * iLGAD, N1-7_7e15 (some runs): -1  0  same orientation than telescope
+                                            0  -1 
+
+        Parameters
+        ----------
+        name: str
+            Sensor name
+        run: int
+            The run number
+
+        Return
+        ------
+        int: -1
+            The rotation1 and rotation4 values
+    """
+    if (name == "N1-7_7e15_b2" and int(run) >= 391) \
+            or name == "iLGAD8533W1K05T_0_b2":
+        return -1.0
+    return 1.0
 
 def get_gear_content(run_number,sensor_name="",include_ref=False):
     """Get the gear file corresponding to a run number
@@ -731,7 +772,7 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
         # Fill the need input of the template for the dut layer
         filler_dut = (sensor_name,get_beetle(sensor_name),\
                 specs.sizeX,specs.sizeY,specs.pitchX,specs.pitchY,specs.resolution,\
-                specs.thickness,get_z(run_number,sensor_name),sensorID)
+                specs.thickness,get_z(run_number,sensor_name),sensorID,get_orientation(sensor_name,run_number))
         dut_layer = gear_dut_template.format(*filler_dut)
         # And for the Gear file
         geoid = get_geo_id(equivalent_run_number(run_number),sensor_name)
@@ -744,7 +785,7 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
             specs_ref=sensor_name_spec_map['REF_0_b1']
             filler_ref = ("REF_0_b1", get_beetle("REF_0_b1"),\
                     specs_ref.sizeX,specs_ref.sizeY,specs_ref.pitchX,specs_ref.pitchY,specs_ref.resolution,\
-                    specs_ref.thickness,get_z(run_number,"REF_0_b1"),sensorID_ref)
+                    specs_ref.thickness,get_z(run_number,"REF_0_b1"),sensorID_ref,1.0)
             ref_layer = gear_dut_template.format(*filler_ref)
             # And for the Gear file
             filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
@@ -752,7 +793,6 @@ def get_gear_content(run_number,sensor_name="",include_ref=False):
         else:
             filler_gear = ("WITH DUT "+sensor_name, sensor_name,get_z(run_number,sensor_name),\
                     geoid,6,"Mimosa26.so",dut_layer)
-
 
     return gear_content_template.format(*filler_gear)
 

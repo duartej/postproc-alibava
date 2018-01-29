@@ -46,6 +46,8 @@
        <parameter name="OutputFilename" type="string">@NTUPLE_FILENAME@ </parameter>
        <!--The id of the telescope planes-->
        <parameter name="TelescopePlanes" type="IntVec">0 1 2 3 4  </parameter>
+       <!--Set 0 if X-coordinate is the sensitive one or 1 if is the Y-->
+       <parameter name="SensitiveX"> 1 </parameter>
        <!--verbosity level of this processor ("DEBUG0-4,MESSAGE0-4,WARNING0-4,ERROR0-4,SILENT")-->
        <!--parameter name="Verbosity" type="string"> </parameter-->
    </processor>
