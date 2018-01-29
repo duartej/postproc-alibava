@@ -480,7 +480,8 @@ class hits_plane_accessor(object):
                 # First access, propagate the prealignment from the Marlin 
                 # processor here:
                 _k = 1
-                # Just to be sure we have data
+                # Just to be sure we have data (if x_local is not empty, 
+                # then y_local is not empty too) 
                 while self.x_local.size() == 0:
                     dummy = tree.GetEntry(_k)
                     _k+=1
@@ -492,10 +493,11 @@ class hits_plane_accessor(object):
                 # adjustment (1.15 degrees)
                 #hits_plane_accessor.align_constants[self.id].turn = 0.021
             # Not re-synchronized until new order
+            print "Inferred sensitive direction: {0}".format(self.sensitive_direction.upper())
             print hits_plane_accessor.align_constants[self.id]
             hits_plane_accessor.resync[self.id] = False
         
-        # Defining the sensitive axis and useful accessors
+        # Defining some useful accessors which depends on the sensitive direction
         if self.sensitive_direction == "x":         
             self.sC = self.x
             self.sC_local = self.x_local
