@@ -193,6 +193,8 @@ class alignment_cts(object):
         # next iterations, just overwritte the wrong value
         # when added from the other
         self.iteration = iteration+1
+        # Also, not adding up the sensitive direction
+        self.sensitive_direction = other.sensitive_direction
         return self
     
     def __eq__(self,other):
@@ -896,7 +898,7 @@ class hits_plane_accessor(object):
         i: int
             The hit index of this (self) instance to be 
             compare
-        other: hit_plane_accessor instance (or any other instance
+        other: hits_plane_accessor instance (or any other instance
             with a method 'z.__getitem__')
             The other instance to compare with
         j: int
@@ -1588,7 +1590,7 @@ class tracks_accessor(object):
                     if not ihit_fit:
                         continue
                     # The itrk-track was using in the fit the measured i-hit: it's a match
-                    # Get the index of the hit_plane_accessor instance
+                    # Get the index of the hits_plane_accessor instance
                     i_in_hit_plane = filter(lambda k: measured_hits.equal(i,original_measured_hits[sID],k),\
                             xrange(original_measured_hits[sID].n))[0]
                     #print self.get_point(itrk,original_measured_hits[sID].z[i_in_hit_plane]),fitted_hits.x[ihit_fit],fitted_hits.y[ihit_fit]
@@ -1795,10 +1797,11 @@ class processor(object):
 
         # Asumming strips for the ref (so recall is going 
         # to be used as 2 x pitch)
-        self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
         ## --- XXX Simulate pixels
         self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
-        self.pitchY = self.pitchX
+        ## ----
+        self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
+        self.pitchX = self.pitchY
         # -- Check if is 3-D or strips
         #if minst.dut_name.lower().find("lgad") == -1:
         #    # simulate pixels
@@ -1806,13 +1809,13 @@ class processor(object):
         #else:
         #    # As is going to be use as 2 x pitch
         #    self.pitchY[minst.dut_plane] = 0.5*minst.dut_pitchY
-        self.sizeX = { minst.dut_plane: minst.dut_sizeX, minst.ref_plane: minst.ref_sizeX }
+        self.sizeY = { minst.dut_plane: minst.dut_sizeY, minst.ref_plane: minst.ref_sizeY }
         # Be careful than iLGAD and LGAD don't have the proper dimensions of the sensors
         if minst.dut_name.lower().find("ilgad") == 0:
-            self.sizeX[minst.dut_plane]= 7.2*MM
+            self.sizeY[minst.dut_plane]= 7.2*MM
         elif minst.dut_name.lower().find("lgad") == 0:
-            self.sizeX[minst.dut_plane]= 5.2*MM
-        self.sizeY = { minst.dut_plane: minst.dut_sizeY, minst.ref_plane: minst.ref_sizeY }
+            self.sizeY[minst.dut_plane]= 5.2*MM
+        self.sizeX = { minst.dut_plane: minst.dut_sizeX, minst.ref_plane: minst.ref_sizeX }
         # useful for the histos
         # half size plus some extra to keep alignment factors
         sxdut = self.sizeX[minst.dut_plane]/2.0+1.5
@@ -1831,14 +1834,15 @@ class processor(object):
         self.events_with_ref_no_tracks = 0
         self.events_with_ref_dut_tracks = 0
         self.number_matched_hits = {}
+        self.events_with_matched_hits = {}
         # Alingment histos
         # -----------------
         # -- the shift in x
-        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-sxdut,sxdut),
-                minst.ref_plane: ROOT.TH1F("dx_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-sxref,sxref) }
+        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; y_{DUT}-y_{trk}^{pred} [mm]; Entries",200,-sydut,sydut),
+                minst.ref_plane: ROOT.TH1F("dx_ref"," ; y_{REF}-y_{trk}^{pred} [mm]; Entries",200,-syref,syref) }
         # -- finer alignment
-        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
-                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5) }
+        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-0.5,0.5),
+                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-0.5,0.5) }
         # -- the rot (around z-axis)
         self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",\
                         50,-6.0,6.0,-0.2,0.2),
@@ -2274,9 +2278,10 @@ class processor(object):
         for plid,thelist in matched_hits.iteritems():
             if not self.number_matched_hits.has_key(plid):
                 self.number_matched_hits[plid] = len(thelist)
+                self.events_with_matched_hits[plid] = int(len(thelist)>0)
             else:
                 self.number_matched_hits[plid] += len(thelist)
-
+                self.events_with_matched_hits[plid] += int(len(thelist)>0)
 
     def process(self,t,trks,refhits,duthits,is_alignment=False):
         """Fill the relevant counters and the histograms
@@ -2475,13 +2480,15 @@ class processor(object):
         """
         m = ""
         for plid,n in self.number_matched_hits.iteritems():
+            evts_w_match = self.events_with_matched_hits[plid]
             if plid == self.dut_plane:
                 sensor_evts = self.events_with_dut
                 sensor_name = "DUT"
             else:
                 sensor_evts = self.events_with_ref
                 sensor_name = "REF"
-            m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events_tracks)*100.)
+            #m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(n)/float(self.total_events_tracks)*100.)
+            m+= "{0} efficiency (Isolated track-matched): {1:.2f}%\n".format(sensor_name,float(evts_w_match)/float(self.total_events_tracks)*100.)
         return m
 
     def __str__(self):
@@ -2504,7 +2511,7 @@ class processor(object):
 
         return m
 
-def get_x_offset(h,xmin=-2.0,xmax=2.0):
+def get_offset(h,xmin=-2.0,xmax=2.0):
     """XXX 
     """
     import ROOT
@@ -2515,7 +2522,8 @@ def get_x_offset(h,xmin=-2.0,xmax=2.0):
     if h.GetEntries() == 0:
         raise RuntimeError("Empty histogram '{0}'".format(h.GetName()))
 
-    gbg = ROOT.TF1("gbg","[0]*exp(-0.5*((x-[1])/[2])**2.0)+[3]",xmin,xmax)
+    #gbg = ROOT.TF1("gbg","[0]*exp(-0.5*((x-[1])/[2])**2.0)+[3]",xmin,xmax)
+    gbg = ROOT.TF1("gbg","gausn(0)+cheb2(3)",xmin,xmax)
     # Set the initial values
     # -- Amplitude
     gbg.SetParameter(0,h.GetMaximum())
