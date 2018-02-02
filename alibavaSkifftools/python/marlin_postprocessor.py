@@ -1036,6 +1036,11 @@ class hits_plane_accessor(object):
                 #    continue
                 # Isolation: be sure there is no other track surrounding this one
                 (rpred,rtel0) = track_acc.get_point_in_sensor_frame(itrk,self)
+                # Before apply assign the alignment, otherwise biasing the distance
+                # ---- using all tracks
+                hcorr.Fill(self.sC_local[ihit],rpred[ic])
+                hdx.Fill((self.sC_local[ihit]-(rpred[ic]-r_offset)))
+                hdx_finer.Fill(self.sC_local[ihit]-rpred[ic])
                 #print
                 #print self.z[ihit],rpred,rtel0,
                 # note tha i_at_list catchs the indice at `not_used_track_indices`
@@ -1045,6 +1050,7 @@ class hits_plane_accessor(object):
                 #        map(lambda other_i:  (other_i,track_acc.get_point_in_sensor_frame(other_i,self)),\
                 #            not_used_track_indices[i_at_list+1:]))
                 non_isolated=[]
+                # -- Check if there is another track near-by
                 for otrk in xrange(track_acc.n):
                     if otrk == itrk:
                         continue
@@ -1058,12 +1064,7 @@ class hits_plane_accessor(object):
                     ##used_tracks.append(itrk)
                     ##dummy = map(lambda (i,other_stuff): used_tracks.append(i), non_isolated)
                     continue
-                # Before apply assign the alignment, otherwise biasing the distance
-                # ---- using isolated tracks
-                hcorr.Fill(self.sC_local[ihit],rpred[ic])
-                hdx.Fill((self.sC_local[ihit]-(rpred[ic]-r_offset)))
-                hdx_finer.Fill(self.sC_local[ihit]-rpred[ic])
-                # -- Get the closest
+                # -- Store the distance
                 closest[abs(self.sC_local[ihit]-rpred[ic])] = itrk
             if len(closest) == 0:
                 continue
@@ -1076,17 +1077,9 @@ class hits_plane_accessor(object):
             # Note that the prediction is given in the sensor reference frame (z should be zero)
             # Therefore, not to interesting this plot, better
             hplane.Fill(rtel[2]-self.z[0],rtel[0],rtel[1])
-            # Now we can check in the telescope plane, the discrepancies is due
-            # to the misalignment
-            #rsensor = track_acc.get_point(trk_el,self.z[ihit])
-            # And fill some histograms
-            # Fill correlation histograms using only the closest isolated tracks
-            ## --- hcorr.Fill(self.sC_local[ihit],rsensor[ic])
             # -- resolution histogram
             dc = self.sC_local[ihit]-rsensor[ic]
-            #dc = rsensor[ic]-self.sC_local[ihit]
             hres.Fill(self.sC_local[ihit],dc)
-            #hdx_finer.Fill(dc)
             # Fill only those passing the cuts 
             if distance_abs < res:
                 # Fill the matched hits
@@ -2315,8 +2308,8 @@ class processor(object):
                 self.hhitmap[sensorID].Fill(rpred[0],rpred[1])
                 # Modulo (Assuming the center of the sensor: -0.5*pitch 
                 # XXX provisional
-                xmod = (32.+rpred[0])%(2.0*self.pitchX[sensorID])
-                ymod = (32+rpred[0])%(2.0*self.pitchY[sensorID])
+                xmod = (rpred[0])%(2.0*self.pitchX[sensorID])
+                ymod = (rpred[1])%(2.0*self.pitchY[sensorID])
                 if abs(xmod) > 2.0*self.pitchX[sensorID] \
                         or abs(ymod) > 2.0*self.pitchY[sensorID]:
                     raise RuntimeError("SOMETHING VERY STRANGE: ERROR-WTF24!??!?")
