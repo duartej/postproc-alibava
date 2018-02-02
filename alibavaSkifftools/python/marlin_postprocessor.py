@@ -1729,8 +1729,7 @@ class tracks_accessor(object):
             is_isolated = True
             for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
                 (o_ref,o_ref) = self.get_point_in_sensor_frame(otrk,refhits)
-                #(o_dut,o_dut) = self.get_point_in_sensor_frame(otrk,duthits)
-                #if sqrt( (r_ref[0]-o_ref[0])**2.0 + (r_ref[1]-o_ref[1])**2.0 ) < self.isolation_condition:
+                # Just asking for isolation in REF (XXX what about DUT?)
                 if abs(r_ref[0]-o_ref[0]) < self.isolation_condition \
                         and abs(r_ref[1]-o_ref[1]) < self.isolation_condition:
                     is_isolated = False
