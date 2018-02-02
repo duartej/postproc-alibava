@@ -1730,7 +1730,9 @@ class tracks_accessor(object):
             for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
                 (o_ref,o_ref) = self.get_point_in_sensor_frame(otrk,refhits)
                 #(o_dut,o_dut) = self.get_point_in_sensor_frame(otrk,duthits)
-                if sqrt( (r_ref[0]-o_ref[0])**2.0 + (r_ref[1]-o_ref[1])**2.0 ) < self.isolation_condition:
+                #if sqrt( (r_ref[0]-o_ref[0])**2.0 + (r_ref[1]-o_ref[1])**2.0 ) < self.isolation_condition:
+                if abs(r_ref[0]-o_ref[0]) < self.isolation_condition \
+                        and abs(r_ref[1]-o_ref[1]) < self.isolation_condition:
                     is_isolated = False
                     break
             # -- Only require isolation at REF?
@@ -2500,7 +2502,7 @@ class processor(object):
             ic = 0
         elif duthits.sensitive_direction == "y":
             ic = 1
-        
+
         # -- The workhorse method: obtain one hit per track
         track_dict = trks.associate_hits(refhits,duthits,histos)
     
@@ -2515,13 +2517,13 @@ class processor(object):
             return
         elif len(self._alignment_histos) > 0: 
             # Remove the aligment histos (only do it the first time)
-            # (except some of them)
+            # (except some of them) and from the generic counter list
             keepthem =[]
             for hname in ["corr_trkX_{0}","dx_{0}","dx_finer_{0}"]:
-                for sname in i in [ "dut","ref" ]:
+                for sname in [ "dut","ref" ]:
                     keepthem.append(hname.format(sname)) 
-            dummy = map(lambda h: h.Delete(), filter(lambda _h: _h.GetName() not in keepthem, \
-                        self._alignment_histos))
+            dummy = map(lambda h: (h.Delete(),self._allhistograms.remove(h)),\
+                        filter(lambda _h: _h.GetName() not in keepthem,self._alignment_histos))
             # Empty the list to avoid enter again
             self._alignment_histos = []
         
@@ -2971,7 +2973,7 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
 
     # Set some globals
     #tree_inspector(t)
-
+    
     # The hits and tracks 
     dut = hits_plane_accessor(t,metadata.dut_plane,sensor_name=name_converter[fp.sensor_name])
     ref = hits_plane_accessor(t,metadata.ref_plane,"REF_0_b1")
