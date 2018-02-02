@@ -1059,7 +1059,7 @@ class hits_plane_accessor(object):
               those passing the cuts (isolation, matching). See `dx_h`
               in the processor class.
             - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the x-prediction. See `dx_y_h` in the 
+              (see last histo) vs. the x-prediction. See `dy_x_h` in the 
               processor class. This histo is used for alignment (rotation)            
             - A ROOT.TProfile to store the variation of the residual in y
               (see last histo) vs. the y-prediction. See `dy_y_h` in the 
@@ -1689,8 +1689,8 @@ class tracks_accessor(object):
         from math import sqrt
 
         # Get the histograms
-        hcorr,hdx= histos[refhits.id]
-        hcorr_d,hdx_d= histos[duthits.id]
+        hcorr,hdx,hdx_finer= histos[refhits.id]
+        hcorr_d,hdx_d,hdx_finer_d= histos[duthits.id]
         
         if refhits.sensitive_direction == "x":
             # -- the sensitive
@@ -1742,7 +1742,13 @@ class tracks_accessor(object):
             # -- Now find the closest hit to that track (-1 is returned if any)
             iref,distance_ref = refhits.close_hit(r_ref)
             idut,distance_dut = duthits.close_hit(r_dut)
-            # -- Association
+            # -- Some plots: smoother residual evaluation (and alignment) 
+            #    using closest hits to a track (event if the hit is re-used)
+            if iref != -1:
+                hdx_finer.Fill(refhits.sC_local[iref]-r_ref[ic])
+            if idut != -1:
+                hdx_finer_d.Fill(duthits.sC_local[idut]-r_dut[ic])
+            # -- Association 
             if not refhits.is_within_matching_distance(distance_ref):
                 iref = -1
             if not duthits.is_within_matching_distance(distance_dut):
@@ -2025,18 +2031,18 @@ class processor(object):
         self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; y_{DUT}-y_{trk}^{pred} [mm]; Entries",200,-sydut,sydut),
                 minst.ref_plane: ROOT.TH1F("dx_ref"," ; y_{REF}-y_{trk}^{pred} [mm]; Entries",200,-syref,syref) }
         # -- finer alignment
-        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5),
-                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.5,0.5) }
+        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3),
+                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3) }
         # -- the rot (around z-axis)
-        self.dx_y_h = { minst.dut_plane: ROOT.TProfile("dx_y_dut"," ;y_{trk}^{pred} [mm];#Deltax_{DUT} [mm]",\
-                        50,-6.0,6.0,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_y_ref"," ;y_{trk}^{pred} [mm];#Deltax_{REF} [mm]",\
-                        50,-6.0,6.0,-0.2,0.2) }
+        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
+                        45,-sxdut,sxdut,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ;x_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
+                        45,-sxref,sxref,-0.2,0.2) }
         # -- the tilt (around y-axis)
         self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ;y_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
-                        50,-6.0,6.0,-0.2,0.2),
+                        45,-sxdut,sxdut,-0.2,0.2),
                 minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
-                        50,-6.0,6.0,-0.2,0.2) }
+                        45,-sxref,sxref,-0.2,0.2) }
         # -- the turn (around y-axis)
         self.dx_xtx_h = { minst.dut_plane: ROOT.TProfile("dx_xtx_dut"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [mm]",\
                         50,-0.1,0.1,-1.2,1.2),
@@ -2052,7 +2058,7 @@ class processor(object):
                 minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
                     51,-1.0,1.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
 
-        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_y_h.values()+\
+        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dy_x_h.values()+\
                 self.dx_xtx_h.values()+self.dy_y_h.values()+self.dx_tx_h.values()+\
                 self.hplane.values()
 
@@ -2229,7 +2235,6 @@ class processor(object):
 
         # Just extract all the static info of the class,
         for pl_id in self.alignment.keys():
-
             # an alignment instance to be populated
             new_align = alignment_cts(self.alignment[pl_id].sensitive_direction)
 
@@ -2258,7 +2263,7 @@ class processor(object):
                 adding = True
                 # -- Others things here --> 
                 ## -- > rotation ()
-                rot = -get_linear_fit(self.dx_y_h[pl_id],-3,3)
+                rot = -get_linear_fit(self.dy_x_h[pl_id],-3,3)
                 # Asume resolution about 5 deg 
                 if abs(rot) > 0.087:
                     new_align.rot = rot
@@ -2321,6 +2326,48 @@ class processor(object):
         for h in self._alignment_histos:
             h.Write()
         f.Close()
+
+    def fill_alignment_histos(self,associated,trks,refs,duts):
+        """Fill all the alignment histograms for the associated
+        tracks and hits. 
+
+        Parameters
+        ----------
+        associated: dict((int,(int,int))
+            A track index associated with a reference and dut hit
+            { track index: (ref-hit index,dut-hit index) }
+        trks: tracks_accessor
+            The tracks accessor instance
+        refs: hits_plane_accessor
+            The REF hits accessor instance
+        duts: hits_plane_accessor
+            The DUT hits accessor instance
+        """
+        for (itrk,(iref,idut)) in associated.iteritems():
+            # Just do it for each sensor
+            for i,hits in [(iref,refs),(idut,duts)]:
+                # -- just matched 
+                if i == -1:
+                    continue
+                # The sensitive axis
+                if hits.sensitive_direction == "x":
+                    ic = 0
+                    iccom = 1
+                    trk_drdz = trks.dxdz
+                elif hits.sensitive_direction == "y":
+                    ic = 1
+                    iccom = 0
+                    trk_drdz = trks.dydz
+                (rpred,tel) = trks.get_point_in_sensor_frame(itrk,hits)
+                dc = hits.sC_local[i]-rpred[ic]
+                # -- rotation 
+                self.dy_x_h[hits.id].Fill(rpred[iccom],dc)
+                ## -- tilt
+                self.dy_y_h[hits.id].Fill(rpred[ic],dc)
+                # -- turn
+                self.dx_xtx_h[hits.id].Fill(rpred[ic]*trk_drdz[itrk]*UM,dc)
+                ## -- dz 
+                self.dx_tx_h[hits.id].Fill(trk_drdz[itrk]*UM,dc)
     
     def fractionary_position_plot(self):
         """Using the eta-distribution obtained 
@@ -2424,7 +2471,7 @@ class processor(object):
 
         # Fill histograms for the DUT/REF
         # -- Charge map: using a matched track to the sensor, in order to
-        # find the missing Y
+        # find the missing X
         # -- Efficiency map: matched track to the reference, and extrapolate to
         # the DUT plane (total histogram), match to the DUT  (pass histogram)
         
@@ -2437,15 +2484,15 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         #histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-        #        self.dx_y_h[duthits.id],self.dy_y_h[duthits.id],\
+        #        self.dy_x_h[duthits.id],self.dy_y_h[duthits.id],\
         #        self.dx_xtx_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
         #        self.hmatch_eff[duthits.id],self.hy_eff[duthits.id],self.hntrk_eff[duthits.id],self.hnisotrk_eff[duthits.id])
         #histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-        #        self.dx_y_h[refhits.id],self.dy_y_h[refhits.id],\
+        #        self.dy_x_h[refhits.id],self.dy_y_h[refhits.id],\
         #        self.dx_xtx_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
         #        self.hmatch_eff[refhits.id],self.hy_eff[refhits.id],self.hntrk_eff[refhits.id],self.hnisotrk_eff[refhits.id])
-        histos_ref = (self.hcorr_trkX[refhits.id],self.dx_h[refhits.id])
-        histos_dut = (self.hcorr_trkX[duthits.id],self.dx_h[duthits.id])
+        histos_ref = (self.hcorr_trkX[refhits.id],self.dx_h[refhits.id],self.dx_finer_h[refhits.id])
+        histos_dut = (self.hcorr_trkX[duthits.id],self.dx_h[duthits.id],self.dx_finer_h[duthits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
@@ -2456,15 +2503,29 @@ class processor(object):
         
         # -- The workhorse method: obtain one hit per track
         track_dict = trks.associate_hits(refhits,duthits,histos)
+    
+        # -- If alignment just perform the histo filling and finish
+        if is_alignment:
+            # -- fill the relevant histograms 
+            self.fill_alignment_histos(track_dict,trks,refhits,duthits)
+            # -- update the alignment constants
+            self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
+            #Get an estimation of the sensor efficiency ?
+            #self.fill_statistics_matched(matched_hits)
+            return
+        elif len(self._alignment_histos) > 0: 
+            # Remove the aligment histos (only do it the first time)
+            # (except some of them)
+            keepthem =[]
+            for hname in ["corr_trkX_{0}","dx_{0}","dx_finer_{0}"]:
+                for sname in i in [ "dut","ref" ]:
+                    keepthem.append(hname.format(sname)) 
+            dummy = map(lambda h: h.Delete(), filter(lambda _h: _h.GetName() not in keepthem, \
+                        self._alignment_histos))
+            # Empty the list to avoid enter again
+            self._alignment_histos = []
         
         for (itrk,(iref,idut)) in track_dict.iteritems():
-            # -- Some plots: smoother residual evaluation using closest 
-            #    hits to a track (event if the hit is re-used)
-            if iref != -1:
-                self.dx_finer_h[refhits.id].Fill(refhits.sC_local[iref]-trks.get_point_in_sensor_frame(itrk,refhits)[0][ic])
-            if idut != -1:
-                self.dx_finer_h[duthits.id].Fill(duthits.sC_local[idut]-trks.get_point_in_sensor_frame(itrk,duthits)[0][ic])
-
             # -- No tracks (i.e., REF-matched particle) presence 
             if iref == -1:
                 continue
@@ -2746,7 +2807,9 @@ def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
     # -- Sigma
     gbg.SetParameter(2,hsub.GetBinWidth(1))
     # -- Background: guess it from a region far away from the peak
-    gbg.SetParameter(3,hsub.GetBinContent(h.FindBin(peak-0.4)))
+    #    only when coarse
+    if coarse:
+        gbg.SetParameter(3,hsub.GetBinContent(h.FindBin(peak-0.4)))
     ## Do the fit
     status = h.Fit(gbg,"SQR","")
     try:
