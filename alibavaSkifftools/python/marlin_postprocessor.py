@@ -9,8 +9,6 @@ __version__ = "0.1"
 __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
-# 3. Get all the metadata from SPS2017TB class
-# 4. Be sure plots are in the LOCAL coordinates of the plane as well, i.e. channel (see the formula to convert in biblio)
 # 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so) ??
 
 DEBUG=False
@@ -21,9 +19,13 @@ ALIGN_FILE_FORMAT= "aligncts_plane_{0}_{1}.txt"
 # -- Take care of the activated branches when reading 
 #    the root file
 class branch_list(object):
-    """
+    """Helper class containing all the active 
+    branches list. To be used as a global and 
+    unique instance
     """
     def __init__(self):
+        """
+        """
         self._active_br = []
         pass
     def update(self,tree,brlist):
@@ -338,12 +340,35 @@ class hits_plane_accessor(object):
         The vector of x local position of the hits 
     y_local: ROOT.std.vector(float)()
         The vector of y local position of the hits
+    x_strip: ROOT.std.vector(float)()
+        The vector of x local position of the hits 
+        in channel number
+    y_strip: ROOT.std.vector(float)()
+        The vector of y local position of the hits
+        in channel number
+    sensitive_direction: str
+        The name of the sensitive direction,
+    sC: ROOT.std.vector(float)()
+        The position in the sensitive direction
+    sC_local: ROOT.std.vector(float)()
+        The local position in the sensitive direction
     charge: ROOT.std.vector(float)()
         The hit total charge in ADCs counts 
     n_cluster: ROOT.std.vector(int)()
         The total number of elements forming the cluster
     eta: ROOT.std.vector(float)()
         The eta value (charge distribution on the cluster)
+    sizeX: float
+        The sensor dimension in X
+    sizeY: float
+        The sensor dimension in Y
+    pitchX: float
+        The pitch in the x-direction
+    pitchY: float
+        The pitch in the y-direction
+    orientation: (float,float,float)
+        The orientation of the sensor plane w.r.t. to the
+        local coordinate system
     run_number: int
         The run number of the accessed data
     track_link: dict((int,int)
@@ -404,7 +429,6 @@ class hits_plane_accessor(object):
         tree.SetBranchAddress("hit_XLocal_{0}".format(self.id),self.x_local)
         self.y_local = ROOT.std.vector(float)()
         tree.SetBranchAddress("hit_YLocal_{0}".format(self.id),self.y_local)
-        #self.x_strips = lambda i: (self.x_local[i]+sensor_xsize/2.0)/pitch+0.5
         self.charge = ROOT.std.vector(float)()
         tree.SetBranchAddress("hit_total_charge_{0}".format(self.id),self.charge)
         self.n_cluster = ROOT.std.vector(int)()
@@ -491,9 +515,6 @@ class hits_plane_accessor(object):
                     hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]-self.x[0]
                 elif self._sensitive_direction == "y":
                     hits_plane_accessor.align_constants[self.id].y_offset = self.y_local[0]-self.y[0]
-                # And give an extra turn allowing to perform an initial 
-                # adjustment (1.15 degrees)
-                #hits_plane_accessor.align_constants[self.id].turn = 0.021
             # Not re-synchronized until new order
             print "Inferred sensitive direction: {0}".format(self.sensitive_direction.upper())
             print hits_plane_accessor.align_constants[self.id]
@@ -510,16 +531,22 @@ class hits_plane_accessor(object):
         elif self.sensor_name.lower().find("lgad") == 0:
             self.sizeY = 5.2*MM
             self.sizeX = 5.2*MM
+        
+        # --The position in channel number
+        self.x_strip = lambda i: (self.x_local[i]+0.5*self.sizeX)/self.pitchX+0.5
+        self.y_strip = lambda i: (self.y_local[i]+0.5*self.sizeY)/self.pitchY+0.5
 
         # Defining some useful accessors which depends on the sensitive direction
         if self.sensitive_direction == "x":         
             self.sC = self.x
             self.sC_local = self.x_local
             self.resolution = self.pitchX
+            self.strip_position = self.x_strip
         elif self.sensitive_direction == "y":
             self.sC = self.y
             self.sC_local = self.y_local
             self.resolution = self.pitchY
+            self.strip_position = self.y_strip
 
         # The maximum distance to consider a hit matched a track
         self.matching_distance = 2.0*self.resolution
@@ -983,8 +1010,33 @@ class hits_plane_accessor(object):
         ------
         bool
         """
-        return abs(dist_check) < self.matching_distance       
+        return abs(dist_check) < self.matching_distance
 
+    def fill_distance_histo(self,rtele,h):
+        """Fill the histogram of the distance of the hit to the 
+        rtele position (assumed to be given in the sensor plane 
+        coordinate) for all hits in the event
+
+        Parameter
+        ---------
+        rtele: float
+            The (sensitiv direction) position in the sensor plane
+        h: ROOT.TH1F
+        """
+        dummy = map(lambda r: h.Fill(r-rtele),self.sC_local)
+    
+    def fill_correlation_histo(self,rtele,h):
+        """Fill the histogram of position of the hit versus the
+        rtele position (assumed to be given in the sensor plane 
+        coordinate) for all hits in the event
+
+        Parameter
+        ---------
+        rtele: float
+            The (sensitiv direction) position in the sensor plane
+        h: ROOT.TH"F
+        """
+        dummy = map(lambda r: h.Fill(r,rtele),self.sC_local)
 
     def match_isolated(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
@@ -1621,9 +1673,9 @@ class tracks_accessor(object):
             The accessor to the REF hits of the event
         duthits: hits_plane_accessor
             The accessor to the DUT hits of the event
-        histos: list(TObject)
-            A list of histograms, profiles and maps to
-            fill during the matching and
+        histos: dict(list(TObject))
+            A list of histograms, profiles and maps per
+            sensor, to fill during the association
 
 
         Return
@@ -1637,10 +1689,8 @@ class tracks_accessor(object):
         from math import sqrt
 
         # Get the histograms
-        hcorr,hres,hdx,hrot,htilt,hturn,hdz,hplane,\
-                hmatch_eff,hy_eff,hntracks_eff,hnisotracks_eff = histos[refhits.id]
-        hcorr_d,hres_d,hdx_d,hrot_d,htilt_d,hturn_d,hdz_d,hplane_d,\
-                hmatch_eff_d,hy_eff_d,hntracks_eff_d,hnisotracks_eff_d = histos[duthits.id]
+        hcorr,hdx= histos[refhits.id]
+        hcorr_d,hdx_d= histos[duthits.id]
         
         if refhits.sensitive_direction == "x":
             # -- the sensitive
@@ -1671,8 +1721,10 @@ class tracks_accessor(object):
             # First check isolation (XXX SUBSTITUTE by is_isolated)
             # --- Fill the displacement offset histogram, in order to
             #     to align. First a coarse, raw 
-            dummy = map(lambda r: hdx.Fill(r-(r_ref[ic]-r_offset_r)),refhits.sC_local)
-            dumm2 = map(lambda r1: hdx_d.Fill(r1-(r_dut[ic]-r_offset_d)),duthits.sC_local)
+            refhits.fill_distance_histo((r_ref[ic]-r_offset_r),hdx)
+            refhits.fill_correlation_histo(r_ref[ic],hcorr)
+            duthits.fill_distance_histo((r_dut[ic]-r_offset_d),hdx_d)
+            duthits.fill_correlation_histo(r_dut[ic],hcorr_d)
             # --- SLOW ALGORITHM -- TRY TO IMPROVE IT
             is_isolated = True
             for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
@@ -2341,7 +2393,10 @@ class processor(object):
                 self.events_with_matched_hits[plid] += int(len(thelist)>0)
 
     def process(self,t,trks,refhits,duthits,is_alignment=False):
-        """Fill the relevant counters and the histograms
+        """Process an event. Per each track in the event which is 
+        isolated, and tries to associate a hit in the REF sensor 
+        (in that case defines a particle) and in the DUT sensor.
+        Fill the relevant counters and histograms.
 
         Parameters
         ----------
@@ -2376,25 +2431,23 @@ class processor(object):
         # - a dict to get the sensors by its plane ID
         sensor_hits = { refhits.id: refhits, duthits.id: duthits }
 
-        # --- XX
+        # --- Obtain the number of hits and tracks in the event
         self.nhits_ntrks_all[refhits.id].Fill(refhits.n,trks.n)
         self.nhits_ntrks_all[duthits.id].Fill(duthits.n,trks.n)
         
         # Prepare the ntuple of histograms for DUT and REF
-        histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_y_h[duthits.id],self.dy_y_h[duthits.id],\
-                self.dx_xtx_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
-                self.hmatch_eff[duthits.id],self.hy_eff[duthits.id],self.hntrk_eff[duthits.id],self.hnisotrk_eff[duthits.id])
-        histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_y_h[refhits.id],self.dy_y_h[refhits.id],\
-                self.dx_xtx_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
-                self.hmatch_eff[refhits.id],self.hy_eff[refhits.id],self.hntrk_eff[refhits.id],self.hnisotrk_eff[refhits.id])
+        #histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
+        #        self.dx_y_h[duthits.id],self.dy_y_h[duthits.id],\
+        #        self.dx_xtx_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
+        #        self.hmatch_eff[duthits.id],self.hy_eff[duthits.id],self.hntrk_eff[duthits.id],self.hnisotrk_eff[duthits.id])
+        #histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
+        #        self.dx_y_h[refhits.id],self.dy_y_h[refhits.id],\
+        #        self.dx_xtx_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
+        #        self.hmatch_eff[refhits.id],self.hy_eff[refhits.id],self.hntrk_eff[refhits.id],self.hnisotrk_eff[refhits.id])
+        histos_ref = (self.hcorr_trkX[refhits.id],self.dx_h[refhits.id])
+        histos_dut = (self.hcorr_trkX[duthits.id],self.dx_h[duthits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
-        # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
-        #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
-        #matched_hits = { duthits.id: duthits.match_isolated(trks,histos_dut),
-        #        refhits.id: refhits.match_isolated(trks,histos_ref,True) }
-        # -- Get the sensitive axis
+        # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
         if duthits.sensitive_direction == "x":
             ic = 0
@@ -2614,13 +2667,28 @@ class processor(object):
 
         return m
 
-def fill_distance_histogram():
-    """
-    """
-    pass
-
 def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
-    """XXX 
+    """Fit the histogram to a gaussian plus a linear background
+    using a Chebyshev polynomial of 2nd order.
+
+    Parameters
+    ----------
+    h: ROOT.TH1F
+        The histogram to fit
+    xmin: float, optional
+        The fit range minimum
+    xmax: float, optional
+        The fit range maximum
+    coarse: bool    
+        Whether or not perform a previous subtraction of a 2nd
+        order polynomial background. This assumes a huge background
+        contribution which could give higher frequencies away from 
+        the offset
+
+    Return
+    ------
+    new_align_x: flot
+        The peak of the histogram where the offset is
     """
     import ROOT
     ROOT.gROOT.SetBatch()
@@ -2714,24 +2782,6 @@ def get_linear_fit(h,xmin=-2.0,xmax=2.0,robval=0.75):
     
     if h.GetEntries() == 0:
         raise RuntimeError("Empty histogram '{0}'".format(h.GetName()))
-
-    ##gbg = ROOT.TF1("linear_fit_{0}".format(h.GetName()),"pol1",xmin,xmax)
-    ### Convert to a TGraphErrors to perform the robust fit
-    ##x    = array.array('f',map(lambda i: h.GetBinCenter(i),xrange(1,h.GetNbinsX()+1)))
-    ##xerr = array.array('f',map(lambda i: 0.0,xrange(1,h.GetNbinsX()+1)))
-    ##y    = array.array('f',map(lambda i: h.GetBinContent(i),xrange(1,h.GetNbinsX()+1)))
-    ##yerr = array.array('f',map(lambda i: h.GetBinError(i),xrange(1,h.GetNbinsX()+1)))
-
-    ##gr = ROOT.TGraphErrors(len(x),x,y,xerr,yerr)
-    ###  Do the fit: Note that is using a robust fit (assuming 
-    ###  the 75% of the points at least are not outliers -- I need a TGraph to do that
-    ##status = gr.Fit(gbg,"QS+ROB={0}".format(robval))
-    ##if status.Status() != 0:
-    ##    print "\033[1;33mWARNING\033[1;m FAILED THE LINEAR FIT for '{0}': "\
-    ##            "Status {1}".format(h.GetName(),status.Status())
-    ### Add the function to the histogram  XXX NOT WORKING -- at some point 
-    ### the functions are deleted
-    ###h.GetListOfFunctions().Add(gbg)
     gbg = ROOT.TF1("kkita","pol1")
     status = h.Fit(gbg,"RQS","",xmax,xmin)
     if status.Status() != 0:
@@ -2817,6 +2867,8 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     alignment: bool, optional
         Whether this run is used to align or not. Effectively means
         that less histograms are going to be fill and less entries processed
+    verbose: bool
+        Whether to activate the debug mode, with more print-outs
 
     Return
     ------
@@ -2828,18 +2880,17 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
         Whenever the ROOT file is not present
     """
     import ROOT
-    import timeit
     import sys
     import os
     from .SPS2017TB_metadata import filename_parser 
     from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
     from .SPS2017TB_metadata import sensor_name_spec_map as specs
     # probably provisional XXX
-    global RESOLUTION
 
     global DEBUG
     DEBUG=verbose
-
+    if DEBUG:
+        import timeit
 
     # Get the name of the sensor and some other useful info
     fp = filename_parser(fname)
@@ -2855,12 +2906,6 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     # resolutions)
     metadata = metadata_container(t,name_converter[fp.sensor_name])
 
-    # FIXME provisional XXX : 2 x pitch for dut, same for ref?. Check the efficiency
-    # Note, loose cut for the dut, while tight cut for the ref link
-    RESOLUTION= { metadata.dut_plane: 6.0*specs[name_converter[fp.sensor_name]].pitchX,\
-            metadata.ref_plane : 2.0*specs["REF_0_b1"].pitchX } # in mm
-    # 
-
     # Set some globals
     #tree_inspector(t)
 
@@ -2870,7 +2915,8 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     tracks = tracks_accessor(t,[0,1,2,3,4],metadata.ref_plane,metadata.dut_plane)
     
     # Process the data
-    #start_time = timeit.default_timer()
+    if DEBUG:
+        start_time = timeit.default_timer()
     wtch = processor(metadata,dut.run_number)
     
     if entries_proc == -1:
@@ -2885,7 +2931,8 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
                 os.path.basename(fname)+" [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
         sys.stdout.flush()
         wtch.process(_t,tracks,ref,dut,alignment)
-    #print timeit.default_timer()-start_time
+    if DEBUG:
+        print timeit.default_timer()-start_time
     if alignment:
         if DEBUG:
             foutput = "alignment_plots_{0}_run000{1}_{2}.root".format(fp.sensor_name,fp.run_number,int(wtch.alignment.values()[0].iteration))
