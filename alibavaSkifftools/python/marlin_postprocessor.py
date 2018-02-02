@@ -377,6 +377,7 @@ class hits_plane_accessor(object):
         import ROOT
         import array
         from .SPS2017TB_metadata import get_orientation
+        from .SPS2017TB_metadata import sensor_name_spec_map as specs
 
         self.id = planeid
         self.sensor_name = sensor_name
@@ -498,13 +499,36 @@ class hits_plane_accessor(object):
             print hits_plane_accessor.align_constants[self.id]
             hits_plane_accessor.resync[self.id] = False
         
+        # Dimensions of the sensor (note some issues with LGADS and iLGADs)
+        self.sizeX = specs[self.sensor_name].sizeX 
+        self.sizeY = specs[self.sensor_name].sizeY 
+        self.pitchX = specs[self.sensor_name].pitchX 
+        self.pitchY = specs[self.sensor_name].pitchY 
+        if self.sensor_name.lower().find("ilgad") == 0:
+            self.sizeY = 7.2*MM
+            self.sizeX = 7.2*MM
+        elif self.sensor_name.lower().find("lgad") == 0:
+            self.sizeY = 5.2*MM
+            self.sizeX = 5.2*MM
+
         # Defining some useful accessors which depends on the sensitive direction
         if self.sensitive_direction == "x":         
             self.sC = self.x
             self.sC_local = self.x_local
+            self.resolution = self.pitchX
         elif self.sensitive_direction == "y":
             self.sC = self.y
             self.sC_local = self.y_local
+            self.resolution = self.pitchY
+
+        # The maximum distance to consider a hit matched a track
+        self.matching_distance = 2.0*self.resolution
+        if self.sensor_name.find("REF") == -1:
+            # Loosing the cut
+            self.matching_distance = 6.0*self.resolution
+        
+        # ----------------------------------
+        #  Resolution
 
         # Last, define the orientation of this sensor, 
         # i.e. the factors to multiply each component when
@@ -571,43 +595,35 @@ class hits_plane_accessor(object):
         import array
         self._run_number = array.array('i',[int(value)])
 
-    def x_channel(self,i,sizeX,pitch):
+    def x_channel(self,x):
         """The equivalent channel number for the
-        i-hit
+        x-position
 
         Parameters
         ----------
-        i: int
-            The index of the hit
-        sizeX: float
-            The size of the sensor in mm
-        pitch: float
-            The pitch of the segmented channels in mm
+        x: float
+            The position in the local sensor frame
 
         Return
         ------
         The x position in channel number
         """
-        return (self.x_local[i]+0.5*sizeX)/pitch-0.5
+        return (x+0.5*self.sizeX)/self.pitchX-0.5
     
-    def y_channel(self,i,sizeY,pitch):
+    def y_channel(self,y):
         """The equivalent channel number for the
-        i-hit
+        y-position 
 
         Parameters
         ----------
-        i: int
-            The index of the hit
-        sizeX: float
-            The size of the sensor in mm
-        pitch: float
-            The pitch of the segmented channels in mm
+        y: float
+            The position in the local sensor frame
 
         Return
         ------
         The y position in channel number
         """
-        return (self.y_local[i]+0.5*sizeY)/pitch-0.5
+        return (y+0.5*self.sizeY)/self.pitchY-0.5
     
     def new_event(self):
         """Call it every time a new event is going to
@@ -938,6 +954,37 @@ class hits_plane_accessor(object):
         """
         return abs(self.sC[i]-other.sC[j]) < 1e-9 \
                 and abs(self.z[i]-other.z[j]) < 1e-9
+
+    def close_hit(self,point):
+        """Find the closest hit to the given point. 
+        If there is no hits in the event, it returns -1.
+        
+        Parameters
+        ----------
+        point: (float,float,float)
+            The point position where to search the closest hit 
+        """
+        # Loop over all available hits and found the closest
+        ind_distance_list = map(lambda (i,r): (i,r-point[1]),enumerate(self.sC_local))
+        if len(ind_distance_list) == 0 :
+            return (-1,-9999)
+        return min(ind_distance_list,key=lambda (i,d): abs(d))
+
+    def is_within_matching_distance(self,dist_check):
+        """Whether or not the distance introduced is within
+        the considered matching distance for that sensor
+
+        Parameters
+        ----------
+        dist_check: float
+            The distance to check
+
+        Return
+        ------
+        bool
+        """
+        return abs(dist_check) < self.matching_distance       
+
 
     def match_isolated(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
@@ -1488,6 +1535,9 @@ class tracks_accessor(object):
         self.ref_measured_hits = track_hits_plane_accessor(tree,self.refid,True,self.refid,self.dutid)
         self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False,self.refid,self.dutid)
 
+        # -- The isolation condition
+        self.isolation_condition = 0.6*MM
+
     @property
     def n(self):
         """The number of tracks
@@ -1508,7 +1558,7 @@ class tracks_accessor(object):
         # -- dict to be used to list of the non-isolated tracks
         self._cache_nonisolated = {}
     
-    def is_isolated(self,i,hit_z_position,isolation_cone=0.6*MM):
+    def is_isolated(self,i,hit_z_position):
         """Whether or not the track is isolated, i.e.
         if there is no other track in the plane defined by the 
         z position inside the isolation cone
@@ -1519,8 +1569,6 @@ class tracks_accessor(object):
             The index of the track
         hit_z_position: hit_accessor
             The hit accessor which defines the plane
-        isolation_code: float, optional
-            The size of the isolation cone
 
         Return
         ------
@@ -1528,17 +1576,15 @@ class tracks_accessor(object):
               cone
         """
         from math import sqrt
-
+        
+        # -- It was found previously..
         if self._cache_nonisolated.has_key(i):
             return False
-        # -- Extract all the indices of isolated tracks (so far)
-        not_used_track_indices = filter(lambda _itr: i != _itr and _itr not in self._cache_nonisolated.keys(), xrange(self.n))
         # -- Get the track at the plane
         ((xpred,ypred,zpred),rtel0) = self.get_point_in_sensor_frame(i,hit_z_position)
-        # -- Get the list of non isolated
-        non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < isolation_cone,\
-                map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hit_z_position)),\
-                not_used_track_indices))
+        # -- Get the list of non isolated (CONE OR SQUARES@??) XXX
+        non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < self.isolation_condition,\
+                map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hit_z_position)),xrange(self.n)))
         if len(non_isolated) == 0:
             return True
         # -- if not isolated, update some stuff
@@ -1561,6 +1607,98 @@ class tracks_accessor(object):
         ((xpred,ypred,zpred),rtel0) = self.get_point_in_sensor_frame(itrk,hitobj)
         dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
+
+    def associate_hits(self,refhits,duthits,histos):
+        """Perform the hits association to each track found,
+        given that the tracks can only be associated if they
+        are isolated (see isolation_condition datamember).
+        The associating criteria is defined through the 
+        hits accessors themselves.
+
+        Parameters
+        ----------
+        refhits: hits_plane_accessor
+            The accessor to the REF hits of the event
+        duthits: hits_plane_accessor
+            The accessor to the DUT hits of the event
+        histos: list(TObject)
+            A list of histograms, profiles and maps to
+            fill during the matching and
+
+
+        Return
+        ------
+        tracks_d: dict( (int,(int,int) )
+            A dict with the indices of the tracks associated
+            to the indices of the matched hits. If there is 
+            not, a -1 is placed instead of the index.
+            { track_index: (REF-hit-index,DUT-hit-index) ,... }
+        """
+        from math import sqrt
+
+        # Get the histograms
+        hcorr,hres,hdx,hrot,htilt,hturn,hdz,hplane,\
+                hmatch_eff,hy_eff,hntracks_eff,hnisotracks_eff = histos[refhits.id]
+        hcorr_d,hres_d,hdx_d,hrot_d,htilt_d,hturn_d,hdz_d,hplane_d,\
+                hmatch_eff_d,hy_eff_d,hntracks_eff_d,hnisotracks_eff_d = histos[duthits.id]
+        
+        if refhits.sensitive_direction == "x":
+            # -- the sensitive
+            ic = 0
+            # -- the complementary
+            iccom = 1
+            # -- the offset
+            r_offset_r = refhits.align_constants[refhits.id].x_offset
+            r_offset_d = refhits.align_constants[duthits.id].x_offset
+            # -- the proper track slope
+            #track_slope = self.dxdz
+        elif refhits.sensitive_direction == "y":
+            # -- the sensitive
+            ic = 1
+            # -- the complementary
+            iccom = 0
+            # -- the offset
+            r_offset_r = refhits.align_constants[refhits.id].y_offset
+            r_offset_d = refhits.align_constants[duthits.id].y_offset
+            # -- the proper track slope
+            #track_slope = self.dydz
+
+        # Start track loop
+        tracks_d = {}
+        for itrk in xrange(self.n):
+            (r_ref,t_ref) = self.get_point_in_sensor_frame(itrk,refhits)
+            (r_dut,t_dut) = self.get_point_in_sensor_frame(itrk,duthits)
+            # First check isolation (XXX SUBSTITUTE by is_isolated)
+            # --- Fill the displacement offset histogram, in order to
+            #     to align. First a coarse, raw 
+            dummy = map(lambda r: hdx.Fill(r-(r_ref[ic]-r_offset_r)),refhits.sC_local)
+            dumm2 = map(lambda r1: hdx_d.Fill(r1-(r_dut[ic]-r_offset_d)),duthits.sC_local)
+            # --- SLOW ALGORITHM -- TRY TO IMPROVE IT
+            is_isolated = True
+            for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
+                (o_ref,o_ref) = self.get_point_in_sensor_frame(otrk,refhits)
+                #(o_dut,o_dut) = self.get_point_in_sensor_frame(otrk,duthits)
+                if sqrt( (r_ref[0]-o_ref[0])**2.0 + (r_ref[1]-o_ref[1])**2.0 ) < self.isolation_condition:
+                    is_isolated = False
+                    break
+            # -- Only require isolation at REF?
+            #if not self.is_isolated(itrk,refhits) \
+            #        or not self.is_isolated(itrk,duthits):
+            #    continue
+            if not is_isolated:
+                continue
+            # -- Now find the closest hit to that track (-1 is returned if any)
+            iref,distance_ref = refhits.close_hit(r_ref)
+            idut,distance_dut = duthits.close_hit(r_dut)
+            # -- Association
+            if not refhits.is_within_matching_distance(distance_ref):
+                iref = -1
+            if not duthits.is_within_matching_distance(distance_dut):
+                idut = -1
+            # Fill the track dictionary with matching information
+            tracks_d[itrk] = (iref,idut)
+        return tracks_d
+
     
     def _matched_hits(self,duthits,refhits,h):
         """Function only usable if the tracks were fitted including
@@ -1719,6 +1857,7 @@ class tracks_accessor(object):
                 hit.align_constants[hit.id].y_offset, 0.0)) )
 
         return a,rpred 
+
 
 class processor(object):
     """Results extractor. Main class where statistics and histograms 
@@ -1963,11 +2102,14 @@ class processor(object):
         self.hcluster_size_mod_m = ROOT.TProfile2D("cluster_size_mod_dut_m" ,";mod(x_{trk})_{2xpitch} [mm];mod(y_{trk})_{2xpitch} [#mum];"\
                         "<cluster charge> [ADC]", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM)
         # efficiency
+        nch = self.sizeY[self.dut_plane]/minst.dut_pitchY
         self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
+        self.heff_ch = ROOT.TProfile2D("eff_map_ch",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [channel];#varepsilon",\
+                50,-1.1*sxdut,1.1*sxdut,int(2*nch+1),-0.5,(nch-0.5))
         self.heff_entries = ROOT.TH2F("eff_entries",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
         self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
                         "efficiency", 40,0,2.0*self.pitchX[minst.dut_plane]*UM,40,0.0,2.0*self.pitchY[minst.dut_plane]*UM,-1,2)
-        dut_eff = [self.heff,self.heff_mod,self.heff_entries]
+        dut_eff = [self.heff,self.heff_ch,self.heff_mod,self.heff_entries]
 
         # -- Eta distribution for matched, isolated
         self.heta = ROOT.TH1F("eta_2","#eta for isolated,matched cluster size 2;#eta;#frac{dN}{d#eta}",100,-0.1,1.1)
@@ -2240,174 +2382,200 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_dut = (self.hcorr_trkX[duthits.id],self.residual_projection[duthits.id],self.dx_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_y_h[duthits.id],self.dy_y_h[duthits.id],\
+                self.dx_y_h[duthits.id],self.dy_y_h[duthits.id],\
                 self.dx_xtx_h[duthits.id],self.dx_tx_h[duthits.id],self.hplane[duthits.id],\
                 self.hmatch_eff[duthits.id],self.hy_eff[duthits.id],self.hntrk_eff[duthits.id],self.hnisotrk_eff[duthits.id])
         histos_ref = (self.hcorr_trkX[refhits.id],self.residual_projection[refhits.id],self.dx_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_y_h[refhits.id],self.dy_y_h[refhits.id],\
+                self.dx_y_h[refhits.id],self.dy_y_h[refhits.id],\
                 self.dx_xtx_h[refhits.id],self.dx_tx_h[refhits.id],self.hplane[refhits.id],\
                 self.hmatch_eff[refhits.id],self.hy_eff[refhits.id],self.hntrk_eff[refhits.id],self.hnisotrk_eff[refhits.id])
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # Get the matched hits { sensorID: [ (hit_index,track_index),. ..] , }
         #matched_hits = trks.matched_hits(duthits,refhits,self.hcorr_trkX)
-        matched_hits = { duthits.id: duthits.match_isolated(trks,histos_dut),
-                refhits.id: refhits.match_isolated(trks,histos_ref,True) }
-
-        # Fill some track histograms
-        for itr in xrange(trks.n):
-            for ho in sensor_hits.values():
-                trks.fill_isolation_histograms(itr,ho,self.trk_iso[ho.id])
-                ((xpred,ypred,zpred),tel) = trks.get_point_in_sensor_frame(itr,ho)
-                self.htrks_at_planes[ho.id].Fill(xpred,ypred)
-        # Some diagnostic for sensor hits
-        for plane,oh in sensor_hits.iteritems():
-            for ih in xrange(oh.n):
-                self.hhit_raw[plane].Fill(oh.sC_local[ih])
-        # --
-        # [H]--for pl,plist in matched_hits.iteritems():
-        # [H]--    print "PLANE",pl,"CHANNEL"
-        # [H]--    for hj,ht in plist:
-        # [H]--        print self.sizeX[pl],self.pitchX[pl]
-        # [H]--        print sensor_hits[pl].x_local[hj],sensor_hits[pl].x_channel(hj,self.sizeX[pl],self.pitchX[pl])
-
-        
-        # Some diagnostic plots
-        # -- number of tracks in the event
-        self.ntracks.Fill(trks.n)
-        # -- number of matched,isolated hits in the event
-        self.nmatched.Fill(len(matched_hits[duthits.id]),len(matched_hits[refhits.id]))
-        
-        # If alignment, just return here, trying to avoid extra processing time
-        if is_alignment:
-            # Update the alignment constants 
-            self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
-            # Get an estimation of the sensor efficiency ?
-            self.fill_statistics_matched(matched_hits)
-            return
+        #matched_hits = { duthits.id: duthits.match_isolated(trks,histos_dut),
+        #        refhits.id: refhits.match_isolated(trks,histos_ref,True) }
         # -- Get the sensitive axis
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
         if duthits.sensitive_direction == "x":
             ic = 0
         elif duthits.sensitive_direction == "y":
             ic = 1
+        
+        # -- The workhorse method: obtain one hit per track
+        track_dict = trks.associate_hits(refhits,duthits,histos)
+        
+        for (itrk,(iref,idut)) in track_dict.iteritems():
+            # -- Some plots: smoother residual evaluation using closest 
+            #    hits to a track (event if the hit is re-used)
+            if iref != -1:
+                self.dx_finer_h[refhits.id].Fill(refhits.sC_local[iref]-trks.get_point_in_sensor_frame(itrk,refhits)[0][ic])
+            if idut != -1:
+                self.dx_finer_h[duthits.id].Fill(duthits.sC_local[idut]-trks.get_point_in_sensor_frame(itrk,duthits)[0][ic])
 
-        # Filling histograms
-        for sensorID,pointlist in matched_hits.iteritems():
-            hits = sensor_hits[sensorID]
-            for hit_el,trk_index in pointlist:
-                # Remember: it_el=index of the measured hit at the corrent sensor (sensorID)
-                #           trk_index= index of the track
-                (rpred,rtel) = trks.get_point_in_sensor_frame(trk_index,hits)
-                # XXX TO CODE: Fiducial cut: some percentange from the edges
-                # -- track-hits correlation
-                self.evt_corr[sensorID].Fill(self.total_events,hits.sC_local[hit_el]-rpred[ic])
-                # Event and charge maps (using track predictions)
-                # --- Some histograms should use the measured values (at least when possible)
-                self.hcharge[sensorID].Fill(rpred[0],rpred[1],hits.charge[hit_el])
-                self.hhitmap[sensorID].Fill(rpred[0],rpred[1])
-                # Modulo (Assuming the center of the sensor: -0.5*pitch 
-                # XXX provisional
-                xmod = (rpred[0])%(2.0*self.pitchX[sensorID])
-                ymod = (rpred[1])%(2.0*self.pitchY[sensorID])
-                if abs(xmod) > 2.0*self.pitchX[sensorID] \
-                        or abs(ymod) > 2.0*self.pitchY[sensorID]:
-                    raise RuntimeError("SOMETHING VERY STRANGE: ERROR-WTF24!??!?")
-                self.hcluster_size_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.n_cluster[hit_el])
-                self.hcharge_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
-                self.hhitmap_mod[sensorID].Fill(xmod*UM,ymod*UM)
-                self.nhits_ntrks[sensorID].Fill(hits.n,trks.n)
-                ## INCLUDE IT IN HERE
-        # Matching beetwen DUT and REF: hits with the same track ID
-        # Loop over all the measured hits in the REF, matching to a
-        # track, using the track as common element in the DUT-REF match
-        # XXX Just using those within the fiducial cut of the DUT XXX
-        # First check the ref matching efficiency
-        for ihit_dut,itrk_d in matched_hits[duthits.id]:
-            ref_match = filter(lambda (ir,itrk_r): itrk_d == itrk_r,matched_hits[refhits.id])
-            self.dutref_match_eff.Fill(duthits.sC_local[ihit_dut],(len(ref_match) > 0))
-            # Track efficiencies incorporated
-            if len(matched_hits[refhits.id]) > 0:
-                self.dutref_pure_match_eff.Fill(duthits.sC_local[ihit_dut],(len(ref_match) > 0))
-            # Whats the position the track matched with the REF gives in the DUT?
-            #for ihit_ref,itrk_r in matched_hits[refhits.id]:
-            #    self.dutref_distance.Fill(trks.get_point_in_sensor_frame(itrk_d,duthits)[0][ic]-\
-            #            trks.get_point_in_sensor_frame(itrk_r,refhits)[0][ic])
-        for ihit_ref,itrk in matched_hits[refhits.id]:
-            # Cluster size for track matched ref hits
-            self.hcl_size[refhits.id].Fill(refhits.n_cluster[ihit_ref])
-            # Get the track predicted points at the DUT plane
-            ((xpred_dut,ypred_dut,zpred_dut),rtel) = trks.get_point_in_sensor_frame(itrk,duthits)
-            if refhits.sensitive_direction == "x":
-                rpred_dut = xpred_dut
-            elif refhits.sensitive_direction == "y":
-                rpred_dut = ypred_dut
-            # --- add all the matched-tracks to DUT in here to see correlations
-            ismatched=0
-            for ihit_dut,itrk_dut in matched_hits[duthits.id]:
-                self.hcorr_ref_dut.Fill(trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic],rpred_dut)
-                if abs(trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic]-rpred_dut) < 0.6:
-                    #print 
-                    #print "At DUT the track", itrk_dut,trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic],rpred_dut
-                    #print "At REF the track", itrk_dut,trks.get_point_in_sensor_frame(itrk_dut,refhits)[0][ic],"the track",itrk,\
-                    #    trks.get_point_in_sensor_frame(itrk,refhits)[0][ic]
-                    ismatched += 1
-            # Only within fiducial  
-            ###
-            ### if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin: XXX USE proper coordinate with rmin rmax
-            ###    continue
-            # Modulo pitch
-            xmod = (xpred_dut)%(2.0*self.pitchX[duthits.id])
-            ymod = (ypred_dut)%(2.0*self.pitchY[duthits.id])
-            # For the given track (matched with the ref), see if the track
-            # matched as well with the DUT
-            dut_match = filter(lambda (ihit_dut,itrk_dut): itrk_dut == itrk,matched_hits[duthits.id])
-            any_match = int(len(dut_match)>0)
-            if any_match != ismatched:
-                #print dut_match,ismatched
-                raise RuntimeError("INCONSISTENCY")
-            # Efficiency
-            self.heff_mod.Fill(xmod*UM,ymod*UM,any_match)
-            self.heff.Fill(xpred_dut,ypred_dut,any_match)
-            self.heff_entries.Fill(xpred_dut,ypred_dut)
-            if len(dut_match) > 0:
-                # Get the track predicted points at the REF plane
-                ((xpred_at_ref,ypred_at_ref,zpred_at_ref),rptel) = trks.get_point_in_sensor_frame(itrk,refhits)
-                if refhits.sensitive_direction == "x":
-                    rpred_ref= xpred_at_ref
-                elif refhits.sensitive_direction == "y":
-                    rpred_ref = ypred_at_ref
-                # And some correlation plots of the predicted values between
-                # the DUT and REF sensors
-                # Note that the expected gaussian could be not centered at zero,
-                # in that case the difference will be related with the misaligned 
-                # between them
-                self.hcorrX.Fill(xpred_dut,xpred_at_ref)
-                # Not measured elements at Y, so using the predictions
-                self.hcorrY.Fill(ypred_dut,ypred_at_ref)
-                ## Residuals only for the DUT-REF matched tracks
-                self.residual_matched[duthits.id].Fill(duthits.sC_local[dut_match[0][0]]-rpred_dut)
-                self.residual_matched[refhits.id].Fill(refhits.sC_local[ihit_ref]-rpred_ref)
-                ## -- >TO BE REMOVE?? XXX <----
-                self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
-                # Cluster size 
-                self.hcl_size[duthits.id].Fill(duthits.n_cluster[duthits.track_link[itrk]])
-                self.hcluster_size_mod_m.Fill(xmod*UM,ymod*UM,duthits.n_cluster[duthits.track_link[itrk]])
-                # -- charge
-                self.hcharge_mod_m.Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
-                self.hhitmap_mod_m.Fill(xmod*UM,ymod*UM)
-                # -- Eta distribution for the matched cluster size=2
-                clustersize = duthits.n_cluster[duthits.track_link[itrk]]
-                if clustersize >= 2:
-                    dhit = duthits.track_link[itrk]
-                    self.heta_g.Fill(duthits.eta[dhit])
-                    self.heta_csize.Fill(duthits.eta[dhit],clustersize)
-                    self.duthits_matched_eta_h.append((duthits.eta[dhit],duthits.charge[dhit]))
-                    if clustersize == 2:
-                        self.heta.Fill(duthits.eta[dhit])
-                        self.duthits_matched_eta.append(self.duthits_matched_eta_h[-1])
-            elif len(dut_match) > 1:
-                raise RuntimeError("This must never happens!! Contact developer, error 3E43")
-        self.fill_statistics_matched(matched_hits)
+            # -- No tracks (i.e., REF-matched particle) presence 
+            if iref == -1:
+                continue
+            # -- Efficiency
+            r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
+            self.heff.Fill(r_at_dut[0],r_at_dut[1],(idut != -1))
+            self.heff_ch.Fill(r_at_dut[0],duthits.y_channel(r_at_dut[1]),(idut != -1))
+
+        # Fill some track histograms
+        #for itr in xrange(trks.n):
+        #    for ho in sensor_hits.values():
+        #        trks.fill_isolation_histograms(itr,ho,self.trk_iso[ho.id])
+        #        ((xpred,ypred,zpred),tel) = trks.get_point_in_sensor_frame(itr,ho)
+        #        self.htrks_at_planes[ho.id].Fill(xpred,ypred)
+        ## Some diagnostic for sensor hits
+        #for plane,oh in sensor_hits.iteritems():
+        #    for ih in xrange(oh.n):
+        #        self.hhit_raw[plane].Fill(oh.sC_local[ih])
+        ## --
+        ## [H]--for pl,plist in matched_hits.iteritems():
+        ## [H]--    print "PLANE",pl,"CHANNEL"
+        ## [H]--    for hj,ht in plist:
+        ## [H]--        print self.sizeX[pl],self.pitchX[pl]
+        ## [H]--        print sensor_hits[pl].x_local[hj],sensor_hits[pl].x_channel(hj,self.sizeX[pl],self.pitchX[pl])
+
+        #
+        ## Some diagnostic plots
+        ## -- number of tracks in the event
+        #self.ntracks.Fill(trks.n)
+        ## -- number of matched,isolated hits in the event
+        #self.nmatched.Fill(len(matched_hits[duthits.id]),len(matched_hits[refhits.id]))
+        #
+        ## If alignment, just return here, trying to avoid extra processing time
+        #if is_alignment:
+        #    # Update the alignment constants 
+        #    self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
+        #    # Get an estimation of the sensor efficiency ?
+        #    self.fill_statistics_matched(matched_hits)
+        #    return
+        ## -- Get the sensitive axis
+        #assert(duthits.sensitive_direction == refhits.sensitive_direction)
+        #if duthits.sensitive_direction == "x":
+        #    ic = 0
+        #elif duthits.sensitive_direction == "y":
+        #    ic = 1
+
+        ## Filling histograms
+        #for sensorID,pointlist in matched_hits.iteritems():
+        #    hits = sensor_hits[sensorID]
+        #    for hit_el,trk_index in pointlist:
+        #        # Remember: it_el=index of the measured hit at the corrent sensor (sensorID)
+        #        #           trk_index= index of the track
+        #        (rpred,rtel) = trks.get_point_in_sensor_frame(trk_index,hits)
+        #        # XXX TO CODE: Fiducial cut: some percentange from the edges
+        #        # -- track-hits correlation
+        #        self.evt_corr[sensorID].Fill(self.total_events,hits.sC_local[hit_el]-rpred[ic])
+        #        # Event and charge maps (using track predictions)
+        #        # --- Some histograms should use the measured values (at least when possible)
+        #        self.hcharge[sensorID].Fill(rpred[0],rpred[1],hits.charge[hit_el])
+        #        self.hhitmap[sensorID].Fill(rpred[0],rpred[1])
+        #        # Modulo (Assuming the center of the sensor: -0.5*pitch 
+        #        # XXX provisional
+        #        xmod = (rpred[0])%(2.0*self.pitchX[sensorID])
+        #        ymod = (rpred[1])%(2.0*self.pitchY[sensorID])
+        #        if abs(xmod) > 2.0*self.pitchX[sensorID] \
+        #                or abs(ymod) > 2.0*self.pitchY[sensorID]:
+        #            raise RuntimeError("SOMETHING VERY STRANGE: ERROR-WTF24!??!?")
+        #        self.hcluster_size_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.n_cluster[hit_el])
+        #        self.hcharge_mod[sensorID].Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
+        #        self.hhitmap_mod[sensorID].Fill(xmod*UM,ymod*UM)
+        #        self.nhits_ntrks[sensorID].Fill(hits.n,trks.n)
+        #        ## INCLUDE IT IN HERE
+        ## Matching beetwen DUT and REF: hits with the same track ID
+        ## Loop over all the measured hits in the REF, matching to a
+        ## track, using the track as common element in the DUT-REF match
+        ## XXX Just using those within the fiducial cut of the DUT XXX
+        ## First check the ref matching efficiency
+        #for ihit_dut,itrk_d in matched_hits[duthits.id]:
+        #    ref_match = filter(lambda (ir,itrk_r): itrk_d == itrk_r,matched_hits[refhits.id])
+        #    self.dutref_match_eff.Fill(duthits.sC_local[ihit_dut],(len(ref_match) > 0))
+        #    # Track efficiencies incorporated
+        #    if len(matched_hits[refhits.id]) > 0:
+        #        self.dutref_pure_match_eff.Fill(duthits.sC_local[ihit_dut],(len(ref_match) > 0))
+        #    # Whats the position the track matched with the REF gives in the DUT?
+        #    #for ihit_ref,itrk_r in matched_hits[refhits.id]:
+        #    #    self.dutref_distance.Fill(trks.get_point_in_sensor_frame(itrk_d,duthits)[0][ic]-\
+        #    #            trks.get_point_in_sensor_frame(itrk_r,refhits)[0][ic])
+
+        #for ihit_ref,itrk in matched_hits[refhits.id]:
+        #    # Cluster size for track matched ref hits
+        #    self.hcl_size[refhits.id].Fill(refhits.n_cluster[ihit_ref])
+        #    # Get the track predicted points at the DUT plane
+        #    ((xpred_dut,ypred_dut,zpred_dut),rtel) = trks.get_point_in_sensor_frame(itrk,duthits)
+        #    if refhits.sensitive_direction == "x":
+        #        rpred_dut = xpred_dut
+        #    elif refhits.sensitive_direction == "y":
+        #        rpred_dut = ypred_dut
+        #    # --- add all the matched-tracks to DUT in here to see correlations
+        #    ismatched=0
+        #    for ihit_dut,itrk_dut in matched_hits[duthits.id]:
+        #        self.hcorr_ref_dut.Fill(trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic],rpred_dut)
+        #        if abs(trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic]-rpred_dut) < 0.6:
+        #            #print 
+        #            #print "At DUT the track", itrk_dut,trks.get_point_in_sensor_frame(itrk_dut,duthits)[0][ic],rpred_dut
+        #            #print "At REF the track", itrk_dut,trks.get_point_in_sensor_frame(itrk_dut,refhits)[0][ic],"the track",itrk,\
+        #            #    trks.get_point_in_sensor_frame(itrk,refhits)[0][ic]
+        #            ismatched += 1
+        #    # Only within fiducial  
+        #    ###
+        #    ### if xpred_dut > duthits.xmax or xpred_dut < duthits.xmin: XXX USE proper coordinate with rmin rmax
+        #    ###    continue
+        #    # Modulo pitch
+        #    xmod = (xpred_dut)%(2.0*self.pitchX[duthits.id])
+        #    ymod = (ypred_dut)%(2.0*self.pitchY[duthits.id])
+        #    # For the given track (matched with the ref), see if the track
+        #    # matched as well with the DUT
+        #    dut_match = filter(lambda (ihit_dut,itrk_dut): itrk_dut == itrk,matched_hits[duthits.id])
+        #    any_match = int(len(dut_match)>0)
+        #    if any_match != ismatched:
+        #        #print dut_match,ismatched
+        #        raise RuntimeError("INCONSISTENCY")
+        #    # Efficiency
+        #    self.heff_mod.Fill(xmod*UM,ymod*UM,any_match)
+        #    self.heff.Fill(xpred_dut,ypred_dut,any_match)
+        #    self.heff_entries.Fill(xpred_dut,ypred_dut)
+        #    if len(dut_match) > 0:
+        #        # Get the track predicted points at the REF plane
+        #        ((xpred_at_ref,ypred_at_ref,zpred_at_ref),rptel) = trks.get_point_in_sensor_frame(itrk,refhits)
+        #        if refhits.sensitive_direction == "x":
+        #            rpred_ref= xpred_at_ref
+        #        elif refhits.sensitive_direction == "y":
+        #            rpred_ref = ypred_at_ref
+        #        # And some correlation plots of the predicted values between
+        #        # the DUT and REF sensors
+        #        # Note that the expected gaussian could be not centered at zero,
+        #        # in that case the difference will be related with the misaligned 
+        #        # between them
+        #        self.hcorrX.Fill(xpred_dut,xpred_at_ref)
+        #        # Not measured elements at Y, so using the predictions
+        #        self.hcorrY.Fill(ypred_dut,ypred_at_ref)
+        #        ## Residuals only for the DUT-REF matched tracks
+        #        self.residual_matched[duthits.id].Fill(duthits.sC_local[dut_match[0][0]]-rpred_dut)
+        #        self.residual_matched[refhits.id].Fill(refhits.sC_local[ihit_ref]-rpred_ref)
+        #        ## -- >TO BE REMOVE?? XXX <----
+        #        self.residual_sensor.Fill(xpred_dut-xpred_at_ref,ypred_dut-xpred_at_ref)
+        #        # Cluster size 
+        #        self.hcl_size[duthits.id].Fill(duthits.n_cluster[duthits.track_link[itrk]])
+        #        self.hcluster_size_mod_m.Fill(xmod*UM,ymod*UM,duthits.n_cluster[duthits.track_link[itrk]])
+        #        # -- charge
+        #        self.hcharge_mod_m.Fill(xmod*UM,ymod*UM,hits.charge[hit_el])
+        #        self.hhitmap_mod_m.Fill(xmod*UM,ymod*UM)
+        #        # -- Eta distribution for the matched cluster size=2
+        #        clustersize = duthits.n_cluster[duthits.track_link[itrk]]
+        #        if clustersize >= 2:
+        #            dhit = duthits.track_link[itrk]
+        #            self.heta_g.Fill(duthits.eta[dhit])
+        #            self.heta_csize.Fill(duthits.eta[dhit],clustersize)
+        #            self.duthits_matched_eta_h.append((duthits.eta[dhit],duthits.charge[dhit]))
+        #            if clustersize == 2:
+        #                self.heta.Fill(duthits.eta[dhit])
+        #                self.duthits_matched_eta.append(self.duthits_matched_eta_h[-1])
+        #    elif len(dut_match) > 1:
+        #        raise RuntimeError("This must never happens!! Contact developer, error 3E43")
+        #self.fill_statistics_matched(matched_hits)
 
     def get_raw_sensors_efficiency(self):
         """Summarize the efficiency of the sensors:
@@ -2445,6 +2613,11 @@ class processor(object):
         m+= "|-------------------------------------------|"
 
         return m
+
+def fill_distance_histogram():
+    """
+    """
+    pass
 
 def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
     """XXX 
