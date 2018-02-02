@@ -1040,9 +1040,6 @@ class hits_plane_accessor(object):
                 # ---- using all tracks
                 hcorr.Fill(self.sC_local[ihit],rpred[ic])
                 hdx.Fill((self.sC_local[ihit]-(rpred[ic]-r_offset)))
-                hdx_finer.Fill(self.sC_local[ihit]-rpred[ic])
-                #print
-                #print self.z[ihit],rpred,rtel0,
                 # note tha i_at_list catchs the indice at `not_used_track_indices`
                 # list, therefore in order to evaluate only those tracks not previously
                 # evaluated just use the remaining elements after the current track index
@@ -1074,6 +1071,8 @@ class hits_plane_accessor(object):
             distance_abs,trk_el =sorted(closest.iteritems())[0]
             #rturn,rtitl,rrot,rsensor = track_acc.get_point_in_sensor_frame(trk_el,self)
             rsensor,rtel = track_acc.get_point_in_sensor_frame(trk_el,self)
+            # -- A finer alignment, using only the closest tracks 
+            hdx_finer.Fill(self.sC_local[ihit]-rsensor[ic])
             # Note that the prediction is given in the sensor reference frame (z should be zero)
             # Therefore, not to interesting this plot, better
             hplane.Fill(rtel[2]-self.z[0],rtel[0],rtel[1])
