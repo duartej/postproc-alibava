@@ -733,7 +733,7 @@ if __name__ == '__main__':
             help="Same as '-a','--align' option, except the alignment" \
             " is performed automatically. WARNING: use it carefully")
     sm_parser.add_argument('-v','--verbose',dest="verbose",action="store_true",\
-            help="Verbose mode for debugging porpurses")
+            help="Verbose mode for debugging porpurses. This includes extra histograms")
     sm_parser.set_defaults(which='sensor_maps',align=False,align_auto=False)
     
     # -- Subparser: simple file merger when dealing with EORE extra events
