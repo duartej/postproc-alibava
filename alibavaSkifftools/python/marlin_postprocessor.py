@@ -1648,7 +1648,23 @@ class tracks_accessor(object):
         self.get_point("clean")
         self.get_point_in_sensor_frame("clean")
         # -- dict to be used to list of the non-isolated tracks
-        self._cache_nonisolated = {}
+        self._cache_nonisolated = { self.dutid: {}, self.refid: {} }
+        self._cache_isodistance = { self.dutid: {}, self.refid: {} }
+
+    def find_iso_distance(self,i,hitplane):
+        """
+        """
+        from math import sqrt
+        
+        # It was previously calculated
+        if self._cache_isodistance[hitplane].has_key(i):
+            return self._cache_isodistance[hitplane.id][i]
+        # Otherwise, do it now
+        distance = min(map(lambda (oindex,((o_x,o_y,o_z),_tel)): (oindex,sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+                map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hitplane)),\
+                    filter(lambda iother: iother != i,xrange(self.n)))))
+        self._cache_isodistance[hitplane][i] = distance
+        return distance
     
     def is_isolated(self,i,hit_z_position):
         """Whether or not the track is isolated, i.e.
@@ -1670,22 +1686,13 @@ class tracks_accessor(object):
         from math import sqrt
         
         # -- It was found previously..
-        if self._cache_nonisolated.has_key(i):
+        if self._cache_nonisolated[hit_z_position.id].has_key(i):
             return False
-        # -- Get the track at the plane
-        ((xpred,ypred,zpred),rtel0) = self.get_point_in_sensor_frame(i,hit_z_position)
-        # -- Get the list of non isolated (CONE OR SQUARES@??) XXX
-        non_isolated = filter(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0) < self.isolation_condition,\
-                map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hit_z_position)),xrange(self.n)))
-        if len(non_isolated) == 0:
+        if find_iso_distance(i,hit_z_position) < self.isolation_condition:
+            self._cache_nonisolated[hit_z_position.id][i] = 1
+            return False
+        else:
             return True
-        # -- if not isolated, update some stuff
-        # -- Update the current event cache
-        self._cache_nonisolated[i] = 1
-        # -- And the others (reciprocal quality)
-        for noniso_i,stuff in non_isolated:
-            self._cache_nonisolated[noniso_i] = 1
-        return False
     
     def fill_isolation_histograms(self,itrk,hitobj,h):
         """Fill the isolation histogram. The distance between
@@ -2180,10 +2187,10 @@ class processor(object):
         # -------------------------------------
         # Residuals between REF-DUT (matched tracks family)
         # Residuals, matched family
-        self.residual_matched = { minst.dut_plane: ROOT.TH1F("res_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];Entries",\
-                        100,-0.4*MM,0.4*MM), 
-                minst.ref_plane: ROOT.TH1F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
-                        100,-0.4*MM,0.4*MM) }
+        self.residual_matched = { minst.dut_plane: ROOT.TH2F("res_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];Entries",\
+                        100,-sydut,sydut,-0.4*MM,0.4*MM), 
+                minst.ref_plane: ROOT.TH2F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
+                        100,-syref,syref,-0.4*MM,0.4*MM) }
         self.hcharge_matched = { minst.dut_plane: ROOT.TProfile2D("charge_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2240,10 +2247,6 @@ class processor(object):
         ## Add it as alignment plot
         self._alignment_histos += self.hcorr_trkX.values()
 
-        # -- DUT-REF
-        self.hcorrX = ROOT.TH2F("corrX_dut_ref",";x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
-        self.hcorrY = ROOT.TH2F("corrY_dut_ref",";y_{DUT} [mm]; y_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
-        
         # efficiency
         self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",\
                 50,-1.1*sxdut,1.1*sxdut,int(2*nch_dut+3),-1.1*sydut,1.1*sydut)
@@ -2261,63 +2264,60 @@ class processor(object):
         self.hcl_size = { minst.dut_plane: ROOT.TH1F("cluster_size_dut","Isolated, REF-matched hits;N_{cluster};Entries",10,-0.5,9.5),
                 minst.ref_plane: ROOT.TH1F("cluster_size_ref","Isolated-matched hits;N_{cluster};Entries",10,-0.5,9.5) }
         # -- Extra histos
+        #self.evt_corr = { minst.dut_plane: ROOT.TProfile("dx_correlation_dut","Event correlation closest track;Event;(#Delta_x)_{DUT}",\
+        #                300000,0.0,299999),\
+        #            minst.ref_plane: ROOT.TProfile("dx_correlation_ref","Event correlation closest track;Event;(#Delta_x)_{REF}",\
+        #                300000,0.0,299999)}
+        #extra = self.htrks_at_planes.values()+self.evt_corr.values()
+        
+        # -- Diagnostics
         self.htrks_at_planes = { minst.dut_plane: ROOT.TH2F("trk_at_dut","Tracks at DUT;x_{DUT}^{trk} [mm]; y_{DUT}^{trk} [mm]; Entries",\
                         200,-10.0,10.0,200,-10.0,10.0),\
                 minst.ref_plane: ROOT.TH2F("trk_at_ref","Tracks at REF;x_{REF}^{trk} [mm]; y_{REF}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
-        self.evt_corr = { minst.dut_plane: ROOT.TProfile("dx_correlation_dut","Event correlation closest track;Event;(#Delta_x)_{DUT}",\
-                        300000,0.0,299999),\
-                    minst.ref_plane: ROOT.TProfile("dx_correlation_ref","Event correlation closest track;Event;(#Delta_x)_{REF}",\
-                        300000,0.0,299999)}
-        extra = self.htrks_at_planes.values()+self.evt_corr.values()
-        
-        # -- Diagnostics
         self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
                 "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
                     "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
-        self.nhits_ntrks = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_dut","at least 1 hit matched-isolated;N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
-                minst.ref_plane: ROOT.TH2F("nhits_ntracks_ref","At least 1 hit matched-isolated ;N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
         self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
                 minst.ref_plane: ROOT.TH2F("nhits_ntracks_all_ref",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
-        self.hmatch_eff = { minst.dut_plane: ROOT.TProfile("match_eff_dut","Track-matching hit efficiency;x_{DUT};#varepsilon",\
-                    100,-sxdut*1.01,sxdut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("match_eff_ref","Track-matching hit efficiency;x_{REF};#varepsilon",\
-                    100,-sxref,sxref,0,1) }
-        self.hy_eff = { minst.dut_plane: ROOT.TProfile("y_eff_dut","Track-matching hit efficiency vs. y-predicted;"\
-                    "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1),
-                minst.ref_plane: ROOT.TProfile("y_eff_ref","Track-matching hit efficiency vs. y-predicted;"\
-                    "y_{pred}[mm];#varepsilon",100,-syref,syref,0,1) }
-        self.hntrk_eff = { minst.dut_plane: ROOT.TProfile("ntrk_eff_dut","Track-matching hit efficiency vs. number of tracks;"\
-                    "N_{trk};#varepsilon",40,-0.5,39.5,0,1),
-                minst.ref_plane: ROOT.TProfile("ntrk_eff_ref","Track-matching hit efficiency vs. number of tracks;"\
-                    "N_{trk};#varepsilon",40,-0.5,39.5,0,1) }
-        self.hnisotrk_eff = { minst.dut_plane: ROOT.TProfile("nisotrk_eff_dut","Track-matching hit efficiency vs. number of Non-isolated tracks;"\
-                    "N_{trk} non-isolated;#varepsilon",8,-0.5,7.5,0,1),
-                minst.ref_plane: ROOT.TProfile("nisotrk_eff_ref","Track-matching hit efficiency vs. number of tracks;"\
-                    "N_{trk} non-isolated;#varepsilon",8,-0.5,7.5,0,1) }
+        self.track_a_eff = { minst.dut_plane: ROOT.TProfile("track_a_eff_dut","Track-association efficiency;x_{DUT};#varepsilon",\
+                    100,-sydut*1.01,sydut*1.01,0,1),
+                minst.ref_plane: ROOT.TProfile("track_a_eff_ref","Track-association efficiency;x_{REF};#varepsilon",\
+                    100,-syref,syref,0,1) }
+        self.trackch_a_eff = { minst.dut_plane: ROOT.TProfile("trackch_a_eff_dut","Track-association efficiency;x_{DUT} [ch];#varepsilon",\
+                    int(2*nch_dut+3),-1.5,(nch_dut+1.0-0.5)),
+                minst.ref_plane: ROOT.TProfile("trackch_a_eff_ref","Track-association efficiency;x_{REF} [ch];#varepsilon",\
+                    int(2*nch_ref+3),-1.5,(nch_ref+1.0-0.5)) }
+        self.trackpred_y_eff = ROOT.TProfile("trackpred_y_eff","Track-association efficiency vs. y-predicted;"\
+                    "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1)
+        self.trackpred_x_eff = ROOT.TProfile("trackpred_x_eff","Track-association efficiency vs. y-predicted;"\
+                    "x_{DUT}^{pred}[mm];#varepsilon",100,-sxdut,sxdut,0,1)
+        #self.trkiso_a_eff = ROOT.TProfile("trkiso_a_eff_","Efficiency vs. distance between pair of tracks in the "\
+        #            "same trigger-event;Track distance [mm];#varepsilon", 400,0,10.0*MM)
         self.dutref_match_eff = ROOT.TProfile("match_dutref_eff","REF-matching DUT-hit efficiency;x_{DUT};#varepsilon",\
                                     100,-sxdut,sxdut,0,1)
-        self.dutref_pure_match_eff = ROOT.TProfile("purematch_dutref_eff","REF-matching DUT-hit efficiency (REF hit present);x_{DUT};#varepsilon",\
-                                    100,-sxdut,sxdut,0,1)
-        self.hcorr_ref_dut = ROOT.TH2F("corr_ref_dut","Tracks matched with REF-hits and DUT-hits, at DUT position;"\
-                "x_{DUT} [mm]; x_{REF} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
+        self.dutref_pure_match_eff = ROOT.TProfile2D("purematch_dutref_eff","REF-matching DUT-hit efficiency"\
+                "(REF hit present);x_{DUT}^{pred} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
+        self.hcorrx_dut_ref = ROOT.TH2F("corrX_dut_ref","Isolated tracks at DUT and REF (y);"\
+                "x_{DUT}^{pred} [mm]; x_{REF}^{pred} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
+        self.hcorry_dut_ref = ROOT.TH2F("corrY_dut_ref","Isolated tracks at DUT and REF (y);"\
+                "y_{DUT}^{pred} [mm]; y_{REF}^{pred} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
+        
  
         diagnostics = []
         if DEBUG:
-            diagnostics = self.trk_iso.values()+self.nhits_ntrks.values()+\
-                    self.nhits_ntrks_all.values()+\
-                    self.hmatch_eff.values()+self.hy_eff.values()+self.hntrk_eff.values()+self.hnisotrk_eff.values()+\
-                    [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorr_ref_dut]
+            diagnostics = self.htrks_at_planes.values()+self.trk_iso.values()+self.nhits_ntrks_all.values()+\
+                    self.track_a_eff.values()+self.trackch_a_eff.values()+\
+                    [self.trackpred_x_eff,self.trackpred_y_eff]+\
+                    [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]
 
 
         # Keep track of all histograms which should be stored in the file
         self._allhistograms = self._alignment_histos+\
                 associated_histos+\
                 matched_histos+\
-                [self.hcorrX,self.hcorrY]+\
                 [self.heta,self.heta_g,self.heta_csize]+\
-                dut_eff+diagnostics+\
-                extra
+                dut_eff+diagnostics
         dummy=map(lambda h: h.SetDirectory(0),self._allhistograms)
 
         # The alignment constants
@@ -2574,30 +2574,50 @@ class processor(object):
         self.hitmap_matched_mod[hits.id].Fill(xmod*UM,ymod*UM)
 
     def fill_diagnosis_histos(self,trks,refhits,duthits,track_dict):
-        """
+        """Observables
         """
         # -- tracks at sensors
         for itrk in xrange(trks.n):
             # Track isolation
             trks.fill_isolation_histograms(itrk,refhits,self.trk_iso[refhits.id])
             trks.fill_isolation_histograms(itrk,duthits,self.trk_iso[duthits.id])
+            # Hit map at the sensor planes
             ((xpred_ref,ypred_ref,zpred_ref),tel_ref) = trks.get_point_in_sensor_frame(itrk,refhits)
             self.htrks_at_planes[refhits.id].Fill(xpred_ref,ypred_ref)
-            ((xpred_dut,ypred_dut,zpred_dut),tel_ref) = trks.get_point_in_sensor_frame(itrk,duthits)
+            ((xpred_dut,ypred_dut,zpred_dut),tel_dut) = trks.get_point_in_sensor_frame(itrk,duthits)
             self.htrks_at_planes[duthits.id].Fill(xpred_dut,ypred_dut)
-        # Evaluate REF-DUT matching
+            # Correlation between both planes
+            self.hcorrx_dut_ref.Fill(xpred_dut,xpred_ref)
+            self.hcorry_dut_ref.Fill(ypred_dut,ypred_ref)
+        # Some intermediate efficiencies
+        # ------------------------------
+        # Association probability (given a hit, is there a track matched)
+        for ihit in xrange(refhits.n):
+            # -- Check with the associated tracks dictionary if this hit is there
+            is_ref_present = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
+            self.track_a_eff[refhits.id].Fill(refhits.sC_local[ihit],is_ref_present)
+            self.trackch_a_eff[refhits.id].Fill(refhits.get_sC_channel(refhits.sC_local[ihit]),is_ref_present)
+        for ihit in xrange(duthits.n):
+            # -- Check with the associated tracks dictionary if this hit is there
+            is_dut_present = int(len(filter(lambda (it,(i_r,i_d)): i_d == ihit,track_dict.iteritems())) == 0) 
+            self.track_a_eff[duthits.id].Fill(duthits.sC_local[ihit],is_dut_present)
+            self.trackch_a_eff[duthits.id].Fill(duthits.get_sC_channel(duthits.sC_local[ihit]),is_dut_present)
+            # Evaluate the closest track to that hit, what isolation has?
+        # DUT hit correlation probability (given an associated idut, is there
+        # an associated REF?
         for (itrk,(iref,idut)) in track_dict.iteritems():
-            # -- Check what's the probability of REF association, i.e. 
+            # -- Check what's the probability of REF association
             if idut == -1:
                 continue
+            # -- with respect the dut local position
             self.dutref_match_eff.Fill(duthits.sC_local[idut],int(iref != -1))
-        #    # Track efficiencies incorporated
-        #    if len(matched_hits[refhits.id]) > 0:
-        #        self.dutref_pure_match_eff.Fill(duthits.sC_local[ihit_dut],(len(ref_match) > 0))
-        #    # Whats the position the track matched with the REF gives in the DUT?
-        #    #for ihit_ref,itrk_r in matched_hits[refhits.id]:
-        #    #    self.dutref_distance.Fill(trks.get_point_in_sensor_frame(itrk_d,duthits)[0][ic]-\
-        #    #            trks.get_point_in_sensor_frame(itrk_r,refhits)[0][ic])
+            ((xd,yd,zd),td) = trks.get_point_in_sensor_frame(itrk,duthits)
+            # -- with respect the associated track dut prediction
+            self.trackpred_x_eff.Fill(xd,int(iref != -1))
+            self.trackpred_y_eff.Fill(yd,int(iref != -1))
+            # And now, assuring that the REF is present in the event
+            if refhits.n > 0:
+                self.dutref_pure_match_eff.Fill(xd,yd,int(iref != -1))
     
     def fractionary_position_plot(self):
         """Using the eta-distribution obtained 
@@ -2652,22 +2672,32 @@ class processor(object):
         if ndut != 0 and nref != 0 and tracks != 0:
             self.events_with_ref_dut_tracks += 1
         
-    def fill_statistics_matched(self,matched_hits):
+    def fill_statistics_matched(self,associated_hits,nref,ndut):
         """Fill some statistic related with the number of 
         matched-to-track hits
 
         Parameters
         ----------
-        matched_hits:  dict(int,[])
-            The list of matched hits 
+        matched_hits:  dict(int,(int,int))
+            The tracks which were associated to hits at REF and DUT
+            { track_id: (ref_id,dut_id) }
+        nref: int
+            The number of reference hits in the event
+        ndut: int
+            The number of reference hits in the dut
         """
-        for plid,thelist in matched_hits.iteritems():
-            if not self.number_matched_hits.has_key(plid):
-                self.number_matched_hits[plid] = len(thelist)
-                self.events_with_matched_hits[plid] = int(len(thelist)>0)
-            else:
-                self.number_matched_hits[plid] += len(thelist)
-                self.events_with_matched_hits[plid] += int(len(thelist)>0)
+        # --->>>> <<<<---
+        self.events_with_matched_hits[self] += 1 
+        for itrk,(iref,idut) in associated_hits.iteritems():
+            if not self.number_matched_hits.has_key(self.refid):
+                self.events_with_matched_hits[self.refid] = 0
+            if not self.number_matched_hits.has_key(self.dutid):
+                self.events_with_matched_hits[self.dutid] = 0
+            if iref != -1:
+                self.number_matched_hits[self.refid] += 1 
+            if idut != -1:
+                self.number_matched_hits[self.dutid] += 1 
+                #self.events_with_matched_hits[plid] += 1
 
     def process(self,t,trks,refhits,duthits,is_alignment=False):
         """Process an event. Per each track in the event which is 
@@ -2739,7 +2769,7 @@ class processor(object):
             #Get an estimation of the sensor efficiency ?
             #self.fill_statistics_matched(matched_hits)
             return
-        elif len(self._alignment_histos) > 0: 
+        else: 
             # Remove the aligment histos (only do it the first time)
             # (except some of them) and from the generic counter list
             keepthem =[]
