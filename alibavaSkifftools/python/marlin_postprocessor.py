@@ -2188,9 +2188,9 @@ class processor(object):
         # Residuals between REF-DUT (matched tracks family)
         # Residuals, matched family
         self.residual_matched = { minst.dut_plane: ROOT.TH2F("res_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];Entries",\
-                        100,-sydut,sydut,-0.4*MM,0.4*MM), 
+                        100,-sydut,sydut,100,-0.4*MM,0.4*MM), 
                 minst.ref_plane: ROOT.TH2F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
-                        100,-syref,syref,-0.4*MM,0.4*MM) }
+                        100,-syref,syref,100,-0.4*MM,0.4*MM) }
         self.hcharge_matched = { minst.dut_plane: ROOT.TProfile2D("charge_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2284,10 +2284,18 @@ class processor(object):
                     100,-sydut*1.01,sydut*1.01,0,1),
                 minst.ref_plane: ROOT.TProfile("track_a_eff_ref","Track-association efficiency;x_{REF};#varepsilon",\
                     100,-syref,syref,0,1) }
-        self.trackch_a_eff = { minst.dut_plane: ROOT.TProfile("trackch_a_eff_dut","Track-association efficiency;x_{DUT} [ch];#varepsilon",\
-                    int(2*nch_dut+3),-1.5,(nch_dut+1.0-0.5)),
-                minst.ref_plane: ROOT.TProfile("trackch_a_eff_ref","Track-association efficiency;x_{REF} [ch];#varepsilon",\
-                    int(2*nch_ref+3),-1.5,(nch_ref+1.0-0.5)) }
+        self.trackpresent_a_eff = { minst.dut_plane: ROOT.TProfile("trackpresent_a_eff_dut","Track-association efficiency;x_{DUT};#varepsilon",\
+                    100,-sydut*1.01,sydut*1.01,0,1),
+                minst.ref_plane: ROOT.TProfile("trackpresent_a_eff_ref","Track-association efficiency;x_{REF};#varepsilon",\
+                    100,-syref,syref,0,1) }
+        self.track_senhit_eff = { minst.dut_plane: ROOT.TProfile("track_senhit_eff_dut","Track reconstruction efficiency"\
+                    "(DUT present);x_{DUT};#varepsilon",100,-sydut*1.01,sydut*1.01,0,1),
+                minst.ref_plane: ROOT.TProfile("track_senhit_eff_ref","Track reconstruction efficiency"\
+                    "(REF present);x_{REF};#varepsilon",100,-syref,syref,0,1) }
+        self.track_eff = { minst.dut_plane: ROOT.TProfile("track_eff_dut","DUT-hit probability if track present;y_{DUT};#varepsilon",\
+                    100,-sydut*1.01,sydut*1.01,0,1),
+                minst.ref_plane: ROOT.TProfile("track_eff_ref","REF-hit probability if track present;y_{REF};#varepsilon",\
+                    100,-syref,syref,0,1) }
         self.trackpred_y_eff = ROOT.TProfile("trackpred_y_eff","Track-association efficiency vs. y-predicted;"\
                     "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1)
         self.trackpred_x_eff = ROOT.TProfile("trackpred_x_eff","Track-association efficiency vs. y-predicted;"\
@@ -2307,8 +2315,8 @@ class processor(object):
         diagnostics = []
         if DEBUG:
             diagnostics = self.htrks_at_planes.values()+self.trk_iso.values()+self.nhits_ntrks_all.values()+\
-                    self.track_a_eff.values()+self.trackch_a_eff.values()+\
-                    [self.trackpred_x_eff,self.trackpred_y_eff]+\
+                    self.track_a_eff.values()+self.track_senhit_eff.values()+self.trackpresent_a_eff.values()+\
+                    [self.trackpred_x_eff,self.trackpred_y_eff]+self.track_eff.values()+\
                     [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]
 
 
@@ -2594,30 +2602,38 @@ class processor(object):
         # Association probability (given a hit, is there a track matched)
         for ihit in xrange(refhits.n):
             # -- Check with the associated tracks dictionary if this hit is there
-            is_ref_present = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
-            self.track_a_eff[refhits.id].Fill(refhits.sC_local[ihit],is_ref_present)
-            self.trackch_a_eff[refhits.id].Fill(refhits.get_sC_channel(refhits.sC_local[ihit]),is_ref_present)
+            is_ref_associated = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
+            self.track_a_eff[refhits.id].Fill(refhits.sC_local[ihit],is_ref_associated)
+            self.track_senhit_eff[refhits.id].Fill(refhits.sC_local[ihit],int(trks.n>0))
+            if trks.n > 0:
+                self.trackpresent_a_eff[refhits.id].Fill(refhits.sC_local[ihit],is_ref_associated)
         for ihit in xrange(duthits.n):
             # -- Check with the associated tracks dictionary if this hit is there
-            is_dut_present = int(len(filter(lambda (it,(i_r,i_d)): i_d == ihit,track_dict.iteritems())) == 0) 
-            self.track_a_eff[duthits.id].Fill(duthits.sC_local[ihit],is_dut_present)
-            self.trackch_a_eff[duthits.id].Fill(duthits.get_sC_channel(duthits.sC_local[ihit]),is_dut_present)
+            is_dut_associated = int(len(filter(lambda (it,(i_r,i_d)): i_d == ihit,track_dict.iteritems())) == 0) 
+            self.track_a_eff[duthits.id].Fill(duthits.sC_local[ihit],is_dut_associated)
+            self.track_senhit_eff[duthits.id].Fill(duthits.sC_local[ihit],int(trks.n>0))
+            if trks.n > 0:
+                self.trackpresent_a_eff[duthits.id].Fill(duthits.sC_local[ihit],is_dut_associated)
             # Evaluate the closest track to that hit, what isolation has?
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
         for (itrk,(iref,idut)) in track_dict.iteritems():
+            # -- probability to have a hit in the sensors for an isolated track
+            (rd,td) = trks.get_point_in_sensor_frame(itrk,duthits)
+            (rr,tr) = trks.get_point_in_sensor_frame(itrk,refhits)
+            self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
+            self.track_eff[duthits.id].Fill(rd[duthits.sC_index],(int(idut != -1)))
             # -- Check what's the probability of REF association
             if idut == -1:
                 continue
             # -- with respect the dut local position
             self.dutref_match_eff.Fill(duthits.sC_local[idut],int(iref != -1))
-            ((xd,yd,zd),td) = trks.get_point_in_sensor_frame(itrk,duthits)
             # -- with respect the associated track dut prediction
-            self.trackpred_x_eff.Fill(xd,int(iref != -1))
-            self.trackpred_y_eff.Fill(yd,int(iref != -1))
+            self.trackpred_x_eff.Fill(rd[0],int(iref != -1))
+            self.trackpred_y_eff.Fill(rd[1],int(iref != -1))
             # And now, assuring that the REF is present in the event
             if refhits.n > 0:
-                self.dutref_pure_match_eff.Fill(xd,yd,int(iref != -1))
+                self.dutref_pure_match_eff.Fill(rd[0],rd[1],int(iref != -1))
     
     def fractionary_position_plot(self):
         """Using the eta-distribution obtained 
