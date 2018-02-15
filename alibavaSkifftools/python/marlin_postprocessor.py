@@ -383,6 +383,10 @@ class hits_plane_accessor(object):
         The index of the track which is related with the hit.
         A match condition between the track and the hit must 
         be fulfilled
+    track_inside: dict((int,int)
+        The index of the track which is related with the hit.
+        The matched track is within the fiducial region of the
+        sensor
     """
     # The properties of the plane where the hit lives
     # The rotation:=beta (around z-axis), tilt:=alpha (around x-axis) 
@@ -473,6 +477,8 @@ class hits_plane_accessor(object):
 
         # Initialize the link index 
         self.track_link = {}
+        # Initialize whether the track is inside the fiducial region
+        self.track_inside = {}
 
         # Let's assume that z doesn't change between events, as 
         # it is a fixed constrain, so find the first entry with
@@ -551,6 +557,8 @@ class hits_plane_accessor(object):
         # Defining some useful accessors which depends on the sensitive direction
         if self.sensitive_direction == "x":         
             self.sC = self.x
+            self.sC_index = 0
+            self.sC_other_index = 1
             self.sC_local = self.x_local
             self.resolution = self.pitchX
             self.strip_position = self.x_strip
@@ -559,6 +567,8 @@ class hits_plane_accessor(object):
             self.get_sC_channel = self.get_x_channel
         elif self.sensitive_direction == "y":
             self.sC = self.y
+            self.sC_index = 1
+            self.sC_other_index = 0
             self.sC_local = self.y_local
             self.resolution = self.pitchY
             self.strip_position = self.y_strip
@@ -698,6 +708,7 @@ class hits_plane_accessor(object):
         """
         # Clean up the links
         self.track_link = {}
+        self.track_inside = {}
     
     #@staticmethod
     def update_alignment(self,align_inst):
@@ -1809,11 +1820,15 @@ class tracks_accessor(object):
             else:
                 # equivalently, link the track with the hit
                 refhits.track_link[itrk] = iref
+            # and check if is within fiducial
+            refhits.track_inside[itrk] = refhits.is_within_fiducial(r_ref[0],r_ref[1])
             if not duthits.is_within_matching_distance(distance_dut):
                 idut = -1
             else:
                 # equivalently, link the track with the hit
                 duthits.track_link[itrk] = idut
+            # and check if is within fiducial
+            duthits.track_inside[itrk] = duthits.is_within_fiducial(r_dut[0],r_dut[1])
             # Fill the track dictionary with matching information
             tracks_d[itrk] = (iref,idut)
         return tracks_d
@@ -2499,7 +2514,7 @@ class processor(object):
                 ## -- dz 
                 self.dx_tx_h[hits.id].Fill(trk_drdz[itrk]*UM,dc)
 
-    def fill_associated_hit_histos(self,(itrk,trks),(ihit,hits),ip):
+    def fill_associated_hit_histos(self,(itrk,trks),(ihit,hits)):
         """Fill those histograms related with associated hit quantities
         (associated hit=a track is associated to the hit, see 
         self.associate_hits method)
@@ -2512,8 +2527,6 @@ class processor(object):
         ihit: int
             The index of the hit to use
         hits: hits_plane_accessor
-        ip: int
-            The index of the sensitive direction
         """
         # First of all check tha the index of the hit
         # is valid
@@ -2523,26 +2536,24 @@ class processor(object):
         # -- hit map
         self.hitmap_associated[hits.id].Fill(r[0],r[1])
         # -- residuals
-        dr = hits.sC_local[ihit]-r[ip]
+        dr = hits.sC_local[ihit]-r[hits.sC_index]
         self.residual_associated[hits.id].Fill(hits.sC_local[ihit],dr)
         # -- charge
-        # -- Get the inverse of the sensitive direction:
-        ip_compl = 1^ip
         self.hcharge_associated[hits.id].Fill(r[0],r[1],hits.charge[ihit])
         self.hcharge1D_associated[hits.id].Fill(hits.charge[ihit])
         # -- cluster size
         self.hclustersize_associated[hits.id].Fill(r[0],r[1],hits.n_cluster[ihit])
         self.hclustersize1D_associated[hits.id].Fill(hits.n_cluster[ihit])
 
-        # -- Modulo 2 times the pitch
-        xmod = ((r[0])%(2.0*hits.pitchX))
-        ymod = ((r[1])%(2.0*hits.pitchY))
+        # -- Modulo 2 times the pitch (out sensor bounds)
+        xmod = ((100.0+r[0])%(2.0*hits.pitchX))
+        ymod = ((100.0+r[1])%(2.0*hits.pitchY))
         # Charge, cluster and hit map for a region of the sensor
         self.hclustersize_associated_mod[hits.id].Fill(xmod*UM,ymod*UM,hits.n_cluster[ihit])
         self.hcharge_associated_mod[hits.id].Fill(xmod*UM,ymod*UM,hits.charge[ihit])
         self.hitmap_associated_mod[hits.id].Fill(xmod*UM,ymod*UM)
 
-    def fill_matched_hit_histos(self,(itrk,trks),(ihit,hits),ip):
+    def fill_matched_hit_histos(self,(itrk,trks),(ihit,hits)):
         """Fill those histograms related with matched hit quantities
         (matched hit=a track associated to a REF is associated to 
         the DUT hit , self.associate_hits method)
@@ -2555,18 +2566,14 @@ class processor(object):
         ihit: int
             The index of the hit to use
         hits: hits_plane_accessor
-        ip: int
-            The index of the sensitive direction
         """
         r,tr = trks.get_point_in_sensor_frame(itrk,hits)
         # -- hit map
         self.hitmap_matched[hits.id].Fill(r[0],r[1])
         # -- residuals
-        dr = hits.sC_local[ihit]-r[ip]
+        dr = hits.sC_local[ihit]-r[hits.sC_index]
         self.residual_matched[hits.id].Fill(hits.sC_local[ihit],dr)
         # -- charge
-        # -- Get the inverse of the sensitive direction:
-        ip_compl = 1^ip
         self.hcharge_matched[hits.id].Fill(r[0],r[1],hits.charge[ihit])
         self.hcharge1D_matched[hits.id].Fill(hits.charge[ihit])
         # -- cluster size
@@ -2768,10 +2775,6 @@ class processor(object):
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
-        if duthits.sensitive_direction == "x":
-            ic = 0
-        elif duthits.sensitive_direction == "y":
-            ic = 1
 
         # -- The workhorse method: obtain one hit per track
         track_dict = trks.associate_hits(refhits,duthits,histos)
@@ -2801,29 +2804,30 @@ class processor(object):
         #    Associated and matched 
         for (itrk,(iref,idut)) in track_dict.iteritems():
             # -- Fill extra histograms: associated hits 
-            self.fill_associated_hit_histos((itrk,trks),(iref,refhits),ic)
-            self.fill_associated_hit_histos((itrk,trks),(idut,duthits),ic)
+            self.fill_associated_hit_histos((itrk,trks),(iref,refhits))
+            self.fill_associated_hit_histos((itrk,trks),(idut,duthits))
             # -- No tracks (i.e., REF-matched particle) presence 
             if iref == -1:
                 continue
             # -- Fill matched histograms
             r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
             # Just within acceptance
-            if not duthits.is_within_fiducial(r_at_dut[0],r_at_dut[1]):
+            #assert( duthits.is_within_fiducial(r_at_dut[0],r_at_dut[1]) == duthits.track_inside[itrk] )
+            if not duthits.track_inside[itrk]:
                 continue
             # -- Efficiency plots
             self.heff.Fill(r_at_dut[0],r_at_dut[1],(idut != -1))
             self.heff_ch.Fill(r_at_dut[0],duthits.get_y_channel(r_at_dut[1]),(idut != -1))
-            # Modulo pitch
-            xmod = ((r_at_dut[0])%(2.0*duthits.pitchX))*UM
-            ymod = ((r_at_dut[1])%(2.0*duthits.pitchY))*UM
+            # Modulo pitch: first place it out sensor bounds
+            xmod = ((100.0+r_at_dut[0])%(2.0*duthits.pitchX))*UM
+            ymod = ((100.0+r_at_dut[1])%(2.0*duthits.pitchY))*UM
             self.heff_mod.Fill(xmod,ymod,(idut != -1))
             # --- Fill /
             if idut == -1:
                 continue
             # Fill the matched histograms
-            self.fill_matched_hit_histos((itrk,trks),(iref,refhits),ic)
-            self.fill_matched_hit_histos((itrk,trks),(idut,duthits),ic)
+            self.fill_matched_hit_histos((itrk,trks),(iref,refhits))
+            self.fill_matched_hit_histos((itrk,trks),(idut,duthits))
             # --- Some histograms exclusivelly for particles at DUT
             # -- Eta distribution for the matched cluster size=2
             clustersize = duthits.n_cluster[duthits.track_link[itrk]]
@@ -2860,7 +2864,7 @@ class processor(object):
     def __str__(self):
         """Summarize the information
         """
-        m = "|-------------------------------------------|\n"
+        m = "\n|-------------------------------------------|\n"
         m+= " Events with DUT: {0} (eff: {1:.2f}%)\n".\
                 format(self.events_with_dut,float(self.events_with_dut)/float(self.total_events)*100.)
         m+= " Events with REF: {0} (eff: {1:.2f}%)\n".\
