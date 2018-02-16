@@ -2150,6 +2150,10 @@ class processor(object):
                     100,-1.1*sydut,1.1*sydut,100,-0.4*MM,0.4*MM), 
                 minst.ref_plane: ROOT.TH2F("res_a_ref",";y_{REF} [mm] ;y_{REF}-y_{REF}^{pred} [mm];Entries",\
                     100,-1.1*syref,1.1*syref,100,-0.4*MM,0.4*MM) }
+        self.resch_associated = { minst.dut_plane: ROOT.TH2F("resch_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
+                        100,-0.6*MM,0.6*MM,100,0,600), 
+                minst.ref_plane: ROOT.TH2F("resch_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
+                        100,-0.6*MM,0.6*MM,100,0,600) }
         self.hcharge_associated = { minst.dut_plane: ROOT.TProfile2D("charge_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2208,6 +2212,10 @@ class processor(object):
                         100,-sydut,sydut,100,-0.4*MM,0.4*MM), 
                 minst.ref_plane: ROOT.TH2F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
                         100,-syref,syref,100,-0.4*MM,0.4*MM) }
+        self.resch_matched = { minst.dut_plane: ROOT.TH2F("resch_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
+                        100,-0.6*MM,0.6*MM,100,0,600), 
+                minst.ref_plane: ROOT.TH2F("resch_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
+                        100,-0.6*MM,0.6*MM,100,0,600) }
         self.hcharge_matched = { minst.dut_plane: ROOT.TProfile2D("charge_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2250,7 +2258,7 @@ class processor(object):
                     ";mod(x_{trk})_{2pitch} [#mum]; mod(y_{trk})_{2pitch} [#mum];Entries", \
                     40,0,2.0*self.pitchX[minst.ref_plane]*UM,40,0.0,2.0*self.pitchY[minst.ref_plane]*UM) }
 
-        matched_histos = self.residual_matched.values()+\
+        matched_histos = self.residual_matched.values()+self.resch_matched.values()+self.resch_associated.values()+\
                 self.hcharge_matched.values()+self.hcharge1D_matched.values()+\
                 self.hitmap_matched.values()+\
                 self.hclustersize_matched.values()+self.hclustersize1D_matched.values()+\
@@ -2559,6 +2567,8 @@ class processor(object):
         # -- charge
         self.hcharge_associated[hits.id].Fill(r[0],r[1],hits.charge[ihit])
         self.hcharge1D_associated[hits.id].Fill(hits.charge[ihit])
+        # -- Charge and residuals
+        self.resch_associated[hits.id].Fill(dr,hits.charge[ihit])
         # -- cluster size
         self.hclustersize_associated[hits.id].Fill(r[0],r[1],hits.n_cluster[ihit])
         self.hclustersize1D_associated[hits.id].Fill(hits.n_cluster[ihit])
@@ -2594,6 +2604,8 @@ class processor(object):
         # -- charge
         self.hcharge_matched[hits.id].Fill(r[0],r[1],hits.charge[ihit])
         self.hcharge1D_matched[hits.id].Fill(hits.charge[ihit])
+        # -- Charge and residuals
+        self.resch_matched[hits.id].Fill(dr,hits.charge[ihit])
         # -- cluster size
         self.hclustersize_matched[hits.id].Fill(r[0],r[1],hits.n_cluster[ihit])
         self.hclustersize1D_matched[hits.id].Fill(hits.n_cluster[ihit])
