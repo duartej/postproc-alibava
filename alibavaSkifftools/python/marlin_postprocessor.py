@@ -326,6 +326,11 @@ class hits_plane_accessor(object):
         The factors to be multiplied when 
         moving a telescope hit into the sensor coordinate system
         (see tracks_accessor.get_point_in_sensor_frame method)
+    tdc_time: float
+        The TDC time of the event, used to select hits with good S/N
+        (as they were selected in the peak of the pulse)
+    _time_window: list(float)
+        The time window for the TDC time defining a good cluster
     x: ROOT.std.vector(float)()
         The vector of x-position of the hits 
     y: ROOT.std.vector(float)()
@@ -415,6 +420,7 @@ class hits_plane_accessor(object):
         import array
         from .SPS2017TB_metadata import get_orientation
         from .SPS2017TB_metadata import sensor_name_spec_map as specs
+        from .analysis_functions import get_time_window
 
         self.id = planeid
         self.sensor_name = sensor_name
@@ -424,15 +430,14 @@ class hits_plane_accessor(object):
         pre_brnames = ["hit_X","hit_Y","hit_Z","hit_XLocal","hit_YLocal",\
                 "hit_total_charge","hit_Ncluster","hit_cluster_eta"]
         brnames = map(lambda x: "{0}_{1}".format(x,self.id),pre_brnames)
-        ACTIVE_BRS.update(tree,brnames+["RunNumber"])
+        ACTIVE_BRS.update(tree,brnames+["RunNumber","TDCtime"])
         # ----------------------------------
         # Check if there is any problem
         if len(filter(lambda br: br.GetName() == "hit_X_{0}".format(self.id) ,tree.GetListOfBranches())) == 0:
             raise RuntimeError("The INDEX '{0}' does not identify any Alibava"\
                     " sensor plane".format(self.id))
         # Activate the tree if wasn't
-
-        #self.run_number = tree.RunNumber
+        
         self.x = ROOT.std.vector(float)()
         tree.SetBranchAddress("hit_X_{0}".format(self.id),self.x)
         self.y = ROOT.std.vector(float)()
@@ -447,6 +452,15 @@ class hits_plane_accessor(object):
         tree.SetBranchAddress("hit_Ncluster_{0}".format(self.id),self.n_cluster)
         self.eta = ROOT.std.vector(float)()
         tree.SetBranchAddress("hit_cluster_eta_{0}".format(self.id),self.eta)
+
+        # Just use the event time if this is a DUT (as the event time corresponds
+        # to the DUT) XXX maybe protect that?
+        if not self.sensor_name.lower().find("ref") == 0:
+            # Just run over the data to find the peak
+            self._time_window = get_time_window(tree,"",2.0,\
+                    "hit_total_charge_{0}".format(self.id),"TDCtime")
+            self.tdc_time = 0.0
+            tree.SetBranchAddress("TDCtime",self._tdc_time)
 
         self.run_number = 0.0 
         tree.SetBranchAddress("RunNumber",self._run_number)
@@ -479,6 +493,36 @@ class hits_plane_accessor(object):
         self.track_link = {}
         # Initialize whether the track is inside the fiducial region
         self.track_inside = {}
+        
+        # ----------------------------------
+        # define the orientation of this sensor, 
+        # i.e. the factors to multiply each component when
+        # moving a telescope hit into the sensor coordinate system
+        # (see tracks_accessor.get_point_in_sensor_frame method)
+        # |-------------------------------------------------------------------
+        # As the sensor reference system is defined (wrt to the telescope 
+        # plane) as  e0=(-1,0,0), e1=(0,1,0), n=(0,0,-1)pe gear file )
+        # Therefore, for a sensor with the orientation -1  0 
+        #                                               0 -1
+        # the planes are like:     / z
+        #                         /
+        #                        ----> x
+        #                        |
+        #                        | y
+        # 
+        # The sensor planes are e0 = -x, e1 = y  and n = -z
+        # In the case than the sensor have an orientation 1 0 
+        #                                                 0 1
+        # the planes are like:  y|  / z
+        #                        | /
+        #                  x <----/
+        # 
+        # and the sensor planes are e0 = x, e1 = -y and n = -z
+        rotation1 = int(get_orientation(self.sensor_name,self.run_number))
+        if rotation1 == 1:
+            self.orientation = (1.0,-1.0,-1.0)
+        else:
+            self.orientation = (-1.0,1.0,-1.0)
 
         # Let's assume that z doesn't change between events, as 
         # it is a fixed constrain, so find the first entry with
@@ -526,9 +570,9 @@ class hits_plane_accessor(object):
                     dummy = tree.GetEntry(_k)
                     _k+=1
                 if self.sensitive_direction == "x":
-                    hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]-self.x[0]
+                    hits_plane_accessor.align_constants[self.id].x_offset = self.x_local[0]+self.orientation[0]*self.x[0]
                 elif self._sensitive_direction == "y":
-                    hits_plane_accessor.align_constants[self.id].y_offset = self.y_local[0]-self.y[0]
+                    hits_plane_accessor.align_constants[self.id].y_offset = self.y_local[0]+self.orientation[1]*self.y[0]
             # Not re-synchronized until new order
             print "Inferred sensitive direction: {0}".format(self.sensitive_direction.upper())
             print hits_plane_accessor.align_constants[self.id]
@@ -582,37 +626,6 @@ class hits_plane_accessor(object):
             # Loosing the cut
             self.matching_distance = 6.0*self.resolution
         
-        # ----------------------------------
-        #  Resolution
-
-        # Last, define the orientation of this sensor, 
-        # i.e. the factors to multiply each component when
-        # moving a telescope hit into the sensor coordinate system
-        # (see tracks_accessor.get_point_in_sensor_frame method)
-        # |-------------------------------------------------------------------
-        # As the sensor reference system is defined (wrt to the telescope 
-        # plane) as  e0=(-1,0,0), e1=(0,1,0), n=(0,0,-1)pe gear file )
-        # Therefore, for a sensor with the orientation -1  0 
-        #                                               0 -1
-        # the planes are like:     / z
-        #                         /
-        #                        ----> x
-        #                        |
-        #                        | y
-        # 
-        # The sensor planes are e0 = -x, e1 = y  and n = -z
-        # In the case than the sensor have an orientation 1 0 
-        #                                                 0 1
-        # the planes are like:  y|  / z
-        #                        | /
-        #                  x <----/
-        # 
-        # and the sensor planes are e0 = x, e1 = -y and n = -z
-        rotation1 = int(get_orientation(self.sensor_name,self.run_number))
-        if rotation1 == 1:
-            self.orientation = (1.0,-1.0,-1.0)
-        else:
-            self.orientation = (-1.0,1.0,-1.0)
 
     @property
     def n(self):
@@ -633,6 +646,22 @@ class hits_plane_accessor(object):
         str: x|y
         """
         return self._sensitive_direction
+
+    @property
+    def tdc_time(self):
+        """The TDC time
+
+        Return
+        ------
+        float
+        """
+        return self._tdc_time[0]
+    @tdc_time.setter
+    def tdc_time(self,value):
+        """The setter for the tdc_time
+        """
+        import array
+        self._tdc_time = array.array('f',[float(value)])
     
     @property
     def run_number(self):
@@ -1089,6 +1118,23 @@ class hits_plane_accessor(object):
         """
         dummy = map(lambda r: h.Fill(r,rtele),self.sC_local)
 
+    def is_good_cluster(self):
+        """The function checks if the cluster was generated in the 
+        peak of the TDC time (assuming this is a DUT sensor). 
+
+        Return
+        ------
+        bool: whether or not the cluster was measured within the 
+              proper time window
+
+        Raises
+        ------
+        AttributeError: Whenever this accessor belongs to a REF sensor
+            
+        """
+        return (self.tdc_time <= self._time_window[1] \
+                and self.tdc_time >= self._time_window[0])
+
     def match_isolated(self,track_acc,histos,is_ref=False,res=None):
         """Search for tracks matching (within a resolution) the list 
         of hits in the current event.
@@ -1240,14 +1286,14 @@ class hits_plane_accessor(object):
                 ## Fill the alignment histograms after being accepted
                 #  as providing from the hit
                 ## -- rot
-                hrot.Fill(rsensor[iccom],dc)
+                hrot.Fill(rsensor[iccom],dc*UM)
                 ## -- tilt
                 #htilt.Fill(rsensor[iccom]*track_slope[trk_el]*UM,dc)
-                htilt.Fill(rsensor[ic],dc)
+                htilt.Fill(rsensor[ic],dc*UM)
                 # -- turn
-                hturn.Fill(rsensor[ic]*track_slope[trk_el]*UM,dc)
+                hturn.Fill(rsensor[ic]*track_slope[trk_el]*UM,dc*UM)
                 ## -- dz 
-                hdz.Fill(track_slope[trk_el]*UM,dc)
+                hdz.Fill(track_slope[trk_el]*UM,dc*UM)
             # The hit was matched by at least one track
             hmatch_eff.Fill(self.sC_local[ihit],int(distance_abs<res))
             hy_eff.Fill(rsensor[iccom],int(distance_abs<res))
@@ -1725,7 +1771,7 @@ class tracks_accessor(object):
         dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
 
-    def associate_hits(self,refhits,duthits,histos):
+    def associate_hits(self,refhits,duthits,histos,is_alignment):
         """Perform the hits association to each track found,
         given that the tracks can only be associated if they
         are isolated (see isolation_condition datamember).
@@ -1741,7 +1787,10 @@ class tracks_accessor(object):
         histos: dict(list(TObject))
             A list of histograms, profiles and maps per
             sensor, to fill during the association
-
+        is_alignment: bool
+            Whether or not it is an alignment run and
+            therefore do not apply cluster quality 
+            criteria to avoid lack of statistic
 
         Return
         ------
@@ -1803,7 +1852,11 @@ class tracks_accessor(object):
                 continue
             # -- Now find the closest hit to that track (-1 is returned if any)
             iref,distance_ref = refhits.close_hit(r_ref)
-            idut,distance_dut = duthits.close_hit(r_dut)
+            # -- Quality control for teh DUT clusters
+            if is_alignment or duthits.is_good_cluster():
+                idut,distance_dut = duthits.close_hit(r_dut)
+            else:
+                idut,distance_dut = -1,-9999
             # -- Some plots: smoother residual evaluation (and alignment) 
             #    using closest hits to a track (event if the hit is re-used)
             if iref != -1:
@@ -2108,28 +2161,28 @@ class processor(object):
         self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; y_{DUT}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
                 minst.ref_plane: ROOT.TH1F("dx_ref"," ; y_{REF}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
         # -- finer alignment
-        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3),
-                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.3,0.3) }
+        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2),
+                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2) }
         self.dx_finer_wide_h = { minst.dut_plane: ROOT.TH1F("dx_finer_wide_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0),
                 minst.ref_plane: ROOT.TH1F("dx_finer_wide_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0) }
         # -- the rot (around z-axis)
-        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
+        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [#mum]",\
                         45,-sxdut,sxdut,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ;x_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
+                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ;x_{trk}^{pred} [mm];#Deltay_{REF} [#mum]",\
                         45,-sxref,sxref,-0.2,0.2) }
         # -- the tilt (around y-axis)
-        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ;y_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
+        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ;y_{trk}^{pred} [mm];#Deltay_{DUT} [#mum]",\
                         45,-sxdut,sxdut,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
+                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [#mum]",\
                         45,-sxref,sxref,-0.2,0.2) }
         # -- the turn (around y-axis)
-        self.dx_xtx_h = { minst.dut_plane: ROOT.TProfile("dx_xtx_dut"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [mm]",\
+        self.dx_xtx_h = { minst.dut_plane: ROOT.TProfile("dx_xtx_dut"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [#mum]",\
                         50,-0.1,0.1,-1.2,1.2),
-                minst.ref_plane: ROOT.TProfile("dx_xtx_ref"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{REF} [mm]",\
+                minst.ref_plane: ROOT.TProfile("dx_xtx_ref"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{REF} [#mum]",\
                         50,-0.1,0.1,-1.2,1.2) }
         # -- the delta-z
-        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;tan(#theta_{x}^{trk})#cdot1^{-3};#Deltax_{DUT} [mm]",50,-0.2,0.2,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;tan(#theta_{x}^{trk})#cdot1^{-3};#Deltax_{REF} [mm]",50,-0.2,0.2,-0.2,0.2) }
+        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;tan(#theta_{x}^{trk});#Deltax_{DUT} [#mum]",50,-0.2,0.2,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;tan(#theta_{x}^{trk});#Deltax_{REF} [#mum]",50,-0.2,0.2,-0.2,0.2) }
         # geometry: z
         #----------
         self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
@@ -2415,7 +2468,7 @@ class processor(object):
                 old_offset = self.alignment[pl_id].y_offset
             
             # -- The real offset
-            coarse_offset =get_offset(self.dx_h[pl_id],-4.0,4.0)
+            coarse_offset =get_offset(self.dx_h[pl_id],-10.0,10.0)
             adding = False
             if self.alignment[pl_id].sensitive_direction.lower() == "x":
                 old_offset = self.alignment[pl_id].x_offset
@@ -2825,7 +2878,7 @@ class processor(object):
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
 
         # -- The workhorse method: obtain one hit per track
-        track_dict = trks.associate_hits(refhits,duthits,histos)
+        track_dict = trks.associate_hits(refhits,duthits,histos,is_alignment)
 
         # -- If alignment just perform the histo filling and finish
         if is_alignment:
@@ -2960,57 +3013,33 @@ def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
     if h.GetEntries() == 0:
         raise RuntimeError("Empty histogram '{0}'".format(h.GetName()))
 
-    # Just do it when needed
+    # If coarse bining, do a spectral analysis
+    # ----------------------------------------
     if coarse:
-        # -- There is cases where the peak is difficult to obtain 
-        #    with the background presence: first evaluate the background 
-        #    and remove it
-        #    (o gaussian?)
-        bkg = ROOT.TF1("bkg","cheb2",xmin,xmax)
-        #bkg = ROOT.TF1("bkg","gausn",xmin,xmax)
-        status_bkg = h.Fit(bkg,"SQ","",xmin,xmax)
-        try:
-            if status_bkg.Status() != 0:
-                raise RuntimeError("\033[1;33mWARNING\033[1;m FAILED "\
-                        "THE X-OFFSET FIT for '{0}': "\
-                        "Status {1}".format(h.GetName(),status.Status()))
-        except ReferenceError:
-            raise RuntimeError("\033[1;32mERROR\033[1;m FAILED THE X-OFFSET FIT for '{0}': "\
-                    "No data was fitted".format(h.GetName()))
+        # -- Use the spectral analysis to obtain the peak
+        sp = ROOT.TSpectrum(1)
+        # -- Find the backgroung
+        bkg = sp.Background(h,20,"BackOrder8")
         # -- Extract the background to obtain the peak
-        hsub = ROOT.TH1F("h_subtracted_"+str(hash(cns)),"",h.GetNbinsX(),xmin,xmax)
-        #hsub.SetDirectory(0)
-        for i in xrange(1,hsub.GetNbinsX()+1):
-            x = hsub.GetBinCenter(i)
-            ysub = h.GetBinContent(i)-bkg.Eval(x)
-            if ysub > 0:
-                hsub.SetBinContent(i,ysub)
-    else:
-        # - fine adjustment, 
-        hsub = h
+        hsub = h.Clone("h_subtrackted_"+h.GetName()+"_"+str(hash(cns)))
+        hsub.Add(bkg,-1.0)
+        sp.Search(hsub)
+        return sp.GetPositionX()[0]
+    # - Otherwise fine adjustment, 
     # -- Now find the peak (if needed)
     gbg = ROOT.TF1("gbg","gausn(0)+cheb2(3)",xmin,xmax)
     # Set the initial values
     # -- Amplitude
     gbg.SetParameter(0,h.GetMaximum())
+    # -- Some extra requirements: at least 50 entries per 
+    #    bin in average
+    while float(h.Integral())/float(h.GetNbinsX()) < 50:
+        h.Rebin(2)
     # -- Mean (find the peak from the background subtracted
-    if coarse:
-        peak = h.GetBinCenter(hsub.GetMaximumBin())
-    else:
-        # It supose to be centered
-        peak = 0.0
-        # -- Some extra requirements: at least 50 entries per 
-        #    bin in average
-        while float(h.Integral())/float(h.GetNbinsX()) < 50:
-            h.Rebin(2)
-
-    gbg.SetParameter(1,peak)
+    # It supose to be centered
+    gbg.SetParameter(1,h.GetBinCenter(h.GetMaximumBin()))
     # -- Sigma
-    gbg.SetParameter(2,hsub.GetBinWidth(1))
-    # -- Background: guess it from a region far away from the peak
-    #    only when coarse
-    if coarse:
-        gbg.SetParameter(3,hsub.GetBinContent(h.FindBin(peak-0.4)))
+    gbg.SetParameter(2,h.GetBinWidth(1))
     ## Do the fit
     status = h.Fit(gbg,"SQR","")
     try:
@@ -3020,9 +3049,7 @@ def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
     except ReferenceError:
         print "\033[1;32mERROR\033[1;m FAILED THE X-OFFSET FIT for '{0}': "\
                 "No data was fitted".format(h.GetName())
-    new_align_x = gbg.GetParameter(1)
-
-    return new_align_x
+    return gbg.GetParameter(1)
 
 def get_linear_fit(h,xmin=-2.0,xmax=2.0,robval=0.75):
     """Perform a linear (robust) fit of the histogram (profile)
