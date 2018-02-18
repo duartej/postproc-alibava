@@ -2448,7 +2448,8 @@ class processor(object):
         f.Close()
     
     def update_alignment_file(self):
-        """Extract the information relative to the alignment
+        """Extract the information relative to the alignment from 
+        the related histograms, update the alignment constants and
         and dump it into a file
 
         Explanation
@@ -2884,8 +2885,8 @@ class processor(object):
         if is_alignment:
             # -- fill the relevant histograms 
             self.fill_alignment_histos(track_dict,trks,refhits,duthits)
-            # -- update the alignment constants
-            self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
+            # -- update the alignment constants ---> Cosntants does change in an event basis?? XXX-A
+            #self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
             #Get an estimation of the sensor efficiency ?
             #self.fill_statistics_matched(matched_hits)
             return
@@ -3114,29 +3115,36 @@ def sensor_alignment(fname,verbose):
     """
     import ROOT
     from math import sin
-
+    
     # Get the data, build clusters, do the actual analysis, 
     # but only the first 50k events
     proc_inst = sensor_map_production(fname,entries_proc=60000,alignment=True,verbose=verbose)
-    # Considered aligned if the aligned constants doesn't change (within some 
-    # tolerance): then extract the alignment constants before
-    aligned_sensors = 0
-    for pl_id,current_align in proc_inst.alignment.iteritems():
+    old_align_d = {}
+    for pl_id,aligncts in proc_inst.alignment.iteritems():
         align_f = ALIGN_FILE_FORMAT.format(pl_id,proc_inst.run_number)
-        old_align = alignment_cts(current_align.sensitive_direction)
+        # Extract previous alignment constants
+        old_align = alignment_cts(aligncts.sensitive_direction)
         try:
             with open(align_f) as f:
                 old_align.parse_alignment(f)
         except IOError:
             # not do anything at the begining
             continue
-        if old_align == current_align:
-            aligned_sensors += 1
-    # Update the alignment files
+        old_align_d[pl_id] = old_align
+    # Update the alignment constants and files with
+    # the alignment histos obtained in this run
     proc_inst.update_alignment_file()
+    
+    # Considered aligned if the aligned constants doesn't change 
+    # (within some tolerance). Note that if the previous alignment
+    # constants file was not present, the loop is not performed
+    aligned_sensors = 0
+    for pl_id,old_a in old_align_d.iteritems():
+        if old_a == proc_inst.alignment[pl_id]:
+            aligned_sensors += 1
     print
     print proc_inst.get_raw_sensors_efficiency()
-    # Check if all sensors are aligned: XXX---Not correct---XXX
+    # Check if all sensors are aligned
     return (aligned_sensors == len(proc_inst.alignment.keys()))
 
 
@@ -3218,13 +3226,18 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     for i,_t in enumerate(t):
         if i > nentries:
             break
+        current_ptg = min(int(float(i)/pointpb)+1,100)
         sys.stdout.write("\r\033[1;34mINFO\033[1;m -- Processing file '"+\
-                os.path.basename(fname)+" [ "+"\b"+str(int(float(i)/pointpb)+1).rjust(3)+"%]")
+                os.path.basename(fname)+" [ "+"\b"+str(current_ptg).rjust(3)+"%]")
         sys.stdout.flush()
         wtch.process(_t,tracks,ref,dut,alignment)
     if DEBUG:
-        print timeit.default_timer()-start_time
+        print 
+        print "\033[1;35mDEBUG\033[1;m: Event loop time: {0:0.2f} s".format(timeit.default_timer()-start_time)
     if alignment:
+        # -- copy the alignment constants used from the accessor, in order to
+        #    updated them
+        wtch.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,[(dut.id,dut),(ref.id,ref)]))
         if DEBUG:
             foutput = "alignment_plots_{0}_run000{1}_{2}.root".format(fp.sensor_name,fp.run_number,int(wtch.alignment.values()[0].iteration))
         else:

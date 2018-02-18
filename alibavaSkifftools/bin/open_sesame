@@ -822,8 +822,11 @@ if __name__ == '__main__':
             # do the alignment if the user says so 
             while user_answer[0].lower() == 'y':
                 alignment_status = sensor_alignment(args.ntuple,args.verbose)
-                print "\033[1;34mINFO ALIGNMENT\033[1;m  ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
+                print "\033[1;34mINFO ALIGNMENT\033[1;m ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
                 if args.align_auto and alignment_status:
+                    break
+                if args.align_auto and iteration > 9:
+                    print "\033[1;31mREACHED MAX. ITERATION (10)\033[1;m"
                     break
                 # XXX: Check if python3, then use input instead
                 if not args.align_auto:
