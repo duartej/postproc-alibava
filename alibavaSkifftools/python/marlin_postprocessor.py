@@ -459,6 +459,11 @@ class hits_plane_accessor(object):
             # Just run over the data to find the peak
             self._time_window = get_time_window(tree,"",2.0,\
                     "hit_total_charge_{0}".format(self.id),"TDCtime")
+            if self.sensor_name.lower().find("lgad") != 0:
+                print "-"*56
+                print "\033[1;34mINFO\033[1;m Time window selected for DUT clusters: "\
+                        "[{0:0.1f},{1:0.1f}]".format(self._time_window[0],self._time_window[1])
+                print "-"*56
             self.tdc_time = 0.0
             tree.SetBranchAddress("TDCtime",self._tdc_time)
 
@@ -1771,7 +1776,7 @@ class tracks_accessor(object):
         dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
 
-    def associate_hits(self,refhits,duthits,histos,is_alignment):
+    def associate_hits(self,refhits,duthits,histos,apply_quality):
         """Perform the hits association to each track found,
         given that the tracks can only be associated if they
         are isolated (see isolation_condition datamember).
@@ -1787,10 +1792,9 @@ class tracks_accessor(object):
         histos: dict(list(TObject))
             A list of histograms, profiles and maps per
             sensor, to fill during the association
-        is_alignment: bool
-            Whether or not it is an alignment run and
-            therefore do not apply cluster quality 
-            criteria to avoid lack of statistic
+        apply_quality: bool
+            Whether or not apply cluster quality 
+            criteria
 
         Return
         ------
@@ -1853,7 +1857,7 @@ class tracks_accessor(object):
             # -- Now find the closest hit to that track (-1 is returned if any)
             iref,distance_ref = refhits.close_hit(r_ref)
             # -- Quality control for teh DUT clusters
-            if is_alignment or duthits.is_good_cluster():
+            if apply_quality or duthits.is_good_cluster():
                 idut,distance_dut = duthits.close_hit(r_dut)
             else:
                 idut,distance_dut = -1,-9999
@@ -2877,9 +2881,12 @@ class processor(object):
         histos = { refhits.id: histos_ref, duthits.id: histos_dut }
         # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
-
+        
+        # Do not apply quality cluster in the LGDAD case, the time window
+        # is not well defined
+        apply_quality = (is_alignment or duthits.sensor_name.find("LGAD") == 0)
         # -- The workhorse method: obtain one hit per track
-        track_dict = trks.associate_hits(refhits,duthits,histos,is_alignment)
+        track_dict = trks.associate_hits(refhits,duthits,histos,apply_quality)
 
         # -- If alignment just perform the histo filling and finish
         if is_alignment:
