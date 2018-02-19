@@ -2362,7 +2362,9 @@ class processor(object):
                 "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
                     "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
-        self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
+        self.ntrks_perhit = { minst.dut_plane: ROOT.TH1F("ntrk_perhit_dut","MUST BE 1!!;N_{trks/hit};Entries",10,-0.5,9.5),
+                minst.ref_plane: ROOT.TH1F("ntrk_perhit_ref",";N_{trks/hit};N_{tracks};Entries",10,-0.5,9.5) }
+        self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut","MUST BE 1!!;N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
                 minst.ref_plane: ROOT.TH2F("nhits_ntracks_all_ref",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
         self.track_a_eff = { minst.dut_plane: ROOT.TProfile("track_a_eff_dut","Track-association efficiency;x_{DUT};#varepsilon",\
                     100,-sydut*1.01,sydut*1.01,0,1),
@@ -2413,6 +2415,7 @@ class processor(object):
         diagnostics = []
         if DEBUG:
             diagnostics = self.htrks_at_planes.values()+self.trk_iso.values()+self.nhits_ntrks_all.values()+\
+                    self.ntrks_perhit.values()+\
                     self.hit.values()+self.hit_distance.values()+\
                     self.track_a_eff.values()+self.track_senhit_eff.values()+self.trackpresent_a_eff.values()+\
                     [self.trackpred_x_eff,self.trackpred_y_eff]+self.track_eff.values()+\
@@ -2701,26 +2704,19 @@ class processor(object):
         # Some intermediate efficiencies
         # ------------------------------
         # Association probability (given a hit, is there a track matched)
-        for ihit in xrange(refhits.n):
-            # -- Check with the associated tracks dictionary if this hit is there
-            is_ref_associated = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
-            self.track_a_eff[refhits.id].Fill(refhits.sC_local[ihit],is_ref_associated)
-            self.track_senhit_eff[refhits.id].Fill(refhits.sC_local[ihit],int(trks.n>0))
-            # Hit position
-            self.hit[refhits.id].Fill(refhits.sC_local[ihit])
-            # Hit distance
-            dummy = map(lambda ohit: self.hit_distance[refhits.id].Fill(refhits.sC_local[ihit]-refhits.sC_local[ohit]),\
-                        xrange(ihit+1,refhits.n))
-        for ihit in xrange(duthits.n):
-            # -- Check with the associated tracks dictionary if this hit is there
-            is_dut_associated = int(len(filter(lambda (it,(i_r,i_d)): i_d == ihit,track_dict.iteritems())) == 0) 
-            self.track_a_eff[duthits.id].Fill(duthits.sC_local[ihit],is_dut_associated)
-            self.track_senhit_eff[duthits.id].Fill(duthits.sC_local[ihit],int(trks.n>0))
-            # Hit position
-            self.hit[duthits.id].Fill(duthits.sC_local[ihit])
-            # Hit distance
-            dummy = map(lambda ohit: self.hit_distance[duthits.id].Fill(duthits.sC_local[ihit]-duthits.sC_local[ohit]),\
-                        xrange(ihit+1,duthits.n))
+        for hits in (refhits,duthits):
+            for ihit in xrange(hits.n):
+                # Number of tracks associated to the same hit
+                self.ntrks_perhit[hits.id].Fill(len(filter(lambda _ih: _ih == ihit,hits.track_link.values())))
+                # -- Check with the associated tracks dictionary if this hit is there
+                is_associated = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
+                self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
+                self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(trks.n>0))
+                # Hit position
+                self.hit[hits.id].Fill(hits.sC_local[ihit])
+                # Hit distance
+                dummy = map(lambda ohit: self.hit_distance[hits.id].Fill(hits.sC_local[ihit]-hits.sC_local[ohit]),\
+                        xrange(ihit+1,hits.n))
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
         for (itrk,(iref,idut)) in track_dict.iteritems():
