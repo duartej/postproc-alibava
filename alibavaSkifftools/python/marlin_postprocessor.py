@@ -388,6 +388,10 @@ class hits_plane_accessor(object):
         The index of the track which is related with the hit.
         A match condition between the track and the hit must 
         be fulfilled
+    track_distance: dict((int,int)
+        The distance of the track which is related with the hit.
+        A match condition between the track and the hit must 
+        be fulfilled
     track_inside: dict((int,int)
         The index of the track which is related with the hit.
         The matched track is within the fiducial region of the
@@ -496,6 +500,8 @@ class hits_plane_accessor(object):
 
         # Initialize the link index 
         self.track_link = {}
+        # Initialize the distance of the track to the hit linked 
+        self.track_distance = {}
         # Initialize whether the track is inside the fiducial region
         self.track_inside = {}
         
@@ -741,8 +747,9 @@ class hits_plane_accessor(object):
         be processed. Clean some variables.
         """
         # Clean up the links
-        self.track_link = {}
-        self.track_inside = {}
+        self.track_link     = {}
+        self.track_distance = {}
+        self.track_inside   = {}
     
     #@staticmethod
     def update_alignment(self,align_inst):
@@ -2116,6 +2123,10 @@ class processor(object):
         self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
         ## ----
         self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
+        # Matching distance (see definition at hit accessor)
+        match_dist_dut = 6*self.pitchY[minst.dut_plane]
+        match_dist_ref = 2*self.pitchY[minst.ref_plane]
+
         #self.pitchX = self.pitchY
         # -- Check if is 3-D or strips
         #if minst.dut_name.lower().find("lgad") == -1:
@@ -2196,13 +2207,13 @@ class processor(object):
         # Associated histos (hits associated to a track)
         # -------------------------------------
         self.residual_associated = { minst.dut_plane: ROOT.TH2F("res_a_dut","y_{DUT} [mm];y_{DUT}-y_{DUT}^{pred} [mm];Entries",\
-                    100,-1.1*sydut,1.1*sydut,100,-0.4*MM,0.4*MM), 
+                    100,-1.1*sydut,1.1*sydut,100,-match_dist_dut,match_dist_dut), 
                 minst.ref_plane: ROOT.TH2F("res_a_ref",";y_{REF} [mm] ;y_{REF}-y_{REF}^{pred} [mm];Entries",\
-                    100,-1.1*syref,1.1*syref,100,-0.4*MM,0.4*MM) }
+                    100,-1.1*syref,1.1*syref,100,-match_dist_ref,match_dist_ref) }
         self.resch_associated = { minst.dut_plane: ROOT.TH2F("resch_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
-                        100,-0.6*MM,0.6*MM,100,0,600), 
+                        100,-match_dist_dut,match_dist_dut,100,0,600), 
                 minst.ref_plane: ROOT.TH2F("resch_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
-                        100,-0.6*MM,0.6*MM,100,0,600) }
+                        100,-match_dist_ref,match_dist_ref,100,0,600) }
         self.hcharge_associated = { minst.dut_plane: ROOT.TProfile2D("charge_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2213,9 +2224,9 @@ class processor(object):
                     ";charge cluster [ADC];Entries",300,0,600),
                 minst.ref_plane: ROOT.TH1F("charge1D_a_ref",";charge cluster [ADC];Entries",300,0,600) }
         self.resclsize_associated = { minst.dut_plane: ROOT.TH2F("resclsize_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];cluster size",\
-                        100,-0.2*MM,0.2*MM,10,-0.5,9.5), 
+                        100,-match_dist_dut,match_dist_dut,10,-0.5,9.5), 
                 minst.ref_plane: ROOT.TH2F("resclsize_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge size",\
-                        100,-0.2*MM,0.2*MM,10,-0.5,9.5) }
+                        100,-match_dist_ref,match_dist_ref,10,-0.5,9.5) }
         self.hclustersize_associated = { minst.dut_plane: ROOT.TProfile2D("clustersize_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<cluster size>", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2263,13 +2274,13 @@ class processor(object):
         # Residuals between REF-DUT (matched tracks family)
         # Residuals, matched family
         self.residual_matched = { minst.dut_plane: ROOT.TH2F("res_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];Entries",\
-                        100,-sydut,sydut,100,-0.4*MM,0.4*MM), 
+                        100,-sydut,sydut,100,-match_dist_dut,match_dist_dut), 
                 minst.ref_plane: ROOT.TH2F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
-                        100,-syref,syref,100,-0.4*MM,0.4*MM) }
+                        100,-syref,syref,100,-match_dist_ref,match_dist_ref) }
         self.resch_matched = { minst.dut_plane: ROOT.TH2F("resch_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
-                        100,-0.6*MM,0.6*MM,100,0,600), 
+                        100,-match_dist_dut,match_dist_dut,100,0,600), 
                 minst.ref_plane: ROOT.TH2F("resch_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
-                        100,-0.6*MM,0.6*MM,100,0,600) }
+                        100,-match_dist_ref,match_dist_ref,100,0,600) }
         self.hcharge_matched = { minst.dut_plane: ROOT.TProfile2D("charge_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2280,9 +2291,9 @@ class processor(object):
                     ";charge cluster [ADC];Entries",300,0,600),
                 minst.ref_plane: ROOT.TH1F("charge1D_m_ref",";charge cluster [ADC];Entries",300,0,600) }
         self.resclsize_matched = { minst.dut_plane: ROOT.TH2F("resclsize_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];cluster size",\
-                        100,-0.2*MM,0.2*MM,10,-0.5,9.5), 
+                        100,-match_dist_dut,match_dist_dut,10,-0.5,9.5), 
                 minst.ref_plane: ROOT.TH2F("resclsize_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge size",\
-                        100,-0.2*MM,0.2*MM,10,-0.5,9.5) }
+                        100,-match_dist_ref,match_dist_ref,10,-0.5,9.5) }
         self.hclustersize_matched = { minst.dut_plane: ROOT.TProfile2D("clustersize_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<cluster size>", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2624,7 +2635,7 @@ class processor(object):
         r,tr = trks.get_point_in_sensor_frame(itrk,hits)
         # -- hit map
         self.hitmap_associated[hits.id].Fill(r[0],r[1])
-        # -- residuals
+        # -- residuals: analogously dr= self.track_distance[itrk]
         dr = hits.sC_local[ihit]-r[hits.sC_index]
         self.residual_associated[hits.id].Fill(hits.sC_local[ihit],dr)
         # -- charge
@@ -2663,7 +2674,7 @@ class processor(object):
         r,tr = trks.get_point_in_sensor_frame(itrk,hits)
         # -- hit map
         self.hitmap_matched[hits.id].Fill(r[0],r[1])
-        # -- residuals
+        # -- residuals (analogously, self.track_distance[itrk])
         dr = hits.sC_local[ihit]-r[hits.sC_index]
         self.residual_matched[hits.id].Fill(hits.sC_local[ihit],dr)
         # -- charge
@@ -2707,7 +2718,8 @@ class processor(object):
         for hits in (refhits,duthits):
             for ihit in xrange(hits.n):
                 # Number of tracks associated to the same hit
-                self.ntrks_perhit[hits.id].Fill(len(filter(lambda _ih: _ih == ihit,hits.track_link.values())))
+                self.ntrks_perhit[hits.id].Fill(len(filter(lambda (_itr,_ih): _ih == ihit,hits.track_link.iteritems())))
+                # distance of the hit to the closest track?
                 # -- Check with the associated tracks dictionary if this hit is there
                 is_associated = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
                 self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
