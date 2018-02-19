@@ -1084,10 +1084,27 @@ class hits_plane_accessor(object):
             The point position where to search the closest hit 
         """
         # Loop over all available hits and found the closest
-        ind_distance_list = map(lambda (i,r): (i,r-point[1]),enumerate(self.sC_local))
+        ind_distance_list = map(lambda (i,r): (i,r-point[self.sC_index]),enumerate(self.sC_local))
         if len(ind_distance_list) == 0 :
             return (-1,-9999)
         return min(ind_distance_list,key=lambda (i,d): abs(d))
+                
+    def get_associated_tracks(self,ihit):
+        """Return the list of track indices already associated 
+        to this hit 
+
+        Parameters
+        ----------
+        ihit: int
+            The hit index to check
+
+        Return
+        ------
+        trks: list(int)
+            The list of the associated tracks indices
+        """
+        return map(lambda (_tind,_h): _tind, \
+                filter(lambda (_t,_h): _h == ihit, self.track_link.iteritems()))
 
     def is_within_matching_distance(self,dist_check):
         """Whether or not the distance introduced is within
@@ -1814,36 +1831,35 @@ class tracks_accessor(object):
         from math import sqrt
 
         # Get the histograms
+        # ---- histos[sensor_id] : 
+        #      0: hcorr, 1: hdx,  2:hdx_finer, 3: hdx_finer_wide, 4: plane
         hcorr,hdx,hdx_finer,hdx_finer_wide,hplane= histos[refhits.id]
         hcorr_d,hdx_d,hdx_finer_d,hdx_finer_wide_d,hplane_d= histos[duthits.id]
         
+        r_offset = {}
         if refhits.sensitive_direction == "x":
             # -- the offset
-            r_offset_r = refhits.align_constants[refhits.id].x_offset
-            r_offset_d = refhits.align_constants[duthits.id].x_offset
+            r_offset[refhits.id] = refhits.align_constants[refhits.id].x_offset
+            r_offset[duthits.id] = duthits.align_constants[duthits.id].x_offset
             # -- the proper track slope
             #track_slope = self.dxdz
         elif refhits.sensitive_direction == "y":
             # -- the offset
-            r_offset_r = refhits.align_constants[refhits.id].y_offset
-            r_offset_d = refhits.align_constants[duthits.id].y_offset
+            r_offset[refhits.id] = refhits.align_constants[refhits.id].y_offset
+            r_offset[duthits.id] = duthits.align_constants[duthits.id].y_offset
             # -- the proper track slope
             #track_slope = self.dydz
 
         # Start track loop
         tracks_d = {}
         for itrk in xrange(self.n):
-            (r_ref,t_ref) = self.get_point_in_sensor_frame(itrk,refhits)
-            (r_dut,t_dut) = self.get_point_in_sensor_frame(itrk,duthits)
-            # First check isolation (XXX SUBSTITUTE by is_isolated)
-            # --- Fill the displacement offset histogram, in order to
-            #     to align. First a coarse, raw 
-            refhits.fill_distance_histo((r_ref[refhits.sC_index]-r_offset_r),hdx)
-            refhits.fill_correlation_histo(r_ref[refhits.sC_index],hcorr)
-            duthits.fill_distance_histo((r_dut[duthits.sC_index]-r_offset_d),hdx_d)
-            duthits.fill_correlation_histo(r_dut[duthits.sC_index],hcorr_d)
+            hit_indices = { refhits.id: -1, duthits.id: -1 }
+            # Try to associate with a not used hit
+            # First of all be sure this is an isolated track 
+            # (only to be checked in the REF plane)
             # --- SLOW ALGORITHM -- TRY TO IMPROVE IT
             is_isolated = True
+            (r_ref,reftel) = self.get_point_in_sensor_frame(itrk,refhits)
             for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
                 (o_ref,o_ref) = self.get_point_in_sensor_frame(otrk,refhits)
                 # Just asking for isolation in REF (XXX what about DUT?)
@@ -1852,41 +1868,67 @@ class tracks_accessor(object):
                     is_isolated = False
                     break
             if not is_isolated:
+                # Ignore this track and move to the next one
                 continue
-            # -- Now find the closest hit to that track (-1 is returned if any)
-            iref,distance_ref = refhits.close_hit(r_ref)
-            # -- Quality control for teh DUT clusters
-            if apply_quality or duthits.is_good_cluster():
-                idut,distance_dut = duthits.close_hit(r_dut)
-            else:
-                idut,distance_dut = -1,-9999
-            # -- Some plots: smoother residual evaluation (and alignment) 
-            #    using closest hits to a track (event if the hit is re-used)
-            if iref != -1:
-                hdx_finer.Fill(refhits.sC_local[iref]-r_ref[refhits.sC_index])
-                hdx_finer_wide.Fill(refhits.sC_local[iref]-r_ref[refhits.sC_index])
-                hplane.Fill(t_ref[2]-refhits.z[0],t_ref[0],t_ref[1])
-            if idut != -1:
-                hdx_finer_d.Fill(duthits.sC_local[idut]-r_dut[duthits.sC_index])
-                hdx_finer_wide_d.Fill(duthits.sC_local[idut]-r_dut[duthits.sC_index])
-                hplane_d.Fill(t_dut[2]-duthits.z[0],t_dut[0],t_dut[1])
-            # -- Association 
-            if not refhits.is_within_matching_distance(distance_ref):
-                iref = -1
-            else:
-                # equivalently, link the track with the hit
-                refhits.track_link[itrk] = iref
-            # and check if is within fiducial
-            refhits.track_inside[itrk] = refhits.is_within_fiducial(r_ref[0],r_ref[1])
-            if not duthits.is_within_matching_distance(distance_dut):
-                idut = -1
-            else:
-                # equivalently, link the track with the hit
-                duthits.track_link[itrk] = idut
-            # and check if is within fiducial
-            duthits.track_inside[itrk] = duthits.is_within_fiducial(r_dut[0],r_dut[1])
+            for hits in (refhits,duthits):
+                # The index position of this sensor in the tracks dict: 0: REF, 1: DUT
+                if hits.id == refhits.id:
+                    isens_td = 0
+                elif hits.id == duthits.id:
+                    isens_td = 1
+                (rsens,tel) = self.get_point_in_sensor_frame(itrk,hits)
+                # First check isolation (XXX SUBSTITUTE by is_isolated)
+                # --- Fill the displacement offset histogram, in order to
+                #     to align. First a coarse, raw 
+                hits.fill_distance_histo((rsens[hits.sC_index]-r_offset[hits.id]),histos[hits.id][1])
+                hits.fill_correlation_histo(rsens[hits.sC_index],histos[hits.id][0])
+                # -- Now find the closest hit to that track (-1 is returned if any)
+                ihit,distance = hits.close_hit(rsens)
+                # -- Quality control for the DUT clusters
+                if hits.id == duthits.id:
+                    if apply_quality or hits.is_good_cluster():
+                        ihit,distance = hits.close_hit(rsens)
+                    else:
+                        ihit,distance = -1,-9999
+                # -- Some plots: smoother residual evaluation (and alignment) 
+                #    using closest hits to a track (event if the hit is re-used)
+                # -- dx_finer histo
+                if ihit != -1:
+                    histos[hits.id][2].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
+                    # -- dx_finer_wide
+                    histos[hits.id][3].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
+                    # -- plane
+                    histos[hits.id][4].Fill(tel[2]-hits.z[0],tel[0],tel[1])
+                # -- Association 
+                if not hits.is_within_matching_distance(distance):
+                    ihit = -1
+                else:
+                    # equivalently, link the track with the hit
+                    # Check if the hits was associated before, if it was,
+                    # keep the closest track
+                    hastobelinked=True
+                    for old_trk in hits.get_associated_tracks(ihit):
+                        # If the new one is closest, remove the old one
+                        # from the association dicts
+                        if abs(distance)-abs(hits.track_distance[old_trk]) < 0.0:
+                            dummy = hits.track_link.pop(old_trk)
+                            dummy = hits.track_distance.pop(old_trk)
+                            # and remove also the link in the dictionary
+                            tracks_d[old_trk][isens_td] = -1
+                        else: 
+                            # Ignore this track, found a closest one to
+                            # the same hit
+                            hastobelinked=False
+                    if hastobelinked:
+                        hits.track_link[itrk] = ihit
+                        hits.track_distance[itrk] = distance
+                    else:
+                        ihit = -1
+                # and check if is within fiducial
+                hits.track_inside[itrk] = hits.is_within_fiducial(rsens[0],rsens[1])
+                hit_indices[hits.id] = ihit
             # Fill the track dictionary with matching information
-            tracks_d[itrk] = (iref,idut)
+            tracks_d[itrk] = [hit_indices[refhits.id],hit_indices[duthits.id]]
         return tracks_d
 
     
