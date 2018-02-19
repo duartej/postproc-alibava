@@ -1811,20 +1811,12 @@ class tracks_accessor(object):
         hcorr_d,hdx_d,hdx_finer_d,hdx_finer_wide_d,hplane_d= histos[duthits.id]
         
         if refhits.sensitive_direction == "x":
-            # -- the sensitive
-            ic = 0
-            # -- the complementary
-            iccom = 1
             # -- the offset
             r_offset_r = refhits.align_constants[refhits.id].x_offset
             r_offset_d = refhits.align_constants[duthits.id].x_offset
             # -- the proper track slope
             #track_slope = self.dxdz
         elif refhits.sensitive_direction == "y":
-            # -- the sensitive
-            ic = 1
-            # -- the complementary
-            iccom = 0
             # -- the offset
             r_offset_r = refhits.align_constants[refhits.id].y_offset
             r_offset_d = refhits.align_constants[duthits.id].y_offset
@@ -1839,10 +1831,10 @@ class tracks_accessor(object):
             # First check isolation (XXX SUBSTITUTE by is_isolated)
             # --- Fill the displacement offset histogram, in order to
             #     to align. First a coarse, raw 
-            refhits.fill_distance_histo((r_ref[ic]-r_offset_r),hdx)
-            refhits.fill_correlation_histo(r_ref[ic],hcorr)
-            duthits.fill_distance_histo((r_dut[ic]-r_offset_d),hdx_d)
-            duthits.fill_correlation_histo(r_dut[ic],hcorr_d)
+            refhits.fill_distance_histo((r_ref[refhits.sC_index]-r_offset_r),hdx)
+            refhits.fill_correlation_histo(r_ref[refhits.sC_index],hcorr)
+            duthits.fill_distance_histo((r_dut[duthits.sC_index]-r_offset_d),hdx_d)
+            duthits.fill_correlation_histo(r_dut[duthits.sC_index],hcorr_d)
             # --- SLOW ALGORITHM -- TRY TO IMPROVE IT
             is_isolated = True
             for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
@@ -1864,12 +1856,12 @@ class tracks_accessor(object):
             # -- Some plots: smoother residual evaluation (and alignment) 
             #    using closest hits to a track (event if the hit is re-used)
             if iref != -1:
-                hdx_finer.Fill(refhits.sC_local[iref]-r_ref[ic])
-                hdx_finer_wide.Fill(refhits.sC_local[iref]-r_ref[ic])
+                hdx_finer.Fill(refhits.sC_local[iref]-r_ref[refhits.sC_index])
+                hdx_finer_wide.Fill(refhits.sC_local[iref]-r_ref[refhits.sC_index])
                 hplane.Fill(t_ref[2]-refhits.z[0],t_ref[0],t_ref[1])
             if idut != -1:
-                hdx_finer_d.Fill(duthits.sC_local[idut]-r_dut[ic])
-                hdx_finer_wide_d.Fill(duthits.sC_local[idut]-r_dut[ic])
+                hdx_finer_d.Fill(duthits.sC_local[idut]-r_dut[duthits.sC_index])
+                hdx_finer_wide_d.Fill(duthits.sC_local[idut]-r_dut[duthits.sC_index])
                 hplane_d.Fill(t_dut[2]-duthits.z[0],t_dut[0],t_dut[1])
             # -- Association 
             if not refhits.is_within_matching_distance(distance_ref):
