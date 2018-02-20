@@ -2162,9 +2162,9 @@ class processor(object):
         self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
         ## ----
         self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
-        # Matching distance (see definition at hit accessor)
-        match_dist_dut = 6*self.pitchY[minst.dut_plane]
-        match_dist_ref = 2*self.pitchY[minst.ref_plane]
+        # Fine distance (see definition at hit accessor)
+        fine_dist_dut = 2*self.pitchY[minst.dut_plane]
+        fine_dist_ref = 2*self.pitchY[minst.ref_plane]
 
         #self.pitchX = self.pitchY
         # -- Check if is 3-D or strips
@@ -2246,13 +2246,13 @@ class processor(object):
         # Associated histos (hits associated to a track)
         # -------------------------------------
         self.residual_associated = { minst.dut_plane: ROOT.TH2F("res_a_dut","y_{DUT} [mm];y_{DUT}-y_{DUT}^{pred} [mm];Entries",\
-                    100,-1.1*sydut,1.1*sydut,100,-match_dist_dut,match_dist_dut), 
+                    100,-1.1*sydut,1.1*sydut,100,-fine_dist_dut,fine_dist_dut), 
                 minst.ref_plane: ROOT.TH2F("res_a_ref",";y_{REF} [mm] ;y_{REF}-y_{REF}^{pred} [mm];Entries",\
-                    100,-1.1*syref,1.1*syref,100,-match_dist_ref,match_dist_ref) }
+                    100,-1.1*syref,1.1*syref,100,-fine_dist_ref,fine_dist_ref) }
         self.resch_associated = { minst.dut_plane: ROOT.TH2F("resch_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
-                        100,-match_dist_dut,match_dist_dut,100,0,600), 
+                        100,-fine_dist_dut,fine_dist_dut,100,0,600), 
                 minst.ref_plane: ROOT.TH2F("resch_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
-                        100,-match_dist_ref,match_dist_ref,100,0,600) }
+                        100,-fine_dist_ref,fine_dist_ref,100,0,600) }
         self.hcharge_associated = { minst.dut_plane: ROOT.TProfile2D("charge_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2263,9 +2263,9 @@ class processor(object):
                     ";charge cluster [ADC];Entries",300,0,600),
                 minst.ref_plane: ROOT.TH1F("charge1D_a_ref",";charge cluster [ADC];Entries",300,0,600) }
         self.resclsize_associated = { minst.dut_plane: ROOT.TH2F("resclsize_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];cluster size",\
-                        100,-match_dist_dut,match_dist_dut,10,-0.5,9.5), 
+                        100,-fine_dist_dut,fine_dist_dut,10,-0.5,9.5), 
                 minst.ref_plane: ROOT.TH2F("resclsize_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge size",\
-                        100,-match_dist_ref,match_dist_ref,10,-0.5,9.5) }
+                        100,-fine_dist_ref,fine_dist_ref,10,-0.5,9.5) }
         self.hclustersize_associated = { minst.dut_plane: ROOT.TProfile2D("clustersize_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<cluster size>", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2313,13 +2313,13 @@ class processor(object):
         # Residuals between REF-DUT (matched tracks family)
         # Residuals, matched family
         self.residual_matched = { minst.dut_plane: ROOT.TH2F("res_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];Entries",\
-                        100,-sydut,sydut,100,-match_dist_dut,match_dist_dut), 
+                        100,-sydut,sydut,100,-fine_dist_dut,fine_dist_dut), 
                 minst.ref_plane: ROOT.TH2F("res_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];Entries",\
-                        100,-syref,syref,100,-match_dist_ref,match_dist_ref) }
+                        100,-syref,syref,100,-fine_dist_ref,fine_dist_ref) }
         self.resch_matched = { minst.dut_plane: ROOT.TH2F("resch_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];charge cluster [ADC]",\
-                        100,-match_dist_dut,match_dist_dut,100,0,600), 
+                        100,-fine_dist_dut,fine_dist_dut,100,0,600), 
                 minst.ref_plane: ROOT.TH2F("resch_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge cluster [ADC]",\
-                        100,-match_dist_ref,match_dist_ref,100,0,600) }
+                        100,-fine_dist_ref,fine_dist_ref,100,0,600) }
         self.hcharge_matched = { minst.dut_plane: ROOT.TProfile2D("charge_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<charge cluster> [ADC]", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
@@ -2330,9 +2330,9 @@ class processor(object):
                     ";charge cluster [ADC];Entries",300,0,600),
                 minst.ref_plane: ROOT.TH1F("charge1D_m_ref",";charge cluster [ADC];Entries",300,0,600) }
         self.resclsize_matched = { minst.dut_plane: ROOT.TH2F("resclsize_m_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];cluster size",\
-                        100,-match_dist_dut,match_dist_dut,10,-0.5,9.5), 
+                        100,-fine_dist_dut,fine_dist_dut,10,-0.5,9.5), 
                 minst.ref_plane: ROOT.TH2F("resclsize_m_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge size",\
-                        100,-match_dist_ref,match_dist_ref,10,-0.5,9.5) }
+                        100,-fine_dist_ref,fine_dist_ref,10,-0.5,9.5) }
         self.hclustersize_matched = { minst.dut_plane: ROOT.TProfile2D("clustersize_m_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<cluster size>", \
                     300,-1.1*sxdut,1.1*sxdut,300,-1.1*sydut,1.1*sydut),
