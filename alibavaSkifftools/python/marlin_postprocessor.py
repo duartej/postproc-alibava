@@ -1147,7 +1147,7 @@ class hits_plane_accessor(object):
         """
         dummy = map(lambda r: h.Fill(r,rtele),self.sC_local)
 
-    def is_good_cluster(self):
+    def event_inside_tdc_window(self):
         """The function checks if the cluster was generated in the 
         peak of the TDC time (assuming this is a DUT sensor). 
 
@@ -1800,7 +1800,7 @@ class tracks_accessor(object):
         dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
 
-    def associate_hits(self,refhits,duthits,histos,apply_quality):
+    def associate_hits(self,refhits,duthits,histos,process_it):
         """Perform the hits association to each track found,
         given that the tracks can only be associated if they
         are isolated (see isolation_condition datamember).
@@ -1816,9 +1816,9 @@ class tracks_accessor(object):
         histos: dict(list(TObject))
             A list of histograms, profiles and maps per
             sensor, to fill during the association
-        apply_quality: bool
-            Whether or not apply cluster quality 
-            criteria
+        process_it: bool
+            Whether or not process the event or not, 
+            just returning an empty dict
 
         Return
         ------
@@ -1829,6 +1829,9 @@ class tracks_accessor(object):
             { track_index: (REF-hit-index,DUT-hit-index) ,... }
         """
         from math import sqrt
+        
+        if not process_it:
+            return {}
 
         # Get the histograms
         # ---- histos[sensor_id] : 
@@ -1884,12 +1887,6 @@ class tracks_accessor(object):
                 hits.fill_correlation_histo(rsens[hits.sC_index],histos[hits.id][0])
                 # -- Now find the closest hit to that track (-1 is returned if any)
                 ihit,distance = hits.close_hit(rsens)
-                # -- Quality control for the DUT clusters
-                if hits.id == duthits.id:
-                    if apply_quality or hits.is_good_cluster():
-                        ihit,distance = hits.close_hit(rsens)
-                    else:
-                        ihit,distance = -1,-9999
                 # -- Some plots: smoother residual evaluation (and alignment) 
                 #    using closest hits to a track (event if the hit is re-used)
                 # -- dx_finer histo
@@ -2386,7 +2383,7 @@ class processor(object):
 
         # efficiency
         self.heff = ROOT.TProfile2D("eff_map",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [mm];#varepsilon",\
-                50,-1.1*sxdut,1.1*sxdut,int(2*nch_dut+3),-1.1*sydut,1.1*sydut)
+                50,-1.1*sxdut,1.1*sxdut,50,-1.1*sydut,1.1*sydut)
         self.heff_ch = ROOT.TProfile2D("eff_map_ch",";x_{trk}^{DUT} [mm]; y^{DUT}_{trk} [channel];#varepsilon",\
                 50,-1.1*sxdut,1.1*sxdut,int(2*nch_dut+3),-1.5,(nch_dut+1.0-0.5))
         self.heff_mod = ROOT.TProfile2D("eff_mod",";mod(x_{trk})_{2xpitch} [#mum]; mod(y_{trk})_{2xpitch} [#mum];"\
@@ -2415,9 +2412,9 @@ class processor(object):
                 "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
                     "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
-        self.ntrks_perhit = { minst.dut_plane: ROOT.TH1F("ntrk_perhit_dut","MUST BE 1!!;N_{trks/hit};Entries",10,-0.5,9.5),
-                minst.ref_plane: ROOT.TH1F("ntrk_perhit_ref",";N_{trks/hit};N_{tracks};Entries",10,-0.5,9.5) }
-        self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut","MUST BE 1!!;N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
+        self.ntrks_perhit = { minst.dut_plane: ROOT.TH1F("ntrk_perhit_dut","MUST BE 0 or 1!!;N_{trks/hit};Entries",4,-0.5,3.5),
+                minst.ref_plane: ROOT.TH1F("ntrk_perhit_ref","MUST BE 0 or 1!!;N_{trks/hit};N_{tracks};Entries",10,-0.5,3.5) }
+        self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
                 minst.ref_plane: ROOT.TH2F("nhits_ntracks_all_ref",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5) }
         self.track_a_eff = { minst.dut_plane: ROOT.TProfile("track_a_eff_dut","Track-association efficiency;x_{DUT};#varepsilon",\
                     100,-sydut*1.01,sydut*1.01,0,1),
@@ -2940,16 +2937,16 @@ class processor(object):
         
         # Do not apply quality cluster in the LGDAD case, the time window
         # is not well defined
-        apply_quality = (is_alignment or duthits.sensor_name.find("LGAD") == 0)
+        apply_quality = (not is_alignment or duthits.sensor_name.find("LGAD") == 0)
+        process_event = (not apply_quality or \
+                (apply_quality and duthits.event_inside_tdc_window()) )
         # -- The workhorse method: obtain one hit per track
-        track_dict = trks.associate_hits(refhits,duthits,histos,apply_quality)
+        track_dict = trks.associate_hits(refhits,duthits,histos,process_event)
 
         # -- If alignment just perform the histo filling and finish
         if is_alignment:
             # -- fill the relevant histograms 
             self.fill_alignment_histos(track_dict,trks,refhits,duthits)
-            # -- update the alignment constants ---> Cosntants does change in an event basis?? XXX-A
-            #self.alignment = dict(map(lambda (i,d): (i,d.align_constants[i]) ,sensor_hits.iteritems()))
             #Get an estimation of the sensor efficiency ?
             #self.fill_statistics_matched(matched_hits)
             return
