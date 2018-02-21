@@ -335,7 +335,7 @@ class specs_sensor():
 # Note tha we are using the 3D as micro-strip sensors, forcing
 # the pitch in X be all the X-sensor size -> SENSITIVE AXIS: Y
 mtype = specs_sensor(7.5,6.4,7.5,0.05,0.23)
-ntype = specs_sensor(3.2,7.5,7.5,0.0250,0.23)
+ntype = specs_sensor(7.5,3.2,7.5,0.025,0.23)
 lgad  = specs_sensor(5.12,5.12,5.12,0.160,0.3)
 ilgad = specs_sensor(7.2,7.2,7.2,0.160,0.3,polarity=1.0)
 ref   = specs_sensor(10.24,10.24,10.24,0.08,0.3,polarity=1.0)
