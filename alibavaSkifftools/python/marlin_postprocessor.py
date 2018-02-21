@@ -703,7 +703,7 @@ class hits_plane_accessor(object):
         ------
         The x position in channel number
         """
-        return (x+0.5*self.sizeX)/self.pitchX-0.5
+        return (x+0.5*self.sizeX)/self.pitchX+0.5
     
     def get_y_channel(self,y):
         """The equivalent channel number for the
@@ -718,7 +718,7 @@ class hits_plane_accessor(object):
         ------
         The y position in channel number
         """
-        return (y+0.5*self.sizeY)/self.pitchY-0.5
+        return (y+0.5*self.sizeY)/self.pitchY+0.5
 
     def is_within_fiducial(self,x,y):
         """Whether or not the particle is inside the defined
