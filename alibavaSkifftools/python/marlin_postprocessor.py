@@ -2787,13 +2787,13 @@ class processor(object):
         # Some intermediate efficiencies
         # ------------------------------
         # Association probability (given a hit, is there a track matched)
-        for hits in (refhits,duthits):
+        for (ind_th,hits) in enumerate((refhits,duthits)):
             for ihit in xrange(hits.n):
                 # Number of tracks associated to the same hit
                 self.ntrks_perhit[hits.id].Fill(len(filter(lambda (_itr,_ih): _ih == ihit,hits.track_link.iteritems())))
                 # distance of the hit to the closest track?
                 # -- Check with the associated tracks dictionary if this hit is there
-                is_associated = int(len(filter(lambda (it,(i_r,i_d)): i_r == ihit,track_dict.iteritems())) == 0)
+                is_associated = int(len(filter(lambda (it,ih): ih[ind_th] == ihit,track_dict.iteritems())) > 0)
                 self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
                 self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(trks.n>0))
                 # Hit position
