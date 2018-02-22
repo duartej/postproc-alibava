@@ -111,6 +111,30 @@ class metadata_container(object):
         _p = 1.0/math.sqrt(12.0)
         self.resolution = { self.ref_plane: self.ref_pitchX*_p/MM , 
                 self.dut_plane: self.dut_pitchX*_p/MM }
+    
+    def fake_non_sensitive_attributes(self,sensitive_axis="y"):
+        """Convert the pitch of the non-sensitive direction in 
+        such a way that it mimics a pixel-like detector
+
+        Parameters
+        ----------
+        sensitive_axis: str
+            The axis considered sensitive, valid values "x"|"y"
+        """
+        if sensitive_axis.lower() == "y":
+            nch = lambda n: getattr(self,"{0}_sizeY".format(n))/getattr(self,"{0}_pitchY".format(n))
+            cal = lambda n: getattr(self,"{0}_sizeX".format(n))/nch(n)
+            pitch = "{0}_pitchX"
+        elif sensitive_axis.lower() == "x":
+            nch = lambda n: getattr(self,"{0}_sizeX".format(n))/getattr(self,"{0}_pitchX".format(n))
+            cal = lambda n: getattr(self,"{0}_sizeY".format(n))/nch(n)
+            pitch = "{0}_pitchY"
+        else:
+            raise RuntimeError("Not recognized argument '{0}'".format(sensitive_axis))
+        # Updating the non-sensitive pitch to become a pixel-type
+        for s in ("dut","ref"):
+            setattr(self,pitch.format(s),cal(s))
+        # Update resolution ?
 
 class dummy_list(list):
     """A dummy list which returns always
@@ -590,22 +614,26 @@ class hits_plane_accessor(object):
             hits_plane_accessor.resync[self.id] = False
         
         # Dimensions of the sensor (note some issues with LGADS and iLGADs)
-        self.sizeX = specs[self.sensor_name].sizeX 
-        self.sizeY = specs[self.sensor_name].sizeY 
-        self.pitchX = specs[self.sensor_name].pitchX 
-        self.pitchY = specs[self.sensor_name].pitchY 
+        dim_sen = metadata_container(tree,sensor_name)
+        # -- use this sensor with a pseudo-pixel pitch on the non-sensitive
+        dim_sen.fake_non_sensitive_attributes(self.sensitive_direction)
+
+        self.sizeX = dim_sen.dut_sizeX
+        self.sizeY = dim_sen.dut_sizeY
+        self.pitchX = dim_sen.dut_pitchX
+        self.pitchY = dim_sen.dut_pitchY 
         if self.sensor_name.lower().find("ilgad") == 0:
             self.sizeY = 7.2*MM
             self.sizeX = 7.2*MM
-            self.pitchX = self.sizeX
         elif self.sensor_name.lower().find("lgad") == 0:
             self.sizeY = 5.2*MM
             self.sizeX = 5.2*MM
-            self.pitchX = self.sizeX
+
+        # Th enumber of channels
         self.x_channels = self.sizeX/self.pitchX
         self.y_channels = self.sizeY/self.pitchY
-
-        # --The position in channel number
+        
+        # --The position in channel number:
         self.x_strip = lambda i: (self.x_local[i]+0.5*self.sizeX)/self.pitchX+0.5
         self.y_strip = lambda i: (self.y_local[i]+0.5*self.sizeY)/self.pitchY+0.5
 
@@ -615,21 +643,22 @@ class hits_plane_accessor(object):
             self.sC_index = 0
             self.sC_other_index = 1
             self.sC_local = self.x_local
+            self.x_channels = self.sizeX/self.pitchX
             self.resolution = self.pitchX
             self.strip_position = self.x_strip
             self.sC_channels = self.x_channels
-            self.other_channels = self.y_channels
             self.get_sC_channel = self.get_x_channel
+            self.other_channels = self.y_channels
         elif self.sensitive_direction == "y":
             self.sC = self.y
             self.sC_index = 1
             self.sC_other_index = 0
             self.sC_local = self.y_local
+            self.y_channels = self.sizeY/self.pitchX
             self.resolution = self.pitchY
             self.strip_position = self.y_strip
             self.sC_channels = self.y_channels
             self.other_channels = self.x_channels
-            self.get_sC_channel = self.get_y_channel
 
         # The maximum distance to consider a hit matched a track
         self.matching_distance = 2.0*self.resolution
@@ -2092,6 +2121,9 @@ class processor(object):
     """Results extractor. Main class where statistics and histograms 
     are defined and filled. 
 
+    WARNING: This class is being intialized considering that the
+             sensitive direction is the Y-axis
+
     Attributes
     ----------
     total_events: int
@@ -2156,23 +2188,11 @@ class processor(object):
         # The processed run number 
         self.run_number = run_number
 
-        # Asumming strips for the ref (so recall is going 
-        # to be used as 2 x pitch)
-        ## --- XXX Simulate pixels
-        self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
-        ## ----
-        self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
-        # Fine distance (see definition at hit accessor)
-        fine_dist_dut = 2*self.pitchY[minst.dut_plane]
-        fine_dist_ref = 2*self.pitchY[minst.ref_plane]
-
-        #self.pitchX = self.pitchY
-        # -- Check if is 3-D or strips
-        #if minst.dut_name.lower().find("lgad") == -1:
-        #    # simulate pixels
-        #    self.pitchY[minst.dut_plane] = minst.dut_pitchX
-        #else:
-        #    # As is going to be use as 2 x pitch
+        # -- The number of channels in the sensitive direction
+        nch_dut = minst.dut_sizeY/minst.dut_pitchY
+        nch_ref = minst.ref_sizeY/minst.ref_pitchY
+        
+        # -- Extract sensors characteristics
         self.sizeX = { minst.dut_plane: minst.dut_sizeX, minst.ref_plane: minst.ref_sizeX }
         self.sizeY = { minst.dut_plane: minst.dut_sizeY, minst.ref_plane: minst.ref_sizeY }
         # Be careful than iLGAD and LGAD don't have the proper dimensions of the sensors
@@ -2182,6 +2202,22 @@ class processor(object):
         elif minst.dut_name.lower().find("lgad") == 0:
             self.sizeY[minst.dut_plane]= 5.2*MM
             self.sizeX[minst.dut_plane]= 5.2*MM
+
+        self.pitchY = { minst.dut_plane: minst.dut_pitchY, minst.ref_plane: minst.ref_pitchY }
+        self.pitchX = { minst.dut_plane: minst.dut_pitchX, minst.ref_plane: minst.ref_pitchX }
+        # -- TODO: improve the sensitive direction hardcoded here
+        # - Use a fake pitch extracted from the number of channels of the 
+        #   sensitive direction
+        #self.pitchX = { minst.dut_plane: self.sizeX[self.dut_plane]/nch_dut, \
+        #        minst.ref_plane: self.sizeX[self.ref_plane]/nch_ref }
+        # Fine distance (see definition at hit accessor)
+
+        fine_dist_dut = 6*self.pitchY[minst.dut_plane]
+        fine_dist_ref = 2*self.pitchY[minst.ref_plane]
+        if minst.dut_name.find("LGAD") != -1:
+            # Note for LGAD/iLGAD too large distance, reduce it
+            fine_dist_dut = 2*self.pitchY[minst.dut_plane]
+
         # useful for the histos
         # half size plus some extra to keep alignment factors
         sxdut = self.sizeX[minst.dut_plane]*0.5+0.25
@@ -2240,9 +2276,6 @@ class processor(object):
                 self.dx_xtx_h.values()+self.dy_y_h.values()+self.dx_tx_h.values()+\
                 self.hplane.values()
         
-        # -- The number of channels of this dut
-        nch_dut = self.sizeY[self.dut_plane]/minst.dut_pitchY
-        nch_ref = self.sizeY[self.ref_plane]/minst.ref_pitchY
         # Associated histos (hits associated to a track)
         # -------------------------------------
         self.residual_associated = { minst.dut_plane: ROOT.TH2F("res_a_dut","y_{DUT} [mm];y_{DUT}-y_{DUT}^{pred} [mm];Entries",\
@@ -3264,6 +3297,8 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     # And obtain some metadata (ID of the sensors and sensors
     # resolutions)
     metadata = metadata_container(t,name_converter[fp.sensor_name])
+    # Hardcoded here the sensitive direction
+    metadata.fake_non_sensitive_attributes("y")
 
     # Set some globals
     #tree_inspector(t)
