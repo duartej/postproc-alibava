@@ -2971,8 +2971,8 @@ class processor(object):
         # Do not apply quality cluster in the LGDAD case, the time window
         # is not well defined
         apply_quality = (not is_alignment or duthits.sensor_name.find("LGAD") == 0)
-        process_event = (not apply_quality or \
-                (apply_quality and duthits.event_inside_tdc_window()) )
+        process_event = (not apply_quality \
+                or (apply_quality and duthits.event_inside_tdc_window()) )
         # -- The workhorse method: obtain one hit per track
         track_dict = trks.associate_hits(refhits,duthits,histos,process_event)
 
@@ -3006,7 +3006,7 @@ class processor(object):
                 continue
             # -- Fill matched histograms
             r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
-            # Just within acceptance
+            # Just within fiducial region
             #assert( duthits.is_within_fiducial(r_at_dut[0],r_at_dut[1]) == duthits.track_inside[itrk] )
             if not duthits.track_inside[itrk]:
                 continue
@@ -3033,8 +3033,10 @@ class processor(object):
                 if clustersize == 2:
                     self.heta.Fill(duthits.eta[idut])
                     self.duthits_matched_eta.append(self.duthits_matched_eta_h[-1])
-        # Extra histograms: 
-        if DEBUG:
+        # Extra histograms, only call it if the event was actually processed
+        # otherwise, the inefficiency of not processing the event is going to 
+        # be included: 
+        if DEBUG and process_event:
             self.fill_diagnosis_histos(trks,refhits,duthits,track_dict)
 
         #self.fill_statistics_matched(matched_hits)
