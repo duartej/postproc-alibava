@@ -1767,18 +1767,33 @@ class tracks_accessor(object):
         self._cache_isodistance = { self.dutid: {}, self.refid: {} }
 
     def find_iso_distance(self,i,hitplane):
-        """
+        """Found the closest track in the hitplane
+
+        Parameter
+        ---------
+        i: int 
+            The index of the track
+        hitplane: hit_planes_accessor
+            The plane accessor to look at the track
+            prediction
+
+        Return
+        ------
+        distance: float
+            The distance between the current track and
+            the closest one in the hitplane
         """
         from math import sqrt
         
         # It was previously calculated
-        if self._cache_isodistance[hitplane].has_key(i):
+        if self._cache_isodistance[hitplane.id].has_key(i):
             return self._cache_isodistance[hitplane.id][i]
         # Otherwise, do it now
-        distance = min(map(lambda (oindex,((o_x,o_y,o_z),_tel)): (oindex,sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+        (xpred,ypred,zpred),rtel= self.get_point_in_sensor_frame(i,hitplane)
+        distance = min(map(lambda (oindex,((o_x,o_y,o_z),_tel)): sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0),\
                 map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hitplane)),\
                     filter(lambda iother: iother != i,xrange(self.n)))))
-        self._cache_isodistance[hitplane][i] = distance
+        self._cache_isodistance[hitplane.id][i] = distance
         return distance
     
     def is_isolated(self,i,hit_z_position):
@@ -1800,10 +1815,13 @@ class tracks_accessor(object):
         """
         from math import sqrt
         
+        # Needed at least two tracks, to compare isolation
+        if self.n <= 1:
+            return True
         # -- It was found previously..
         if self._cache_nonisolated[hit_z_position.id].has_key(i):
             return False
-        if find_iso_distance(i,hit_z_position) < self.isolation_condition:
+        if self.find_iso_distance(i,hit_z_position) < self.isolation_condition:
             self._cache_nonisolated[hit_z_position.id][i] = 1
             return False
         else:
@@ -1852,7 +1870,7 @@ class tracks_accessor(object):
         Return
         ------
         tracks_d: dict( (int,(int,int) )
-            A dict with the indices of the tracks associated
+            A dict with the indices of the isolated tracks associated
             to the indices of the matched hits. If there is 
             not, a -1 is placed instead of the index.
             { track_index: (REF-hit-index,DUT-hit-index) ,... }
@@ -1882,25 +1900,15 @@ class tracks_accessor(object):
             # -- the proper track slope
             #track_slope = self.dydz
 
-        # Start track loop
+        # Start track loop, every isolated track is going to 
+        # be store in the dict
         tracks_d = {}
         for itrk in xrange(self.n):
             hit_indices = { refhits.id: -1, duthits.id: -1 }
             # Try to associate with a not used hit
             # First of all be sure this is an isolated track 
             # (only to be checked in the REF plane)
-            # --- SLOW ALGORITHM -- TRY TO IMPROVE IT
-            is_isolated = True
-            (r_ref,reftel) = self.get_point_in_sensor_frame(itrk,refhits)
-            for otrk in filter(lambda i: i  != itrk,xrange(self.n)):
-                (o_ref,o_ref) = self.get_point_in_sensor_frame(otrk,refhits)
-                # Just asking for isolation in REF (XXX what about DUT?)
-                if abs(r_ref[0]-o_ref[0]) < self.isolation_condition \
-                        and abs(r_ref[1]-o_ref[1]) < self.isolation_condition:
-                    is_isolated = False
-                    break
-            if not is_isolated:
-                # Ignore this track and move to the next one
+            if not self.is_isolated(itrk,refhits):
                 continue
             for hits in (refhits,duthits):
                 # The index position of this sensor in the tracks dict: 0: REF, 1: DUT
@@ -2768,8 +2776,11 @@ class processor(object):
         self.hcharge_matched_mod[hits.id].Fill(xmod*UM,ymod*UM,hits.charge[ihit])
         self.hitmap_matched_mod[hits.id].Fill(xmod*UM,ymod*UM)
 
-    def fill_diagnosis_histos(self,trks,refhits,duthits,track_dict):
-        """Observables
+    def fill_diagnosis_histos(self,trks,refhits,duthits,iso_trks):
+        """Debug and diagnosis histograms
+
+        Parameters
+        ----------
         """
         # -- tracks at sensors
         for itrk in xrange(trks.n):
@@ -2793,7 +2804,7 @@ class processor(object):
                 self.ntrks_perhit[hits.id].Fill(len(filter(lambda (_itr,_ih): _ih == ihit,hits.track_link.iteritems())))
                 # distance of the hit to the closest track?
                 # -- Check with the associated tracks dictionary if this hit is there
-                is_associated = int(len(filter(lambda (it,ih): ih[ind_th] == ihit,track_dict.iteritems())) > 0)
+                is_associated = int(len(filter(lambda (it,ih): ih[ind_th] == ihit,iso_trks.iteritems())) > 0)
                 self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
                 self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(trks.n>0))
                 # Hit position
@@ -2803,7 +2814,7 @@ class processor(object):
                         xrange(ihit+1,hits.n))
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
-        for (itrk,(iref,idut)) in track_dict.iteritems():
+        for (itrk,(iref,idut)) in iso_trks.iteritems():
             # Only those tracks inside fiducial
             if not duthits.track_inside[itrk]:
                 continue
@@ -2813,8 +2824,8 @@ class processor(object):
             self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
             self.track_eff[duthits.id].Fill(rd[duthits.sC_index],(int(idut != -1)))
             # Probability of hit existance
-            self.ratio_hit_exist[refhits.id].Fill(rd[refhits.sC_index],int(refhits.n>1))
-            self.ratio_hit_exist[duthits.id].Fill(rd[duthits.sC_index],int(duthits.n>1))
+            self.ratio_hit_exist[refhits.id].Fill(rd[refhits.sC_index],int(refhits.n>0))
+            self.ratio_hit_exist[duthits.id].Fill(rd[duthits.sC_index],int(duthits.n>0))
             # Probability of hit association (given a isolated track and a hit)
             if refhits.n > 0:
                 self.trackpresent_a_eff[refhits.id].Fill(rr[refhits.sC_index],int(iref!=-1))
@@ -2973,13 +2984,13 @@ class processor(object):
         apply_quality = (not is_alignment or duthits.sensor_name.find("LGAD") == 0)
         process_event = (not apply_quality \
                 or (apply_quality and duthits.event_inside_tdc_window()) )
-        # -- The workhorse method: obtain one hit per track
-        track_dict = trks.associate_hits(refhits,duthits,histos,process_event)
+        # -- The workhorse method: obtain one hit per isolated track
+        iso_trks = trks.associate_hits(refhits,duthits,histos,process_event)
 
         # -- If alignment just perform the histo filling and finish
         if is_alignment:
             # -- fill the relevant histograms 
-            self.fill_alignment_histos(track_dict,trks,refhits,duthits)
+            self.fill_alignment_histos(iso_trks,trks,refhits,duthits)
             #Get an estimation of the sensor efficiency ?
             #self.fill_statistics_matched(matched_hits)
             return
@@ -2997,7 +3008,7 @@ class processor(object):
         
         # -- Analysis efficiency and fill histograms:
         #    Associated and matched 
-        for (itrk,(iref,idut)) in track_dict.iteritems():
+        for (itrk,(iref,idut)) in iso_trks.iteritems():
             # -- Fill extra histograms: associated hits 
             self.fill_associated_hit_histos((itrk,trks),(iref,refhits))
             self.fill_associated_hit_histos((itrk,trks),(idut,duthits))
@@ -3037,7 +3048,7 @@ class processor(object):
         # otherwise, the inefficiency of not processing the event is going to 
         # be included: 
         if DEBUG and process_event:
-            self.fill_diagnosis_histos(trks,refhits,duthits,track_dict)
+            self.fill_diagnosis_histos(trks,refhits,duthits,iso_trks)
 
         #self.fill_statistics_matched(matched_hits)
 
