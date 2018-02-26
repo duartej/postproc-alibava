@@ -1743,7 +1743,7 @@ class tracks_accessor(object):
         self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False,self.refid,self.dutid)
 
         # -- The isolation condition
-        self.isolation_condition = 0.6*MM
+        self.isolation_condition = 0.5*MM #0.6*MM
 
     @property
     def n(self):
@@ -2487,6 +2487,10 @@ class processor(object):
                     100,-sydut*1.01,sydut*1.01,0,1),
                 minst.ref_plane: ROOT.TProfile("ratio_hit_present_ref","REF-hit presence probability;y_{REF};#varepsilon",\
                     100,-sydut,sydut,0,1) }
+        self.d_arrt = ROOT.TProfile2D("dut_arrt","DUT-presence (assuming associated REF);"\
+                "x_{DUT} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
+        self.ad_darrt = ROOT.TProfile2D("dutass_darrt","DUT-association (assuming DUT presence and associated REF);"\
+                "x_{DUT} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
         self.trackpred_y_eff = ROOT.TProfile("trackpred_y_eff","Track-association efficiency vs. y-predicted;"\
                     "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1)
         self.trackpred_x_eff = ROOT.TProfile("trackpred_x_eff","Track-association efficiency vs. y-predicted;"\
@@ -2501,6 +2505,11 @@ class processor(object):
                 "x_{DUT}^{pred} [mm]; x_{REF}^{pred} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
         self.hcorry_dut_ref = ROOT.TH2F("corrY_dut_ref","Isolated tracks at DUT and REF (y);"\
                 "y_{DUT}^{pred} [mm]; y_{REF}^{pred} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
+        # Non-isolated tracks
+        self.trk_noniso_pos = ROOT.TProfile2D("trk_noniso_pos","Non-isolated tracks position;"\
+                "x_{REF} [mm];y_{REF} [mm];N_{trk}",100,-sxref,sxref,100,-syref,syref)
+        self.trk_noniso_dist = ROOT.TProfile2D("trk_noniso_dist","Non-isolated tracks position;"\
+                "x_{REF} [mm];y_{REF} [mm];N_{trk}",100,-sxref,sxref,100,-syref,syref)
         
  
         diagnostics = []
@@ -2511,7 +2520,9 @@ class processor(object):
                     self.track_a_eff.values()+self.track_senhit_eff.values()+self.trackpresent_a_eff.values()+\
                     [self.trackpred_x_eff,self.trackpred_y_eff]+self.track_eff.values()+\
                     self.ratio_hit_a.values()+self.ratio_hit_exist.values()+\
-                    [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]
+                    [self.d_arrt,self.ad_darrt]+\
+                    [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]+\
+                    [self.trk_noniso_pos,self.trk_noniso_dist]
 
 
         # Keep track of all histograms which should be stored in the file
@@ -2795,6 +2806,12 @@ class processor(object):
             # Correlation between both planes
             self.hcorrx_dut_ref.Fill(xpred_dut,xpred_ref)
             self.hcorry_dut_ref.Fill(ypred_dut,ypred_ref)
+            # Getting info about why is not isolated
+            if not trks.is_isolated(itrk,refhits):
+                # -- Position distribution
+                self.trk_noniso_pos.Fill(xpred_ref,ypred_ref,trks.n)
+                # -- Distance of the closest track
+                self.trk_noniso_dist.Fill(xpred_ref,ypred_ref,trks.find_iso_distance(itrk,refhits))
         # Some intermediate efficiencies
         # ------------------------------
         # Association probability (given a hit, is there a track matched)
@@ -2805,8 +2822,10 @@ class processor(object):
                 # distance of the hit to the closest track?
                 # -- Check with the associated tracks dictionary if this hit is there
                 is_associated = int(len(filter(lambda (it,ih): ih[ind_th] == ihit,iso_trks.iteritems())) > 0)
+                ## -- p( A_H | HIT )
                 self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
-                self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(trks.n>0))
+                ## -- p( T | HIT )
+                self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(len(iso_trks)>0))
                 # Hit position
                 self.hit[hits.id].Fill(hits.sC_local[ihit])
                 # Hit distance
@@ -2818,21 +2837,32 @@ class processor(object):
             # Only those tracks inside fiducial
             if not duthits.track_inside[itrk]:
                 continue
-            # -- probability to have a hit in the sensors for an isolated track
+            # --
             (rd,td) = trks.get_point_in_sensor_frame(itrk,duthits)
             (rr,tr) = trks.get_point_in_sensor_frame(itrk,refhits)
+            # -- p( Matched HIT_exists | Isolated-track ), i.e. probability of hit
+            #    and match
             self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
             self.track_eff[duthits.id].Fill(rd[duthits.sC_index],(int(idut != -1)))
-            # Probability of hit existance
+            # -- p( Hit_exist | Isolated-track ), i.e. prob. of having a hit
+            #    when an isolated track is present
             self.ratio_hit_exist[refhits.id].Fill(rd[refhits.sC_index],int(refhits.n>0))
             self.ratio_hit_exist[duthits.id].Fill(rd[duthits.sC_index],int(duthits.n>0))
             # Probability of hit association (given a isolated track and a hit)
             if refhits.n > 0:
+                # -- p( Match | REF_exist Iso-track ), i.e. association probability
                 self.trackpresent_a_eff[refhits.id].Fill(rr[refhits.sC_index],int(iref!=-1))
                 self.ratio_hit_a[refhits.id].Fill(rd[refhits.sC_index],int(iref!=-1))
+                if iref != -1:
+                    # -- p( DUT | MATCH_REF REF T ) 
+                    self.d_arrt.Fill(rd[0],rd[1],int(duthits.n>0))
             if duthits.n > 0:
+                # -- p( MATCH_DUT | DUT_exist Iso-track ), i.e. association probability
                 self.trackpresent_a_eff[duthits.id].Fill(rd[duthits.sC_index],int(idut!=-1))
                 self.ratio_hit_a[duthits.id].Fill(rd[duthits.sC_index],int(idut!=-1))
+            if duthits.n > 0 and refhits.n > 0 and iref != -1:
+                # -- p( MATCH_DUT | DUT MATCH_REF REF T )
+                self.ad_darrt.Fill(rd[0],rd[1],int(idut != -1))
             # -- Check what's the probability of REF association
             if idut == -1:
                 continue
