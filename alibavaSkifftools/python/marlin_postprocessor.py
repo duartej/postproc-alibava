@@ -1161,9 +1161,9 @@ class hits_plane_accessor(object):
             The (sensitiv direction) position in the sensor plane
         h: ROOT.TH1F
         """
-        dummy = map(lambda r: h.Fill(r-rtele),self.sC_local)
+        map(lambda r: h.Fill(r-rtele),self.sC_local)
     
-    def fill_correlation_histo(self,rtele,h):
+    def fill_correlation_histo(self,rtele,h,he,nevt):
         """Fill the histogram of position of the hit versus the
         rtele position (assumed to be given in the sensor plane 
         coordinate) for all hits in the event
@@ -1172,9 +1172,15 @@ class hits_plane_accessor(object):
         ---------
         rtele: float
             The (sensitiv direction) position in the sensor plane
-        h: ROOT.TH"F
+        h: ROOT.TH2F
+            Position correlation
+        he: ROOT.TH2F
+            Event correlation 
+        nevt: int
+            The number of event being processed
         """
-        dummy = map(lambda r: h.Fill(r,rtele),self.sC_local)
+        map(lambda r: h.Fill(r,rtele),self.sC_local)
+        map(lambda r: he.Fill(nevt,r-rtele),self.sC_local)
 
     def event_inside_tdc_window(self):
         """The function checks if the cluster was generated in the 
@@ -1618,6 +1624,8 @@ class tracks_accessor(object):
     
     Attributes
     ----------
+    nevents: int
+        Number of processed events
     refid: int
         The Alibava REF ID
     dutid: int
@@ -1860,9 +1868,10 @@ class tracks_accessor(object):
             The accessor to the REF hits of the event
         duthits: hits_plane_accessor
             The accessor to the DUT hits of the event
-        histos: dict(list(TObject))
+        histos: dict(list(TObject), "events": int)
             A list of histograms, profiles and maps per
-            sensor, to fill during the association
+            sensor, to fill during the association. And an
+            entry corresponding to the number of processed events
         process_it: bool
             Whether or not process the event or not, 
             just returning an empty dict
@@ -1882,9 +1891,12 @@ class tracks_accessor(object):
 
         # Get the histograms
         # ---- histos[sensor_id] : 
-        #      0: hcorr, 1: hdx,  2:hdx_finer, 3: hdx_finer_wide, 4: plane
-        hcorr,hdx,hdx_finer,hdx_finer_wide,hplane= histos[refhits.id]
-        hcorr_d,hdx_d,hdx_finer_d,hdx_finer_wide_d,hplane_d= histos[duthits.id]
+        #      0: hcorr, 1: hdx,  2:hdx_finer, 3: hdx_finer_wide, 4: plane, 5: event correlation
+        hcorr,hdx,hdx_finer,hdx_finer_wide,hplane,hec= histos[refhits.id]
+        hcorr_d,hdx_d,hdx_finer_d,hdx_finer_wide_d,hplane_d,hec_d= histos[duthits.id]
+        # Remember to subtract the current event being processed
+        # which is already included
+        nevents = histos["events"]-1
         
         r_offset = {}
         if refhits.sensitive_direction == "x":
@@ -1921,9 +1933,12 @@ class tracks_accessor(object):
                 # --- Fill the displacement offset histogram, in order to
                 #     to align. First a coarse, raw 
                 hits.fill_distance_histo((rsens[hits.sC_index]-r_offset[hits.id]),histos[hits.id][1])
-                hits.fill_correlation_histo(rsens[hits.sC_index],histos[hits.id][0])
+                hits.fill_correlation_histo(rsens[hits.sC_index],histos[hits.id][0],histos[hits.id][5],nevents)
                 # -- Now find the closest hit to that track (-1 is returned if any)
                 ihit,distance = hits.close_hit(rsens)
+                # XXX -- 
+                # if hits.id == duthits.id and ihit != -1) and duthits.n_cluster[ihit] != 1:
+                #    ihit,distance = -1,99999.9
                 # -- Some plots: smoother residual evaluation (and alignment) 
                 #    using closest hits to a track (event if the hit is re-used)
                 # -- dx_finer histo
@@ -2279,10 +2294,17 @@ class processor(object):
                     51,-1.0,1.0,50,-sxdut*1.5,sxdut*1.5,50,-1.5*sydut,1.5*sydut),
                 minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
                     51,-1.0,1.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
+        # -- Event correlation (allow change dynamically ranges)
+        self.evt_trk_corr = { minst.dut_plane: ROOT.TH2F("evttrk_corr_dut",";Event;r_{DUT}-r_{DUT}^{pred} [mm]",\
+                        1000,0,0,100,0,0),
+                minst.ref_plane: ROOT.TH2F("evttrk_corr_ref"," ;Event;r_{REF}-r_{REF}^{pred} [mm]",\
+                        1000,0,0,100,0,0) }
+        map(lambda h: h.SetCanExtend(ROOT.TH1.kAllAxes), self.evt_trk_corr.values())
 
         self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_finer_wide_h.values()+self.dy_x_h.values()+\
                 self.dx_xtx_h.values()+self.dy_y_h.values()+self.dx_tx_h.values()+\
-                self.hplane.values()
+                self.hplane.values()+\
+                self.evt_trk_corr.values()
         
         # Associated histos (hits associated to a track)
         # -------------------------------------
@@ -2552,6 +2574,8 @@ class processor(object):
             The name of file to store the results
         """
         import ROOT
+        # Correct the event correlation histograms
+        self.correct_evt_corr_histos()
         # Store all the histograms
         f=ROOT.TFile.Open(filename,"RECREATE")
         for h in self._allhistograms:
@@ -2657,6 +2681,8 @@ class processor(object):
             The name of file to store the results
         """
         import ROOT
+        # Correct the event correlation histograms
+        self.correct_evt_corr_histos()
         # Store all the histograms
         f=ROOT.TFile.Open(filename,"RECREATE")
         for h in self._alignment_histos:
@@ -2866,6 +2892,7 @@ class processor(object):
             # -- Check what's the probability of REF association
             if idut == -1:
                 continue
+            # -- p( MATCH_REF REF | DUT MATCH_DUT T )
             # -- with respect the dut local position
             self.dutref_match_eff.Fill(duthits.sC_local[idut],int(iref != -1))
             # -- with respect the associated track dut prediction
@@ -2873,6 +2900,7 @@ class processor(object):
             self.trackpred_y_eff.Fill(rd[1],int(iref != -1))
             # And now, assuring that the REF is present in the event
             if refhits.n > 0:
+                # -- p( MATCH_REF | REF DUT MATCH_DUT T)
                 self.dutref_pure_match_eff.Fill(rd[0],rd[1],int(iref != -1))
     
     def fractionary_position_plot(self):
@@ -2898,6 +2926,18 @@ class processor(object):
                 self.duthits_matched_eta_h)
         # done :)
 
+    def correct_evt_corr_histos(self):
+        """Correct the histogram ranges of the event
+        correlation histograms
+        """
+        for h2d in self.evt_trk_corr.values():
+            pfx = h2d.ProjectionX()
+            pfy = h2d.ProjectionY()
+            # Obtain the edges where there is some meaningful data
+            for h,axis in ((pfx,"GetXaxis"),(pfy,"GetYaxis")):
+                a = h.FindFirstBinAbove(0.001*h.Integral())
+                b = h.FindLastBinAbove(0.001*h.Integral())
+                getattr(h2d,axis)().SetRange(a,b)
 
     def fill_statistics(self,ndut,nref,tracks):
         """Fill some statistic related with the number of dut, 
@@ -3002,10 +3042,12 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_ref = (self.hcorr_trkX[refhits.id],self.dx_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_finer_wide_h[refhits.id],self.hplane[refhits.id])
+                self.dx_finer_h[refhits.id],self.dx_finer_wide_h[refhits.id],\
+                self.hplane[refhits.id],self.evt_trk_corr[refhits.id])
         histos_dut = (self.hcorr_trkX[duthits.id],self.dx_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_finer_wide_h[duthits.id],self.hplane[duthits.id])
-        histos = { refhits.id: histos_ref, duthits.id: histos_dut }
+                self.dx_finer_h[duthits.id],self.dx_finer_wide_h[duthits.id],\
+                self.hplane[duthits.id],self.evt_trk_corr[duthits.id] )
+        histos = { refhits.id: histos_ref, duthits.id: histos_dut, "events": self.total_events }
         # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
         
@@ -3024,11 +3066,12 @@ class processor(object):
             #Get an estimation of the sensor efficiency ?
             #self.fill_statistics_matched(matched_hits)
             return
-        else: 
+        elif (not is_alignment and len(self._alignment_histos) != 0): 
             # Remove the aligment histos (only do it the first time)
             # (except some of them) and from the generic counter list
             keepthem =[]
-            for hname in ["corr_trkX_{0}","dx_{0}","dx_finer_{0}","dx_finer_wide_{0}","plane_{0}"]:
+            for hname in ["corr_trkX_{0}","dx_{0}","dx_finer_{0}",\
+                    "dx_finer_wide_{0}","plane_{0}", "evttrk_corr_{0}"]:
                 for sname in [ "dut","ref" ]:
                     keepthem.append(hname.format(sname)) 
             dummy = map(lambda h: (h.Delete(),self._allhistograms.remove(h)),\
