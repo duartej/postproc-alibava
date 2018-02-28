@@ -3160,7 +3160,9 @@ def get_offset(h,xmin=-2.0,xmax=2.0,coarse=True):
         # -- Extract the background to obtain the peak
         hsub = h.Clone("h_subtrackted_"+h.GetName()+"_"+str(hash(cns)))
         hsub.Add(bkg,-1.0)
-        sp.Search(hsub)
+        # Select the highest peak only: amplitude of the searched
+        # peaks being (0.99 * highest_peak)
+        sp.Search(hsub,2,"",0.99)
         return sp.GetPositionX()[0]
     # - Otherwise fine adjustment, 
     # -- Now find the peak (if needed)
