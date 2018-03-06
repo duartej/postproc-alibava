@@ -2622,11 +2622,11 @@ class processor(object):
                     new_align.y_offset = finer_offset
                 adding = True
                 # -- Others things here --> 
-                ## -- > rotation ()
-                rot = -get_linear_fit(self.dy_x_h[pl_id],-3,3)
+                ## -- > rotation 
+                rot = get_linear_fit(self.dy_x_h[pl_id],-3,3)
                 # Asume resolution about 5 deg 
-                if abs(rot) > 0.087:
-                    new_align.rot = rot
+                #if abs(rot) > 0.087:
+                new_align.rot = rot
                 ## --> tilt, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
                 if hits_plane_accessor.sin_tilt(pl_id) > 0.84:
