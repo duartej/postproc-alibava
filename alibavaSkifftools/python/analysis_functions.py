@@ -118,6 +118,9 @@ def get_time_window(tree,cut,\
     status = prof_window.Fit(pol_func,"QS")
     if status.Status() != 0:
         print "[analysis_functions.get_time_window] WARNING : Fit failed"
+        ROOT.gROOT.SetBatch(0)
+        c.Close()
+        return (-1,-1)
     # Find the maximum and define time window as +- 2 ns.
     # To find the maximum df/dt ~= 0
     N = 200
