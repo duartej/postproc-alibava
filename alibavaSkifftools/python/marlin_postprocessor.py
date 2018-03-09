@@ -412,6 +412,11 @@ class hits_plane_accessor(object):
         The index of the track which is related with the hit.
         A match condition between the track and the hit must 
         be fulfilled
+    track_weight: dict(((int,int),float))
+        The index of the track which is related with the hit 
+        and the weight applied to the association. The weight
+        is built as
+        
     track_distance: dict((int,int)
         The distance of the track which is related with the hit.
         A match condition between the track and the hit must 
@@ -446,6 +451,7 @@ class hits_plane_accessor(object):
         """
         import ROOT
         import array
+        from math import sqrt,pi
         from .SPS2017TB_metadata import get_orientation
         from .SPS2017TB_metadata import sensor_name_spec_map as specs
         from .analysis_functions import get_time_window
@@ -523,7 +529,11 @@ class hits_plane_accessor(object):
         del prv_c
 
         # Initialize the link index 
-        self.track_link = {}
+        self.track_link = {} 
+        # Initialize the weight of this track, it will be used to 
+        # decide the hit-track association in case of ambiguties (more
+        # than one track is compatible with the same hit)
+        self.track_weight = {}
         # Initialize the distance of the track to the hit linked 
         self.track_distance = {}
         # Initialize whether the track is inside the fiducial region
@@ -655,17 +665,38 @@ class hits_plane_accessor(object):
             self.sC_other_index = 0
             self.sC_local = self.y_local
             self.y_channels = self.sizeY/self.pitchX
-            self.resolution = self.pitchY
+            self.resolution = self.pitchY/sqrt(12.)
             self.strip_position = self.y_strip
             self.sC_channels = self.y_channels
             self.other_channels = self.x_channels
 
         # The maximum distance to consider a hit matched a track
-        self.matching_distance = 2.0*self.resolution
-        if self.sensor_name.find("REF") == -1:
-            # Loosing the cut
-            self.matching_distance = 6.0*self.resolution
+        self.matching_distance = 6.0*self.resolution 
+        if self.sensor_name.find("REF") == 0:
+            # Tighting the cut
+            self.matching_distance = 2.0*self.resolution
+
+        # Fiducial region definitions
+        # -- The weight ( [0,1] ) of the particle due to its position
+        #    when impacts the sensor (assuming the sensor well aligned),
+        #    it is split in 3 regions
+        #          - most internal (60% of the region): 80% of the probability,
+        #          - middle part   (61 -80%)          : 15% of the probability
+        #          - external part (80 - 100%)        :  5% of the probability 
+        #     see _pfiducial function
+        self._first_region_x = self.sizeX/2.0*0.6
+        self._second_region_x = self.sizeX/2.0*0.8
+        self._third_region_x = self.sizeX/2.0
+        self._first_region_y = self.sizeY/2.0*0.6
+        self._second_region_y = self.sizeY/2.0*0.8
+        self._third_region_y = self.sizeY/2.0
         
+        # The weight functions
+        # -- The weight ( [0,1] ) of the particle due to its
+        #    distance with the sensor hit when impacts on the sensor,
+        #    which is represented by a gaussian
+        self._pdist = ROOT.TF1("_pdist_{0}".format(self.sensor_name),\
+                "(1.0/(sqrt(2*pi)*{0}))*TMath::Gaus(x,0,{0})".format(self.matching_distance))
 
     @property
     def n(self):
@@ -779,6 +810,7 @@ class hits_plane_accessor(object):
         """
         # Clean up the links
         self.track_link     = {}
+        self.track_weight   = {}
         self.track_distance = {}
         self.track_inside   = {}
     
@@ -1136,6 +1168,52 @@ class hits_plane_accessor(object):
         """
         return map(lambda (_tind,_h): _tind, \
                 filter(lambda (_t,_h): _h == ihit, self.track_link.iteritems()))
+
+    
+    def get_weight(self,distance,r):
+        """XXX -- FIXME
+
+        """
+        # First check if i inside fiducial region and allowed distance
+        if not self.is_within_matching_distance(distance):
+            return 0.0
+        x,y,z=r
+        if not self.is_within_fiducial(x,y):
+            return 0.0
+        # Return the probabilities 
+        #   - distance -> 0 implies the track create that hit with p=1, 
+        #     2*p(X > dist. | I ) 
+        # and in the fiducial region
+        #   - same thing, award to the most internal part of the fiducial 
+        #     region
+        return 2.0*self._pdist.Integral(abs(distance),1e2)*self._pfiducial(x,y)
+
+    def _pfiducial(self,x,y):
+        """XXX -- FIXME
+        """
+        # Three regions 
+        # 1. The inner 60% it corresponds a 90% probability
+        # 2. The second region (from 60 -80 % ) -> 16%
+        # 3. The second region (from 80 %  on ) -> 16%
+        prob = 1.0
+        if abs(x) < self._first_region_x:
+            prob *= 0.95
+        elif abs(x) < self._second_region_x:
+            prob *= 0.4
+        elif abs(x) < self._third_region_x:
+            prob *= 0.2
+        else:
+            return 0.0
+        if abs(y) < self._first_region_y:
+            prob *= 0.95
+        elif abs(y) < self._second_region_y:
+            prob *= 0.4
+        elif abs(y) < self._third_region_y:
+            prob *= 0.2
+        else:
+            return 0.0
+        
+        return prob
 
     def is_within_matching_distance(self,dist_check):
         """Whether or not the distance introduced is within
@@ -1755,7 +1833,10 @@ class tracks_accessor(object):
         self.ref_fitted_hits = track_hits_plane_accessor(tree,self.refid,False,self.refid,self.dutid)
 
         # -- The isolation condition
-        self.isolation_condition = 0.5*MM #0.6*MM
+        self.isolation_condition = 1e-99*MM
+
+        # -- The track quality condition
+        self.quality_condition  = 3.0 
 
     @property
     def n(self):
@@ -1971,13 +2052,15 @@ class tracks_accessor(object):
                 #    ihit,distance = -1,99999.9
                 # -- Some plots: smoother residual evaluation (and alignment) 
                 #    using closest hits to a track (event if the hit is re-used)
-                # -- dx_finer histo
                 if ihit != -1:
+                    # -- dx finer 
                     histos[hits.id][2].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
                     # -- dx_finer_wide
                     histos[hits.id][3].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
                     # -- plane
                     histos[hits.id][4].Fill(tel[2]-hits.z[0],tel[0],tel[1])
+                    # Weight 
+                    hits.track_weight[(itrk,ihit)]= hits.get_weight(distance,rsens)
                 # -- Association 
                 if not hits.is_within_matching_distance(distance):
                     ihit = -1
@@ -2504,13 +2587,40 @@ class processor(object):
         #extra = self.htrks_at_planes.values()+self.evt_corr.values()
         
         # -- Diagnostics
-        self.htrks_at_planes = { minst.dut_plane: ROOT.TH2F("trk_at_dut","Tracks at DUT;x_{DUT}^{trk} [mm]; y_{DUT}^{trk} [mm]; Entries",\
-                        200,-10.0,10.0,200,-10.0,10.0),\
-                minst.ref_plane: ROOT.TH2F("trk_at_ref","Tracks at REF;x_{REF}^{trk} [mm]; y_{REF}^{trk} [mm]; Entries",200,-10.0,10.0,200,-10.0,10.0)}
+        # -- helper tree
+        self._tree = ROOT.TTree("diagnostics","diagnostic tree")
+        # variables to fill up the tree
+        self._t_dut_y = ROOT.vector(float)()
+        self._t_ref_y = ROOT.vector(float)()
+        self._t_trk_dut_x  = ROOT.vector(float)()
+        self._t_trk_dut_y  = ROOT.vector(float)()
+        self._t_trk_dut_z  = ROOT.vector(float)()
+        self._t_trk_ref_x  = ROOT.vector(float)()
+        self._t_trk_ref_y  = ROOT.vector(float)()
+        self._t_trk_ref_z  = ROOT.vector(float)()
+        self._t_trk_ref_weight = ROOT.vector(float)()
+        self._t_trk_dut_weight = ROOT.vector(float)()
+        self._t_trk_isolation  = ROOT.vector(int)()
+        self._t_trk_dut_associated  = ROOT.vector(int)()
+        self._t_trk_ref_associated  = ROOT.vector(int)()
+        t_objects_names = [ '_t_dut_y', '_t_ref_y', \
+                '_t_trk_dut_x', '_t_trk_dut_y','_t_trk_dut_z',\
+                '_t_trk_ref_x', '_t_trk_ref_y','_t_trk_ref_z',\
+                '_t_trk_ref_weight', '_t_trk_dut_weight',\
+                '_t_trk_isolation',\
+                '_t_trk_dut_associated', '_t_trk_ref_associated']
+        self._t_objects = map(lambda _brn: getattr(self,_brn),t_objects_names)
+        for br in t_objects_names:
+            br_name = br.replace("_t_","")
+            self._tree.Branch(br_name,getattr(self,br))
+
+        self.htrks_at_planes = { minst.dut_plane: ROOT.TH2F("trk_at_dut","Associated tracks at DUT;x_{DUT}^{trk} [mm]; y_{DUT}^{trk} [mm]; Entries",\
+                        100,-10.0,10.0,100,-10.0,10.0),\
+                minst.ref_plane: ROOT.TH2F("trk_at_ref","Associated tracks at REF;x_{REF}^{trk} [mm]; y_{REF}^{trk} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)}
         self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
-                "same trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM),\
+                "same trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
-                    "trigger-event;Track distance [mm];Triggers", 400,0,20.0*MM) }
+                    "trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM) }
         self.ntrks_perhit = { minst.dut_plane: ROOT.TH1F("ntrk_perhit_dut","MUST BE 0 or 1!!;N_{trks/hit};Entries",4,-0.5,3.5),
                 minst.ref_plane: ROOT.TH1F("ntrk_perhit_ref","MUST BE 0 or 1!!;N_{trks/hit};N_{tracks};Entries",10,-0.5,3.5) }
         self.nhits_ntrks_all = { minst.dut_plane: ROOT.TH2F("nhits_ntracks_all_dut",";N_{hits};N_{tracks};Triggers",10,-0.5,9.5,40,-0.5,39.5),
@@ -2859,6 +2969,9 @@ class processor(object):
         Parameters
         ----------
         """
+        # Clear the tree objects
+        map(lambda _o: _o.clear(),self._t_objects)
+
         # -- tracks at sensors
         for itrk in xrange(trks.n):
             # Track isolation
@@ -2866,18 +2979,33 @@ class processor(object):
             trks.fill_isolation_histograms(itrk,duthits,self.trk_iso[duthits.id])
             # Hit map at the sensor planes
             ((xpred_ref,ypred_ref,zpred_ref),tel_ref) = trks.get_point_in_sensor_frame(itrk,refhits)
-            self.htrks_at_planes[refhits.id].Fill(xpred_ref,ypred_ref)
             ((xpred_dut,ypred_dut,zpred_dut),tel_dut) = trks.get_point_in_sensor_frame(itrk,duthits)
-            self.htrks_at_planes[duthits.id].Fill(xpred_dut,ypred_dut)
             # Correlation between both planes
             self.hcorrx_dut_ref.Fill(xpred_dut,xpred_ref)
             self.hcorry_dut_ref.Fill(ypred_dut,ypred_ref)
+            # Fill in tree variables
+            self._t_trk_dut_x.push_back(xpred_dut)
+            self._t_trk_dut_y.push_back(ypred_dut)
+            self._t_trk_dut_z.push_back(zpred_dut)
+            self._t_trk_ref_x.push_back(xpred_ref)
+            self._t_trk_ref_y.push_back(ypred_ref)
+            self._t_trk_ref_z.push_back(zpred_ref)
+            self._t_trk_isolation.push_back(trks.is_isolated(itrk,refhits))
+            self._t_trk_ref_weight.push_back(0.0)
+            self._t_trk_dut_weight.push_back(0.0)
+            # Just initialize
+            self._t_trk_dut_associated.push_back(-1)
+            self._t_trk_ref_associated.push_back(-1)
             # Getting info about why is not isolated
             if not trks.is_isolated(itrk,refhits):
                 # -- Position distribution
                 self.trk_noniso_pos.Fill(xpred_ref,ypred_ref,trks.n)
-                # -- Distance of the closest track
-                self.trk_noniso_dist.Fill(xpred_ref,ypred_ref,trks.find_iso_distance(itrk,refhits))
+                # -- Number of sensor hits in the event
+                self.trk_noniso_nhits[refhits.id].Fill(xpred_ref,ypred_ref,refhits.n)
+                self.trk_noniso_nhits[duthits.id].Fill(xpred_ref,ypred_ref,duthits.n)
+        # Local coordinate for hits
+        map(lambda _yd: self._t_dut_y.push_back(_yd),duthits.sC_local)
+        map(lambda _yr: self._t_ref_y.push_back(_yr),refhits.sC_local)
         # Some intermediate efficiencies
         # ------------------------------
         # Association probability (given a hit, is there a track matched)
@@ -2897,15 +3025,28 @@ class processor(object):
                 # Hit distance
                 dummy = map(lambda ohit: self.hit_distance[hits.id].Fill(hits.sC_local[ihit]-hits.sC_local[ohit]),\
                         xrange(ihit+1,hits.n))
+        # Update the weight branches 
+        for ((it,ih),prob) in refhits.track_weight.iteritems():
+            self._t_trk_ref_weight[it] = prob
+        for ((it,ih),prob) in duthits.track_weight.iteritems():
+            self._t_trk_dut_weight[it] = prob
+
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
         for (itrk,(iref,idut)) in iso_trks.iteritems():
+            # Update whether or not were associated
+            self._t_trk_dut_associated[itrk] = idut
+            self._t_trk_ref_associated[itrk] = iref
             # Only those tracks inside fiducial
             if not duthits.track_inside[itrk]:
                 continue
             # --
             (rd,td) = trks.get_point_in_sensor_frame(itrk,duthits)
             (rr,tr) = trks.get_point_in_sensor_frame(itrk,refhits)
+            if iref != -1:
+                self.htrks_at_planes[refhits.id].Fill(rr[0],rr[1])
+            if idut != -1:
+                self.htrks_at_planes[duthits.id].Fill(rd[0],rd[1])
             # -- p( Matched HIT_exists | Isolated-track ), i.e. probability of hit
             #    and match
             self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
@@ -2942,6 +3083,9 @@ class processor(object):
             if refhits.n > 0:
                 # -- p( MATCH_REF | REF DUT MATCH_DUT T)
                 self.dutref_pure_match_eff.Fill(rd[0],rd[1],int(iref != -1))
+
+        # Fill tree event
+        self._tree.Fill()
     
     def fractionary_position_plot(self):
         """Using the eta-distribution obtained 
