@@ -644,7 +644,7 @@ class hits_plane_accessor(object):
             self.sC_other_index = 1
             self.sC_local = self.x_local
             self.x_channels = self.sizeX/self.pitchX
-            self.resolution = self.pitchX
+            self.resolution = self.pitchX/sqrt(12.0)
             self.strip_position = self.x_strip
             self.sC_channels = self.x_channels
             self.get_sC_channel = self.get_x_channel
@@ -765,9 +765,11 @@ class hits_plane_accessor(object):
         # Note that is very important that x and y are the described
         # in the sensor reference frame, and the origin of the 
         # reference system is in the center of the detector
-        if abs(x) > self.sizeX/2.:
+        # XXX - FIXME - WHAT ABOUT X non-sensitive direction?
+        #               HOW SURE YO ARE THE POINT IS THERE?
+        if abs(x) > self.sizeX/2.*0.8:
             return False
-        if abs(y) > self.sizeY/2.:
+        if abs(y) > self.sizeY/2.*0.8:
             return False
         return True
     
@@ -1200,7 +1202,11 @@ class hits_plane_accessor(object):
                 and self.tdc_time >= self._time_window[0])
 
     def match_isolated(self,track_acc,histos,is_ref=False,res=None):
-        """Search for tracks matching (within a resolution) the list 
+        """
+        ============================================================
+         TO BE DEPRECATED - NOT TO USED 
+        ============================================================
+        Search for tracks matching (within a resolution) the list 
         of hits in the current event.
 
         Parameters
@@ -1217,7 +1223,7 @@ class hits_plane_accessor(object):
               hit in the sensor and the predicted hit for the track
             - A ROOT.TH1F histogram to store the residuals between the 
               hit in the sensor and the predicted hit for the track of
-              those passing the cuts (isolation, matching). See `dx_h`
+              those passing the cuts (isolation, matching). See `dy_h`
               in the processor class.
             - A ROOT.TProfile to store the variation of the residual in y
               (see last histo) vs. the x-prediction. See `dy_x_h` in the 
@@ -1624,8 +1630,6 @@ class tracks_accessor(object):
     
     Attributes
     ----------
-    nevents: int
-        Number of processed events
     refid: int
         The Alibava REF ID
     dutid: int
@@ -1763,6 +1767,20 @@ class tracks_accessor(object):
         """
         return self.x0.size()
 
+    def quality(self,i):
+        """The quality of a track, just chi2/ndof
+
+        Parameters
+        ----------
+        i: int
+            The index of the track
+
+        Return
+        ------
+        float: the quality of the track, chi2/Ndof
+        """
+        return self.chi2[i]/self.ndof[i]
+
     def new_event(self):
         """Call it every time a new event is going to
         be processed. Clean some variables.
@@ -1803,8 +1821,8 @@ class tracks_accessor(object):
                     filter(lambda iother: iother != i,xrange(self.n)))))
         self._cache_isodistance[hitplane.id][i] = distance
         return distance
-    
-    def is_isolated(self,i,hit_z_position):
+
+    def is_isolated(self,i,hitplane):
         """Whether or not the track is isolated, i.e.
         if there is no other track in the plane defined by the 
         z position inside the isolation cone
@@ -1813,7 +1831,7 @@ class tracks_accessor(object):
         ----------
         i: int
             The index of the track
-        hit_z_position: hit_accessor
+        hitplane: hit_accessor
             The hit accessor which defines the plane
 
         Return
@@ -1821,16 +1839,23 @@ class tracks_accessor(object):
         bool: False if there is any track inside the isolation
               cone
         """
-        from math import sqrt
         
         # Needed at least two tracks, to compare isolation
         if self.n <= 1:
             return True
         # -- It was found previously..
-        if self._cache_nonisolated[hit_z_position.id].has_key(i):
+        if self._cache_nonisolated[hitplane.id].has_key(i):
             return False
-        if self.find_iso_distance(i,hit_z_position) < self.isolation_condition:
-            self._cache_nonisolated[hit_z_position.id][i] = 1
+        #if self.find_iso_distance(i,hitplane) < self.isolation_condition:
+        (xpred,ypred,zpred),rtel= self.get_point_in_sensor_frame(i,hitplane)
+        # Strong isolation: veto any track either of y or x 
+        veto_track = len(filter(lambda (oindex,((o_x,o_y,o_z),_tel)): \
+        #           abs(o_x-xpred) < self.isolation_condition or abs(o_y-ypred) < self.isolation_condition,\
+                   abs(o_y-ypred) < self.isolation_condition,\
+                map(lambda other_i:  (other_i,self.get_point_in_sensor_frame(other_i,hitplane)),\
+                    filter(lambda iother: iother != i,xrange(self.n))))) > 0
+        if veto_track:
+            self._cache_nonisolated[hitplane.id][i] = 1
             return False
         else:
             return True
@@ -1852,7 +1877,9 @@ class tracks_accessor(object):
         from math import sqrt
         
         ((xpred,ypred,zpred),rtel0) = self.get_point_in_sensor_frame(itrk,hitobj)
-        dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+        #dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
+        #        map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
+        dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(abs(o_y-ypred)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
 
     def associate_hits(self,refhits,duthits,histos,process_it):
@@ -1891,9 +1918,8 @@ class tracks_accessor(object):
 
         # Get the histograms
         # ---- histos[sensor_id] : 
-        #      0: hcorr, 1: hdx,  2:hdx_finer, 3: hdx_finer_wide, 4: plane, 5: event correlation
-        hcorr,hdx,hdx_finer,hdx_finer_wide,hplane,hec= histos[refhits.id]
-        hcorr_d,hdx_d,hdx_finer_d,hdx_finer_wide_d,hplane_d,hec_d= histos[duthits.id]
+        #  0: hcorr, 1: hdx,  2:hdx_finer, \
+        #  3: hdx_finer_wide, 4: plane, 5: event correlation
         # Remember to subtract the current event being processed
         # which is already included
         nevents = histos["events"]-1
@@ -1915,8 +1941,13 @@ class tracks_accessor(object):
         # Start track loop, every isolated track is going to 
         # be store in the dict
         tracks_d = {}
+        #if self.n != 1:
+        #    return tracks_d
         for itrk in xrange(self.n):
             hit_indices = { refhits.id: -1, duthits.id: -1 }
+            # Good track quality
+            if abs(self.quality(itrk)) > self.quality_condition:
+                continue
             # Try to associate with a not used hit
             # First of all be sure this is an isolated track 
             # (only to be checked in the REF plane)
@@ -1929,7 +1960,6 @@ class tracks_accessor(object):
                 elif hits.id == duthits.id:
                     isens_td = 1
                 (rsens,tel) = self.get_point_in_sensor_frame(itrk,hits)
-                # First check isolation (XXX SUBSTITUTE by is_isolated)
                 # --- Fill the displacement offset histogram, in order to
                 #     to align. First a coarse, raw 
                 hits.fill_distance_histo((rsens[hits.sC_index]-r_offset[hits.id]),histos[hits.id][1])
@@ -2262,9 +2292,14 @@ class processor(object):
         self.events_with_matched_hits = {}
         # Alingment histos
         # -----------------
-        # -- the shift in x
-        self.dx_h = { minst.dut_plane: ROOT.TH1F("dx_dut"," ; y_{DUT}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
-                minst.ref_plane: ROOT.TH1F("dx_ref"," ; y_{REF}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
+        # -- the shift in y
+        self.dy_h = { minst.dut_plane: ROOT.TH1F("dy_dut"," ; y_{DUT}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
+                minst.ref_plane: ROOT.TH1F("dy_ref"," ; y_{REF}-y_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
+        # -- no sensitive direction
+        self.Ns_h = { minst.dut_plane: ROOT.TH1F("ns_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
+                minst.ref_plane: ROOT.TH1F("ns_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
+        self.Ns_global_h = { minst.dut_plane: ROOT.TH1F("ns_global_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
+                minst.ref_plane: ROOT.TH1F("ns_global_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
         # -- finer alignment
         self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2),
                 minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2) }
@@ -2296,15 +2331,16 @@ class processor(object):
                     51,-1.0,1.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
         # -- Event correlation (allow change dynamically ranges)
         self.evt_trk_corr = { minst.dut_plane: ROOT.TH2F("evttrk_corr_dut",";Event;r_{DUT}-r_{DUT}^{pred} [mm]",\
-                        1000,0,0,100,0,0),
+                        5000,0,0,100,-6,6),
                 minst.ref_plane: ROOT.TH2F("evttrk_corr_ref"," ;Event;r_{REF}-r_{REF}^{pred} [mm]",\
-                        1000,0,0,100,0,0) }
-        map(lambda h: h.SetCanExtend(ROOT.TH1.kAllAxes), self.evt_trk_corr.values())
+                        5000,0,0,100,-6,6) }
+        map(lambda h: h.SetCanExtend(ROOT.TH1.kXaxis), self.evt_trk_corr.values())
 
-        self._alignment_histos = self.dx_h.values()+self.dx_finer_h.values()+self.dx_finer_wide_h.values()+self.dy_x_h.values()+\
+        self._alignment_histos = self.dy_h.values()+self.dx_finer_h.values()+self.dx_finer_wide_h.values()+self.dy_x_h.values()+\
                 self.dx_xtx_h.values()+self.dy_y_h.values()+self.dx_tx_h.values()+\
                 self.hplane.values()+\
-                self.evt_trk_corr.values()
+                self.evt_trk_corr.values()+\
+                self.Ns_h.values()+self.Ns_global_h.values()
         
         # Associated histos (hits associated to a track)
         # -------------------------------------
@@ -2530,8 +2566,10 @@ class processor(object):
         # Non-isolated tracks
         self.trk_noniso_pos = ROOT.TProfile2D("trk_noniso_pos","Non-isolated tracks position;"\
                 "x_{REF} [mm];y_{REF} [mm];N_{trk}",100,-sxref,sxref,100,-syref,syref)
-        self.trk_noniso_dist = ROOT.TProfile2D("trk_noniso_dist","Non-isolated tracks position;"\
-                "x_{REF} [mm];y_{REF} [mm];N_{trk}",100,-sxref,sxref,100,-syref,syref)
+        self.trk_noniso_nhits = { minst.dut_plane : ROOT.TProfile2D("trk_noniso_ndut","Non-isolated tracks: number of dut hits;"\
+                    "x_{REF} [mm];y_{REF} [mm];N_{dut}",100,-10,10,100,-10,10),\
+                minst.ref_plane:  ROOT.TProfile2D("trk_noniso_nref","Non-isolated tracks: Number of ref hits;"\
+                    "x_{REF} [mm];y_{REF} [mm];N_{ref}",100,-10,10,100,-10,10) }
         
  
         diagnostics = []
@@ -2544,7 +2582,8 @@ class processor(object):
                     self.ratio_hit_a.values()+self.ratio_hit_exist.values()+\
                     [self.d_arrt,self.ad_darrt]+\
                     [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]+\
-                    [self.trk_noniso_pos,self.trk_noniso_dist]
+                    [self.trk_noniso_pos]+self.trk_noniso_nhits.values()+\
+                    [self._tree]
 
 
         # Keep track of all histograms which should be stored in the file
@@ -2604,7 +2643,7 @@ class processor(object):
                 old_offset = self.alignment[pl_id].y_offset
             
             # -- The real offset
-            coarse_offset =get_offset(self.dx_h[pl_id],-10.0,10.0)
+            coarse_offset =get_offset(self.dy_h[pl_id],-10.0,10.0)
             adding = False
             if self.alignment[pl_id].sensitive_direction.lower() == "x":
                 old_offset = self.alignment[pl_id].x_offset
@@ -2708,26 +2747,27 @@ class processor(object):
         for (itrk,(iref,idut)) in associated.iteritems():
             # Just do it for each sensor
             for i,hits in [(iref,refs),(idut,duts)]:
-                # -- just matched 
+                # -- just associate
                 if i == -1:
                     continue
                 # The sensitive axis
                 if hits.sensitive_direction == "x":
-                    ic = 0
-                    iccom = 1
                     trk_drdz = trks.dxdz
                 elif hits.sensitive_direction == "y":
-                    ic = 1
-                    iccom = 0
                     trk_drdz = trks.dydz
                 (rpred,tel) = trks.get_point_in_sensor_frame(itrk,hits)
-                dc = hits.sC_local[i]-rpred[ic]
+                # A tomography in the non-sensitive direction
+                self.Ns_h[hits.id].Fill(rpred[hits.sC_other_index])
+                # -- and global coordinates
+                self.Ns_global_h[hits.id].Fill(tel[hits.sC_other_index])
+
+                dc = hits.sC_local[i]-rpred[hits.sC_index]
                 # -- rotation 
-                self.dy_x_h[hits.id].Fill(rpred[iccom],dc)
+                self.dy_x_h[hits.id].Fill(rpred[hits.sC_other_index],dc)
                 ## -- tilt
-                self.dy_y_h[hits.id].Fill(rpred[ic],dc)
+                self.dy_y_h[hits.id].Fill(rpred[hits.sC_index],dc)
                 # -- turn
-                self.dx_xtx_h[hits.id].Fill(rpred[ic]*trk_drdz[itrk]*UM,dc)
+                self.dx_xtx_h[hits.id].Fill(rpred[hits.sC_index]*trk_drdz[itrk]*UM,dc)
                 ## -- dz 
                 self.dx_tx_h[hits.id].Fill(trk_drdz[itrk]*UM,dc)
 
@@ -3041,12 +3081,15 @@ class processor(object):
         self.nhits_ntrks_all[duthits.id].Fill(duthits.n,trks.n)
         
         # Prepare the ntuple of histograms for DUT and REF
-        histos_ref = (self.hcorr_trkX[refhits.id],self.dx_h[refhits.id],\
+        histos_ref = (self.hcorr_trkX[refhits.id],self.dy_h[refhits.id],\
                 self.dx_finer_h[refhits.id],self.dx_finer_wide_h[refhits.id],\
-                self.hplane[refhits.id],self.evt_trk_corr[refhits.id])
-        histos_dut = (self.hcorr_trkX[duthits.id],self.dx_h[duthits.id],\
+                self.hplane[refhits.id],self.evt_trk_corr[refhits.id], \
+                self.Ns_h[refhits.id])
+        histos_dut = (self.hcorr_trkX[duthits.id],self.dy_h[duthits.id],\
                 self.dx_finer_h[duthits.id],self.dx_finer_wide_h[duthits.id],\
-                self.hplane[duthits.id],self.evt_trk_corr[duthits.id] )
+                self.hplane[duthits.id],self.evt_trk_corr[duthits.id],\
+                self.Ns_h[duthits.id])
+
         histos = { refhits.id: histos_ref, duthits.id: histos_dut, "events": self.total_events }
         # -- Get the sensitive axis, first check an evidence
         assert(duthits.sensitive_direction == refhits.sensitive_direction)
@@ -3070,7 +3113,7 @@ class processor(object):
             # Remove the aligment histos (only do it the first time)
             # (except some of them) and from the generic counter list
             keepthem =[]
-            for hname in ["corr_trkX_{0}","dx_{0}","dx_finer_{0}",\
+            for hname in ["corr_trkX_{0}","dy_{0}","dx_finer_{0}",\
                     "dx_finer_wide_{0}","plane_{0}", "evttrk_corr_{0}"]:
                 for sname in [ "dut","ref" ]:
                     keepthem.append(hname.format(sname)) 
