@@ -421,7 +421,7 @@ class hits_plane_accessor(object):
         The distance of the track which is related with the hit.
         A match condition between the track and the hit must 
         be fulfilled
-    track_inside: dict((int,int)
+    ## -- TO BE DEPRECATED track_inside: dict((int,int)
         The index of the track which is related with the hit.
         The matched track is within the fiducial region of the
         sensor
@@ -537,7 +537,7 @@ class hits_plane_accessor(object):
         # Initialize the distance of the track to the hit linked 
         self.track_distance = {}
         # Initialize whether the track is inside the fiducial region
-        self.track_inside = {}
+        #self.track_inside = {} NOT NEEDED
         
         # ----------------------------------
         # define the orientation of this sensor, 
@@ -812,7 +812,7 @@ class hits_plane_accessor(object):
         self.track_link     = {}
         self.track_weight   = {}
         self.track_distance = {}
-        self.track_inside   = {}
+        #self.track_inside   = {} NOT NEEDED
     
     #@staticmethod
     def update_alignment(self,align_inst):
@@ -1940,7 +1940,7 @@ class tracks_accessor(object):
             return False
         else:
             return True
-    
+
     def fill_isolation_histograms(self,itrk,hitobj,h):
         """Fill the isolation histogram. The distance between
         all track pairs in the sensor plane are calculated and
@@ -1962,7 +1962,7 @@ class tracks_accessor(object):
         #        map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
         dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(abs(o_y-ypred)),\
                 map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
-
+    
     def associate_hits(self,refhits,duthits,histos,process_it):
         """Perform the hits association to each track found,
         given that the tracks can only be associated if they
@@ -2600,14 +2600,12 @@ class processor(object):
         self._t_trk_ref_z  = ROOT.vector(float)()
         self._t_trk_ref_weight = ROOT.vector(float)()
         self._t_trk_dut_weight = ROOT.vector(float)()
-        self._t_trk_isolation  = ROOT.vector(int)()
         self._t_trk_dut_associated  = ROOT.vector(int)()
         self._t_trk_ref_associated  = ROOT.vector(int)()
         t_objects_names = [ '_t_dut_y', '_t_ref_y', \
                 '_t_trk_dut_x', '_t_trk_dut_y','_t_trk_dut_z',\
                 '_t_trk_ref_x', '_t_trk_ref_y','_t_trk_ref_z',\
                 '_t_trk_ref_weight', '_t_trk_dut_weight',\
-                '_t_trk_isolation',\
                 '_t_trk_dut_associated', '_t_trk_ref_associated']
         self._t_objects = map(lambda _brn: getattr(self,_brn),t_objects_names)
         for br in t_objects_names:
@@ -2663,23 +2661,10 @@ class processor(object):
                     "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1)
         self.trackpred_x_eff = ROOT.TProfile("trackpred_x_eff","Track-association efficiency vs. y-predicted;"\
                     "x_{DUT}^{pred}[mm];#varepsilon",100,-sxdut,sxdut,0,1)
-        #self.trkiso_a_eff = ROOT.TProfile("trkiso_a_eff_","Efficiency vs. distance between pair of tracks in the "\
-        #            "same trigger-event;Track distance [mm];#varepsilon", 400,0,10.0*MM)
         self.dutref_match_eff = ROOT.TProfile("match_dutref_eff","REF-matching DUT-hit efficiency;x_{DUT};#varepsilon",\
                                     100,-sxdut,sxdut,0,1)
         self.dutref_pure_match_eff = ROOT.TProfile2D("purematch_dutref_eff","REF-matching DUT-hit efficiency"\
                 "(REF hit present);x_{DUT}^{pred} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
-        self.hcorrx_dut_ref = ROOT.TH2F("corrX_dut_ref","Isolated tracks at DUT and REF (y);"\
-                "x_{DUT}^{pred} [mm]; x_{REF}^{pred} [mm]; Entries",100,-sxdut,sxdut,100,-sxref,sxref)
-        self.hcorry_dut_ref = ROOT.TH2F("corrY_dut_ref","Isolated tracks at DUT and REF (y);"\
-                "y_{DUT}^{pred} [mm]; y_{REF}^{pred} [mm]; Entries",100,-sydut,sydut,100,-syref,syref)
-        # Non-isolated tracks
-        self.trk_noniso_pos = ROOT.TProfile2D("trk_noniso_pos","Non-isolated tracks position;"\
-                "x_{REF} [mm];y_{REF} [mm];N_{trk}",100,-sxref,sxref,100,-syref,syref)
-        self.trk_noniso_nhits = { minst.dut_plane : ROOT.TProfile2D("trk_noniso_ndut","Non-isolated tracks: number of dut hits;"\
-                    "x_{REF} [mm];y_{REF} [mm];N_{dut}",100,-10,10,100,-10,10),\
-                minst.ref_plane:  ROOT.TProfile2D("trk_noniso_nref","Non-isolated tracks: Number of ref hits;"\
-                    "x_{REF} [mm];y_{REF} [mm];N_{ref}",100,-10,10,100,-10,10) }
         
  
         diagnostics = []
@@ -2691,8 +2676,7 @@ class processor(object):
                     [self.trackpred_x_eff,self.trackpred_y_eff]+self.track_eff.values()+\
                     self.ratio_hit_a.values()+self.ratio_hit_exist.values()+\
                     [self.d_arrt,self.ad_darrt]+\
-                    [self.dutref_match_eff,self.dutref_pure_match_eff,self.hcorrx_dut_ref,self.hcorry_dut_ref]+\
-                    [self.trk_noniso_pos]+self.trk_noniso_nhits.values()+\
+                    [self.dutref_match_eff,self.dutref_pure_match_eff]+\
                     [self._tree]
 
 
@@ -2980,9 +2964,6 @@ class processor(object):
             # Hit map at the sensor planes
             ((xpred_ref,ypred_ref,zpred_ref),tel_ref) = trks.get_point_in_sensor_frame(itrk,refhits)
             ((xpred_dut,ypred_dut,zpred_dut),tel_dut) = trks.get_point_in_sensor_frame(itrk,duthits)
-            # Correlation between both planes
-            self.hcorrx_dut_ref.Fill(xpred_dut,xpred_ref)
-            self.hcorry_dut_ref.Fill(ypred_dut,ypred_ref)
             # Fill in tree variables
             self._t_trk_dut_x.push_back(xpred_dut)
             self._t_trk_dut_y.push_back(ypred_dut)
@@ -2990,19 +2971,11 @@ class processor(object):
             self._t_trk_ref_x.push_back(xpred_ref)
             self._t_trk_ref_y.push_back(ypred_ref)
             self._t_trk_ref_z.push_back(zpred_ref)
-            self._t_trk_isolation.push_back(trks.is_isolated(itrk,refhits))
             self._t_trk_ref_weight.push_back(0.0)
             self._t_trk_dut_weight.push_back(0.0)
             # Just initialize
             self._t_trk_dut_associated.push_back(-1)
             self._t_trk_ref_associated.push_back(-1)
-            # Getting info about why is not isolated
-            if not trks.is_isolated(itrk,refhits):
-                # -- Position distribution
-                self.trk_noniso_pos.Fill(xpred_ref,ypred_ref,trks.n)
-                # -- Number of sensor hits in the event
-                self.trk_noniso_nhits[refhits.id].Fill(xpred_ref,ypred_ref,refhits.n)
-                self.trk_noniso_nhits[duthits.id].Fill(xpred_ref,ypred_ref,duthits.n)
         # Local coordinate for hits
         map(lambda _yd: self._t_dut_y.push_back(_yd),duthits.sC_local)
         map(lambda _yr: self._t_ref_y.push_back(_yr),refhits.sC_local)
@@ -3272,15 +3245,15 @@ class processor(object):
             # -- Fill extra histograms: associated hits 
             self.fill_associated_hit_histos((itrk,trks),(iref,refhits))
             self.fill_associated_hit_histos((itrk,trks),(idut,duthits))
-            # -- No tracks (i.e., REF-matched particle) presence 
-            if iref == -1:
+            # -- No tracks (i.e., a quality REF-matched particle) presence 
+            if iref == -1: # or refhits.track_weight[(itrk,iref)] < 0.5:
                 continue
             # -- Fill matched histograms
             r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
             # Just within fiducial region
             #assert( duthits.is_within_fiducial(r_at_dut[0],r_at_dut[1]) == duthits.track_inside[itrk] )
-            if not duthits.track_inside[itrk]:
-                continue
+            #if not duthits.track_inside[itrk]: NOT NEEDED
+            #    continue
             # -- Efficiency plots
             self.heff.Fill(r_at_dut[0],r_at_dut[1],(idut != -1))
             self.heff_ch.Fill(r_at_dut[0],duthits.get_y_channel(r_at_dut[1]),(idut != -1))
