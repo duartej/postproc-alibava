@@ -677,6 +677,9 @@ class hits_plane_accessor(object):
             self.matching_distance = 2.0*self.resolution
 
         # Fiducial region definitions
+        # -- Pointing to the function definition, in order
+        #    to be re-define if this is the rEF
+        self.fiducial_weight_func = self._pfiducial
         # -- The weight ( [0,1] ) of the particle due to its position
         #    when impacts the sensor (assuming the sensor well aligned),
         #    it is split in 3 regions
@@ -687,7 +690,7 @@ class hits_plane_accessor(object):
         self._first_region_x = self.sizeX/2.0*0.6
         self._second_region_x = self.sizeX/2.0*0.8
         self._third_region_x = self.sizeX/2.0
-        self._first_region_y = self.sizeY/2.0*0.6
+        self._first_region_y = self.sizeY/2.0*0.5
         self._second_region_y = self.sizeY/2.0*0.8
         self._third_region_y = self.sizeY/2.0
         
@@ -1169,17 +1172,31 @@ class hits_plane_accessor(object):
         return map(lambda (_tind,_h): _tind, \
                 filter(lambda (_t,_h): _h == ihit, self.track_link.iteritems()))
 
-    
+    def get_largest_weight(self,point):
+        """XXX -- FIXME
+        """
+        # First check if there is at least a hit
+        if self.n < 1:
+            return (-1,0)
+        # Loop over all available hits, evaluate distance needed to
+        # calculate the the weights, returning the largest one
+        weights = map(lambda (ihit, dist): (ihit,self.get_weight(dist,point)), \
+                map(lambda (i,r): (i,r-point[self.sC_index]),enumerate(self.sC_local)))
+        ihit,w = max(weights, key=lambda (_ihit,_weight): _weight)
+        if abs(w) < 1e-9:
+            return (-1,0)
+        return (ihit,w)
+
     def get_weight(self,distance,r):
         """XXX -- FIXME
 
         """
         # First check if i inside fiducial region and allowed distance
-        if not self.is_within_matching_distance(distance):
-            return 0.0
+        #if not self.is_within_matching_distance(distance):
+        #    return 0.0
         x,y,z=r
-        if not self.is_within_fiducial(x,y):
-            return 0.0
+        #if not self.is_within_fiducial(x,y):
+        #    return 0.0
         # Return the probabilities 
         #   - distance -> 0 implies the track create that hit with p=1, 
         #     2*p(X > dist. | I ) 
@@ -1188,31 +1205,80 @@ class hits_plane_accessor(object):
         #     region
         return 2.0*self._pdist.Integral(abs(distance),1e2)*self._pfiducial(x,y)
 
+    def inform_dut_fiducial(self,dut):
+        """ XXX -- FIXME
+        """
+        self._pfiducial = dut.fiducial_weight_func
+
     def _pfiducial(self,x,y):
         """XXX -- FIXME
         """
         # Three regions 
-        # 1. The inner 60% it corresponds a 90% probability
-        # 2. The second region (from 60 -80 % ) -> 16%
-        # 3. The second region (from 80 %  on ) -> 16%
+        # 1. The inner 60% it corresponds a 80% probability
+        # 2. The second region (from 60 -80 % ) -> 15%
+        # 3. The second region (from 80 %  on ) -> 5%
+        # Note the Y-contains the sensitive information, we trust
+        # it, no probability there, although the region near the
+        # edges (0.8) we don't wanted too much
+        # -- Assign probilities to the X measurement, the assignation
+        #    of the track to the hit should contain the indetermination
+        #    of the unsensitive direction. Let's assign probabilities
+        #    in proportion with the X-region of the track: just assume
+        #    it is more probable to a track to produce a hit if the track
+        #    is inside the central part of the sensor, following the beam
+        #    profile and the fiducial region -- 
+        # FIXME -- XXX The beam profile should be extracted runtime, for the
+        #              moment, it is assumed to be central at X 
+
+        # First and second region
+        #if abs(y) < self._second_region_y:
+        #    prob = 1.0
+        #elif abs(y) < self._third_region_y:
+        #    prob = 0.05
+        #else:
+        #    return 0.0
+
+        #if abs(x) < self._first_region_x:
+        #    prob *= 0.9
+        #elif abs(x) < self._second_region_x:
+        #    prob *= 0.45
+        #elif abs(x) < self._third_region_x:
+        #    prob *= 0.01
+        #else:
+        #    prob *= 0.001
+
+        #return prob
         prob = 1.0
-        if abs(x) < self._first_region_x:
-            prob *= 0.95
-        elif abs(x) < self._second_region_x:
-            prob *= 0.4
-        elif abs(x) < self._third_region_x:
-            prob *= 0.2
-        else:
-            return 0.0
         if abs(y) < self._first_region_y:
-            prob *= 0.95
+            if abs(x) < self._first_region_x:
+                prob *= 1.0
+            elif abs(x) < self._second_region_x:
+                prob *= 0.45
+            elif abs(x) < self._third_region_x:
+                prob *= 0.05
+            else:
+                prob *= 0
         elif abs(y) < self._second_region_y:
-            prob *= 0.4
+            if abs(x) < self._first_region_x:
+                prob *= 0.45
+            elif abs(x) < self._second_region_x:
+                prob *= 0.04
+            elif abs(x) < self._third_region_x:
+                prob *= 0.01
+            else:
+                prob *= 0
         elif abs(y) < self._third_region_y:
-            prob *= 0.2
+            if abs(x) < self._first_region_x:
+                prob *= 0.009
+            elif abs(x) < self._second_region_x:
+                prob *= 0.003
+            elif abs(x) < self._third_region_x:
+                prob *= 0.001
+            else:
+                prob *= 0
         else:
             return 0.0
-        
+
         return prob
 
     def is_within_matching_distance(self,dist_check):
@@ -2032,8 +2098,8 @@ class tracks_accessor(object):
             # Try to associate with a not used hit
             # First of all be sure this is an isolated track 
             # (only to be checked in the REF plane)
-            if not self.is_isolated(itrk,refhits):
-                continue
+            #if not self.is_isolated(itrk,refhits):
+            #    continue
             for hits in (refhits,duthits):
                 # The index position of this sensor in the tracks dict: 0: REF, 1: DUT
                 if hits.id == refhits.id:
@@ -2045,11 +2111,8 @@ class tracks_accessor(object):
                 #     to align. First a coarse, raw 
                 hits.fill_distance_histo((rsens[hits.sC_index]-r_offset[hits.id]),histos[hits.id][1])
                 hits.fill_correlation_histo(rsens[hits.sC_index],histos[hits.id][0],histos[hits.id][5],nevents)
-                # -- Now find the closest hit to that track (-1 is returned if any)
-                ihit,distance = hits.close_hit(rsens)
-                # XXX -- 
-                # if hits.id == duthits.id and ihit != -1) and duthits.n_cluster[ihit] != 1:
-                #    ihit,distance = -1,99999.9
+                # -- > Now find the hit with highest weight to that track
+                ihit,score = hits.get_largest_weight(rsens)
                 # -- Some plots: smoother residual evaluation (and alignment) 
                 #    using closest hits to a track (event if the hit is re-used)
                 if ihit != -1:
@@ -2059,41 +2122,37 @@ class tracks_accessor(object):
                     histos[hits.id][3].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
                     # -- plane
                     histos[hits.id][4].Fill(tel[2]-hits.z[0],tel[0],tel[1])
-                    # Weight 
-                    hits.track_weight[(itrk,ihit)]= hits.get_weight(distance,rsens)
-                # -- Association 
-                if not hits.is_within_matching_distance(distance):
-                    ihit = -1
-                else:
-                    # equivalently, link the track with the hit
+                    # Track weight for the combination itrk-ihit (unique)
+                    hits.track_weight[(itrk,ihit)] = score
+                    # Associated track-hit by a score higher than 0
+                    if not (hits.track_weight[(itrk,ihit)] > 0):
+                        # don't do nothing with this track
+                        continue
                     # Check if the hits was associated before, if it was,
                     # keep the closest track
                     hastobelinked=True
                     for old_trk in hits.get_associated_tracks(ihit):
-                        # If the new one is closest, remove the old one
-                        # from the association dicts
-                        if abs(distance)-abs(hits.track_distance[old_trk]) < 0.0:
+                        # Ambiguity (same hit for different tracks)
+                        # decided by larger-score criterium.
+                        if score-hits.track_weight[(old_trk,ihit)] > 0.0:
+                            # The current one has higher probability, updating
                             dummy = hits.track_link.pop(old_trk)
                             dummy = hits.track_distance.pop(old_trk)
                             # and remove also the link in the dictionary
                             tracks_d[old_trk][isens_td] = -1
                         else: 
-                            # Ignore this track, found a closest one to
-                            # the same hit
+                            # Ignore this track, the previous found has larger
+                            # probability
                             hastobelinked=False
                     if hastobelinked:
+                        # Update (or set the first time) the track-hit information
                         hits.track_link[itrk] = ihit
-                        hits.track_distance[itrk] = distance
-                    else:
-                        ihit = -1
-                # and check if is within fiducial
-                hits.track_inside[itrk] = hits.is_within_fiducial(rsens[0],rsens[1])
-                hit_indices[hits.id] = ihit
+                        hits.track_distance[itrk] = hits.sC_local[ihit]-rsens[hits.sC_index] 
+                        hit_indices[hits.id] = ihit
             # Fill the track dictionary with matching information
             tracks_d[itrk] = [hit_indices[refhits.id],hit_indices[duthits.id]]
         return tracks_d
 
-    
     def _matched_hits(self,duthits,refhits,h):
         """Function only usable if the tracks were fitted including
         both the DUT and REF sensor hits. 
@@ -2616,7 +2675,7 @@ class processor(object):
                         100,-10.0,10.0,100,-10.0,10.0),\
                 minst.ref_plane: ROOT.TH2F("trk_at_ref","Associated tracks at REF;x_{REF}^{trk} [mm]; y_{REF}^{trk} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)}
         self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
-                "same trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM),\
+                    "same trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
                     "trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM) }
         self.ntrks_perhit = { minst.dut_plane: ROOT.TH1F("ntrk_perhit_dut","MUST BE 0 or 1!!;N_{trks/hit};Entries",4,-0.5,3.5),
@@ -2998,11 +3057,12 @@ class processor(object):
                 # Hit distance
                 dummy = map(lambda ohit: self.hit_distance[hits.id].Fill(hits.sC_local[ihit]-hits.sC_local[ohit]),\
                         xrange(ihit+1,hits.n))
-        # Update the weight branches 
-        for ((it,ih),prob) in refhits.track_weight.iteritems():
-            self._t_trk_ref_weight[it] = prob
-        for ((it,ih),prob) in duthits.track_weight.iteritems():
-            self._t_trk_dut_weight[it] = prob
+        # Update the weight branches, whenever more than 1-hit was associated to a track
+        # use the largest probability value
+        #for ((it,ih),prob) in sortedrefhits.track_weight.iteritems():
+        #    self._t_trk_ref_second_weight[it] = prob
+        #for ((it,ih),prob) in duthits.track_weight.iteritems():
+        #    self._t_trk_dut_weight[it] = prob
 
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
@@ -3010,16 +3070,22 @@ class processor(object):
             # Update whether or not were associated
             self._t_trk_dut_associated[itrk] = idut
             self._t_trk_ref_associated[itrk] = iref
-            # Only those tracks inside fiducial
-            if not duthits.track_inside[itrk]:
-                continue
+            # Only those tracks inside fiducial -- NOT NEEDED
+            #if not duthits.track_inside[itrk]:
+            #    continue
             # --
             (rd,td) = trks.get_point_in_sensor_frame(itrk,duthits)
             (rr,tr) = trks.get_point_in_sensor_frame(itrk,refhits)
             if iref != -1:
                 self.htrks_at_planes[refhits.id].Fill(rr[0],rr[1])
+                # Update weights (note that a itrk is only attached to
+                # one hit (using the weight criterium)
+                self._t_trk_ref_weight[itrk] = refhits.track_weight[(itrk,iref)]
             if idut != -1:
                 self.htrks_at_planes[duthits.id].Fill(rd[0],rd[1])
+                # Update weights (note that a itrk is only attached to
+                # one hit (using the weight criterium)
+                self._t_trk_dut_weight[itrk] = duthits.track_weight[(itrk,idut)]
             # -- p( Matched HIT_exists | Isolated-track ), i.e. probability of hit
             #    and match
             self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
@@ -3246,12 +3312,12 @@ class processor(object):
             self.fill_associated_hit_histos((itrk,trks),(iref,refhits))
             self.fill_associated_hit_histos((itrk,trks),(idut,duthits))
             # -- No tracks (i.e., a quality REF-matched particle) presence 
-            if iref == -1: # or refhits.track_weight[(itrk,iref)] < 0.5:
+            #    tight requirement
+            if iref == -1 or refhits.track_weight[(itrk,iref)] < 0.1:
                 continue
             # -- Fill matched histograms
             r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
             # Just within fiducial region
-            #assert( duthits.is_within_fiducial(r_at_dut[0],r_at_dut[1]) == duthits.track_inside[itrk] )
             #if not duthits.track_inside[itrk]: NOT NEEDED
             #    continue
             # -- Efficiency plots
@@ -3554,6 +3620,8 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     # The hits and tracks 
     dut = hits_plane_accessor(t,metadata.dut_plane,sensor_name=name_converter[fp.sensor_name])
     ref = hits_plane_accessor(t,metadata.ref_plane,"REF_0_b1")
+    # Inform about the fiducial region of the DUT XXX NEEDED?
+    ref.inform_dut_fiducial(dut)
     tracks = tracks_accessor(t,[0,1,2,3,4],metadata.ref_plane,metadata.dut_plane)
     
     # Process the data
