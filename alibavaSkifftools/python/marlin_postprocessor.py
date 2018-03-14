@@ -2638,12 +2638,6 @@ class processor(object):
                 100,-0.1,1.1, 10,-0.5,9.5)
         self.hcl_size = { minst.dut_plane: ROOT.TH1F("cluster_size_dut","Isolated, REF-matched hits;N_{cluster};Entries",10,-0.5,9.5),
                 minst.ref_plane: ROOT.TH1F("cluster_size_ref","Isolated-matched hits;N_{cluster};Entries",10,-0.5,9.5) }
-        # -- Extra histos
-        #self.evt_corr = { minst.dut_plane: ROOT.TProfile("dx_correlation_dut","Event correlation closest track;Event;(#Delta_x)_{DUT}",\
-        #                300000,0.0,299999),\
-        #            minst.ref_plane: ROOT.TProfile("dx_correlation_ref","Event correlation closest track;Event;(#Delta_x)_{REF}",\
-        #                300000,0.0,299999)}
-        #extra = self.htrks_at_planes.values()+self.evt_corr.values()
         
         # -- Diagnostics
         # -- helper tree
@@ -2651,19 +2645,24 @@ class processor(object):
         # variables to fill up the tree
         self._t_dut_y = ROOT.vector(float)()
         self._t_ref_y = ROOT.vector(float)()
+        self._t_dut_charge = ROOT.vector(float)()
+        self._t_ref_charge = ROOT.vector(float)()
         self._t_trk_dut_x  = ROOT.vector(float)()
         self._t_trk_dut_y  = ROOT.vector(float)()
         self._t_trk_dut_z  = ROOT.vector(float)()
         self._t_trk_ref_x  = ROOT.vector(float)()
         self._t_trk_ref_y  = ROOT.vector(float)()
         self._t_trk_ref_z  = ROOT.vector(float)()
+        self._t_trk_quality= ROOT.vector(float)()
         self._t_trk_ref_weight = ROOT.vector(float)()
         self._t_trk_dut_weight = ROOT.vector(float)()
         self._t_trk_dut_associated  = ROOT.vector(int)()
         self._t_trk_ref_associated  = ROOT.vector(int)()
         t_objects_names = [ '_t_dut_y', '_t_ref_y', \
+                '_t_dut_charge', '_t_ref_charge', \
                 '_t_trk_dut_x', '_t_trk_dut_y','_t_trk_dut_z',\
                 '_t_trk_ref_x', '_t_trk_ref_y','_t_trk_ref_z',\
+                '_t_trk_quality',\
                 '_t_trk_ref_weight', '_t_trk_dut_weight',\
                 '_t_trk_dut_associated', '_t_trk_ref_associated']
         self._t_objects = map(lambda _brn: getattr(self,_brn),t_objects_names)
@@ -2671,9 +2670,6 @@ class processor(object):
             br_name = br.replace("_t_","")
             self._tree.Branch(br_name,getattr(self,br))
 
-        self.htrks_at_planes = { minst.dut_plane: ROOT.TH2F("trk_at_dut","Associated tracks at DUT;x_{DUT}^{trk} [mm]; y_{DUT}^{trk} [mm]; Entries",\
-                        100,-10.0,10.0,100,-10.0,10.0),\
-                minst.ref_plane: ROOT.TH2F("trk_at_ref","Associated tracks at REF;x_{REF}^{trk} [mm]; y_{REF}^{trk} [mm]; Entries",100,-10.0,10.0,100,-10.0,10.0)}
         self.trk_iso = { minst.dut_plane: ROOT.TH1F("trkiso_dut","Distance between pair of tracks in the "\
                     "same trigger-event;Track distance [mm];Triggers", 1000,0,10.0*MM),\
                 minst.ref_plane: ROOT.TH1F("trkiso_ref","Distance between pair of tracks in the same "\
@@ -2686,56 +2682,23 @@ class processor(object):
                     100,-sydut*1.01,sydut*1.01,0,1),
                 minst.ref_plane: ROOT.TProfile("track_a_eff_ref","Track-association efficiency;x_{REF};#varepsilon",\
                     100,-syref,syref,0,1) }
-        self.trackpresent_a_eff = { minst.dut_plane: ROOT.TProfile("trackpresent_a_eff_dut","Track-association efficiency;x_{DUT};#varepsilon",\
-                    100,-sydut*1.01,sydut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("trackpresent_a_eff_ref","Track-association efficiency;x_{REF};#varepsilon",\
-                    100,-syref,syref,0,1) }
-        self.track_senhit_eff = { minst.dut_plane: ROOT.TProfile("track_senhit_eff_dut","Track presence "\
-                    "(DUT present);x_{DUT};#varepsilon",100,-sydut*1.01,sydut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("track_senhit_eff_ref","Track presence "\
-                    "(REF present);x_{REF};#varepsilon",100,-syref,syref,0,1) }
-        self.hit = { minst.dut_plane: ROOT.TH1F("hit_dut","DUT hits;y_{DUT} [mm];Entries",100,-sydut*1.01,sydut*1.01),
-                minst.ref_plane: ROOT.TH1F("hit_ref","REF hits;y_{REF} [mm];Entries",100,-syref*1.01,syref*1.01) }
         self.hit_distance = { minst.dut_plane: ROOT.TH1F("hit_distance_dut","Distance between hits same event"\
                     ";Entries",100,-sydut*0.5,sydut*0.5),
                 minst.ref_plane: ROOT.TH1F("hit_distance_ref","Distance between hits same event"\
                     ";Entries",100,-syref*0.5,syref*0.5) }
-        self.track_eff = { minst.dut_plane: ROOT.TProfile("track_eff_dut","DUT-hit probability if track present;y_{DUT};#varepsilon",\
-                    100,-sydut*1.01,sydut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("track_eff_ref","REF-hit probability if track present;y_{REF};#varepsilon",\
-                    100,-syref,syref,0,1) }
-        self.ratio_hit_a = { minst.dut_plane: ROOT.TProfile("ratio_hit_dut","DUT-hit association probability;y_{DUT};#varepsilon",\
-                    100,-sydut*1.01,sydut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("ratio_hit_ref","REF-hit association;y_{REF};#varepsilon",\
-                    100,-sydut,sydut,0,1) }
-        self.ratio_hit_exist = { minst.dut_plane: ROOT.TProfile("ratio_hit_present_dut","DUT-hit presence probability;y_{DUT};#varepsilon",\
-                    100,-sydut*1.01,sydut*1.01,0,1),
-                minst.ref_plane: ROOT.TProfile("ratio_hit_present_ref","REF-hit presence probability;y_{REF};#varepsilon",\
-                    100,-sydut,sydut,0,1) }
         self.d_arrt = ROOT.TProfile2D("dut_arrt","DUT-presence (assuming associated REF);"\
                 "x_{DUT} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
         self.ad_darrt = ROOT.TProfile2D("dutass_darrt","DUT-association (assuming DUT presence and associated REF);"\
                 "x_{DUT} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
-        self.trackpred_y_eff = ROOT.TProfile("trackpred_y_eff","Track-association efficiency vs. y-predicted;"\
-                    "y_{DUT}^{pred}[mm];#varepsilon",100,-sydut,sydut,0,1)
-        self.trackpred_x_eff = ROOT.TProfile("trackpred_x_eff","Track-association efficiency vs. y-predicted;"\
-                    "x_{DUT}^{pred}[mm];#varepsilon",100,-sxdut,sxdut,0,1)
-        self.dutref_match_eff = ROOT.TProfile("match_dutref_eff","REF-matching DUT-hit efficiency;x_{DUT};#varepsilon",\
-                                    100,-sxdut,sxdut,0,1)
-        self.dutref_pure_match_eff = ROOT.TProfile2D("purematch_dutref_eff","REF-matching DUT-hit efficiency"\
-                "(REF hit present);x_{DUT}^{pred} [mm];y_{DUT} [mm];#varepsilon",100,-sxdut,sxdut,100,-sydut,sydut,0,1)
         
  
         diagnostics = []
         if DEBUG:
-            diagnostics = self.htrks_at_planes.values()+self.trk_iso.values()+self.nhits_ntrks_all.values()+\
+            diagnostics = self.trk_iso.values()+self.nhits_ntrks_all.values()+\
                     self.ntrks_perhit.values()+\
-                    self.hit.values()+self.hit_distance.values()+\
-                    self.track_a_eff.values()+self.track_senhit_eff.values()+self.trackpresent_a_eff.values()+\
-                    [self.trackpred_x_eff,self.trackpred_y_eff]+self.track_eff.values()+\
-                    self.ratio_hit_a.values()+self.ratio_hit_exist.values()+\
+                    self.hit_distance.values()+\
+                    self.track_a_eff.values()+\
                     [self.d_arrt,self.ad_darrt]+\
-                    [self.dutref_match_eff,self.dutref_pure_match_eff]+\
                     [self._tree]
 
 
@@ -3030,40 +2993,31 @@ class processor(object):
             self._t_trk_ref_x.push_back(xpred_ref)
             self._t_trk_ref_y.push_back(ypred_ref)
             self._t_trk_ref_z.push_back(zpred_ref)
+            self._t_trk_quality.push_back(trks.quality(itrk))
             self._t_trk_ref_weight.push_back(0.0)
             self._t_trk_dut_weight.push_back(0.0)
             # Just initialize
             self._t_trk_dut_associated.push_back(-1)
             self._t_trk_ref_associated.push_back(-1)
-        # Local coordinate for hits
-        map(lambda _yd: self._t_dut_y.push_back(_yd),duthits.sC_local)
-        map(lambda _yr: self._t_ref_y.push_back(_yr),refhits.sC_local)
+        # Local coordinate and charge for hits
+        map(lambda (_id,_yd): (self._t_dut_charge.push_back(duthits.charge[_id]),self._t_dut_y.push_back(_yd)),enumerate(duthits.sC_local))
+        map(lambda (_ir,_yr): (self._t_ref_charge.push_back(refhits.charge[_ir]),self._t_ref_y.push_back(_yr)),enumerate(refhits.sC_local))
         # Some intermediate efficiencies
         # ------------------------------
         # Association probability (given a hit, is there a track matched)
         for (ind_th,hits) in enumerate((refhits,duthits)):
             for ihit in xrange(hits.n):
-                # Number of tracks associated to the same hit
+                # Number of tracks associated to the same hit,
+                # as cross-check, only can be 0 or 1.
                 self.ntrks_perhit[hits.id].Fill(len(filter(lambda (_itr,_ih): _ih == ihit,hits.track_link.iteritems())))
                 # distance of the hit to the closest track?
                 # -- Check with the associated tracks dictionary if this hit is there
                 is_associated = int(len(filter(lambda (it,ih): ih[ind_th] == ihit,iso_trks.iteritems())) > 0)
-                ## -- p( A_H | HIT )
+                ## -- p( A_H | HIT ) --- >HERE!!!!
                 self.track_a_eff[hits.id].Fill(hits.sC_local[ihit],is_associated)
-                ## -- p( T | HIT )
-                self.track_senhit_eff[hits.id].Fill(hits.sC_local[ihit],int(len(iso_trks)>0))
-                # Hit position
-                self.hit[hits.id].Fill(hits.sC_local[ihit])
                 # Hit distance
                 dummy = map(lambda ohit: self.hit_distance[hits.id].Fill(hits.sC_local[ihit]-hits.sC_local[ohit]),\
                         xrange(ihit+1,hits.n))
-        # Update the weight branches, whenever more than 1-hit was associated to a track
-        # use the largest probability value
-        #for ((it,ih),prob) in sortedrefhits.track_weight.iteritems():
-        #    self._t_trk_ref_second_weight[it] = prob
-        #for ((it,ih),prob) in duthits.track_weight.iteritems():
-        #    self._t_trk_dut_weight[it] = prob
-
         # DUT hit correlation probability (given an associated idut, is there
         # an associated REF?
         for (itrk,(iref,idut)) in iso_trks.iteritems():
@@ -3077,51 +3031,26 @@ class processor(object):
             (rd,td) = trks.get_point_in_sensor_frame(itrk,duthits)
             (rr,tr) = trks.get_point_in_sensor_frame(itrk,refhits)
             if iref != -1:
-                self.htrks_at_planes[refhits.id].Fill(rr[0],rr[1])
                 # Update weights (note that a itrk is only attached to
                 # one hit (using the weight criterium)
                 self._t_trk_ref_weight[itrk] = refhits.track_weight[(itrk,iref)]
             if idut != -1:
-                self.htrks_at_planes[duthits.id].Fill(rd[0],rd[1])
                 # Update weights (note that a itrk is only attached to
                 # one hit (using the weight criterium)
                 self._t_trk_dut_weight[itrk] = duthits.track_weight[(itrk,idut)]
-            # -- p( Matched HIT_exists | Isolated-track ), i.e. probability of hit
-            #    and match
-            self.track_eff[refhits.id].Fill(rr[refhits.sC_index],(int(iref != -1)))
-            self.track_eff[duthits.id].Fill(rd[duthits.sC_index],(int(idut != -1)))
-            # -- p( Hit_exist | Isolated-track ), i.e. prob. of having a hit
-            #    when an isolated track is present
-            self.ratio_hit_exist[refhits.id].Fill(rd[refhits.sC_index],int(refhits.n>0))
-            self.ratio_hit_exist[duthits.id].Fill(rd[duthits.sC_index],int(duthits.n>0))
-            # Probability of hit association (given a isolated track and a hit)
-            if refhits.n > 0:
-                # -- p( Match | REF_exist Iso-track ), i.e. association probability
-                self.trackpresent_a_eff[refhits.id].Fill(rr[refhits.sC_index],int(iref!=-1))
-                self.ratio_hit_a[refhits.id].Fill(rd[refhits.sC_index],int(iref!=-1))
-                if iref != -1:
-                    # -- p( DUT | MATCH_REF REF T ) 
-                    self.d_arrt.Fill(rd[0],rd[1],int(duthits.n>0))
-            if duthits.n > 0:
-                # -- p( MATCH_DUT | DUT_exist Iso-track ), i.e. association probability
-                self.trackpresent_a_eff[duthits.id].Fill(rd[duthits.sC_index],int(idut!=-1))
-                self.ratio_hit_a[duthits.id].Fill(rd[duthits.sC_index],int(idut!=-1))
-            if duthits.n > 0 and refhits.n > 0 and iref != -1:
-                # -- p( MATCH_DUT | DUT MATCH_REF REF T )
-                self.ad_darrt.Fill(rd[0],rd[1],int(idut != -1))
-            # -- Check what's the probability of REF association
-            if idut == -1:
-                continue
-            # -- p( MATCH_REF REF | DUT MATCH_DUT T )
-            # -- with respect the dut local position
-            self.dutref_match_eff.Fill(duthits.sC_local[idut],int(iref != -1))
-            # -- with respect the associated track dut prediction
-            self.trackpred_x_eff.Fill(rd[0],int(iref != -1))
-            self.trackpred_y_eff.Fill(rd[1],int(iref != -1))
-            # And now, assuring that the REF is present in the event
-            if refhits.n > 0:
-                # -- p( MATCH_REF | REF DUT MATCH_DUT T)
-                self.dutref_pure_match_eff.Fill(rd[0],rd[1],int(iref != -1))
+            # Probability of hit association (given a isolated track and a 
+            # quality REF-hit:
+            #    1. Only 1-ref hit per event
+            #    2. With a weight < 0.2
+            #    XXX -- CENTRALIZE THIS CONDITION WHICH IS USED 
+            #           IN THE EFFICIENCY EVALUATION
+            if refhits.n == 1 and iref != -1 \
+                    and refhits.track_weight[(itrk,iref)] > 0.2:
+                # -- p( DUT | MATCH_REF REF T ) 
+                self.d_arrt.Fill(rd[0],rd[1],int(duthits.n>0))
+                if duthits.n > 0:
+                    # -- p( MATCH_DUT | DUT MATCH_REF REF T )
+                    self.ad_darrt.Fill(rd[0],rd[1],int(idut != -1))
 
         # Fill tree event
         self._tree.Fill()
