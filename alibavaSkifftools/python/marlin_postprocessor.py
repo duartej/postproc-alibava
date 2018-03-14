@@ -3241,8 +3241,11 @@ class processor(object):
             self.fill_associated_hit_histos((itrk,trks),(iref,refhits))
             self.fill_associated_hit_histos((itrk,trks),(idut,duthits))
             # -- No tracks (i.e., a quality REF-matched particle) presence 
-            #    tight requirement
-            if iref == -1 or refhits.track_weight[(itrk,iref)] < 0.1:
+            #    tight requirement. Also reduce the ambiguties using only-1
+            #    REF hit events
+            if refhits.n != 1 \
+                    or iref == -1 \
+                    or refhits.track_weight[(itrk,iref)] < 0.2:
                 continue
             # -- Fill matched histograms
             r_at_dut,tel_at_dut = trks.get_point_in_sensor_frame(itrk,duthits)
