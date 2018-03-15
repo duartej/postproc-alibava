@@ -72,16 +72,17 @@ float StripCluster::calibrated_charge(const std::vector<float> & calibration)
 
 float StripCluster::snr(const std::vector<float> & noise)
 {
-    float cluster_noise = 0.0;
+    float cl_snr = 0.0;
     for(int ch=0; ch < static_cast<int>(noise.size()); ++ch)
     {
         if(std::find(_channels.begin(),_channels.end(),ch) != _channels.end())
         {
-            cluster_noise += noise[ch];
+            // XXX Protection against division error?
+            //     Should never happen...
+            cl_snr += _signal_polarity*_signal_map[ch]/noise[ch];
         }
-        
     }
-    return this->charge()/cluster_noise;
+    return cl_snr;
 }
 
 float StripCluster::eta()
