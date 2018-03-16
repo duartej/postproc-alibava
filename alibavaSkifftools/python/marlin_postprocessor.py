@@ -2774,19 +2774,22 @@ class processor(object):
                 elif self.alignment[pl_id].sensitive_direction.lower() == "y":
                     new_align.y_offset = finer_offset
                 adding = True
-                # -- Wait until the offset has been at least 
+                # -- Wait until the offset has been at least 2-iterations ?
+                if self.alignment[pl_id].iteration+1 < 2:
+                    continue
                 # -- Others things here --> 
                 ## -- > rotation 
                 rot = get_linear_fit(self.dy_x_h[pl_id],-3,3)
                 # Asume resolution about 5 deg 
-                if abs(rot) > 0.087:
-                    new_align.rot -= rot
+                #if abs(rot) > 0.087:
+                new_align.rot = rot
                 ## --> tilt, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
                 if hits_plane_accessor.sin_tilt(pl_id) > 0.84:
                     tilt = get_linear_fit(self.dy_y_h[pl_id],-3.,3)/hits_plane_accessor.sin_tilt(pl_id)
                     if abs(titl) > 0.087:
                         new_align.tilt = tilt
+                ## Don't have the information in this coordinate, ther
                 ## --> turn, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
                 #if hits_plane_accessor.sin_turn(pl_id) > 0.84:
