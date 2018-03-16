@@ -2446,23 +2446,23 @@ class processor(object):
         self.dy_finer_wide_h = { minst.dut_plane: ROOT.TH1F("dy_finer_wide_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0),
                 minst.ref_plane: ROOT.TH1F("dy_finer_wide_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0) }
         # -- the rot (around z-axis)
-        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [#mum]",\
+        self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
                         45,-sxdut,sxdut,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ;x_{trk}^{pred} [mm];#Deltay_{REF} [#mum]",\
+                minst.ref_plane: ROOT.TProfile("dy_x_ref"," ;x_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
                         45,-sxref,sxref,-0.2,0.2) }
         # -- the tilt (around y-axis)
-        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ;y_{trk}^{pred} [mm];#Deltay_{DUT} [#mum]",\
+        self.dy_y_h = { minst.dut_plane: ROOT.TProfile("dy_y_dut"," ;y_{trk}^{pred} [mm];#Deltay_{DUT} [mm]",\
                         45,-sxdut,sxdut,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [#mum]",\
+                minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [mm]",\
                         45,-sxref,sxref,-0.2,0.2) }
         # -- the turn (around y-axis)
-        self.dy_yty_h = { minst.dut_plane: ROOT.TProfile("dy_yty_dut"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{DUT} [#mum]",\
+        self.dy_yty_h = { minst.dut_plane: ROOT.TProfile("dy_yty_dut"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{DUT} [mm]",\
                         50,-0.1,0.1,-1.2,1.2),
-                minst.ref_plane: ROOT.TProfile("dy_yty_ref"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{REF} [#mum]",\
+                minst.ref_plane: ROOT.TProfile("dy_yty_ref"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{REF} [mm]",\
                         50,-0.1,0.1,-1.2,1.2) }
         # -- the delta-z
-        self.dy_ty_h = { minst.dut_plane: ROOT.TProfile("dy_ty_dut"," ;tan(#theta_{y}^{trk});#Deltay_{DUT} [#mum]",50,-0.2,0.2,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dy_ty_ref"," ;tan(#theta_{y}^{trk});#Deltay_{REF} [#mum]",50,-0.2,0.2,-0.2,0.2) }
+        self.dy_ty_h = { minst.dut_plane: ROOT.TProfile("dy_ty_dut"," ;tan(#theta_{y}^{trk});#Deltay_{DUT} [mm]",50,-0.2,0.2,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_ty_ref"," ;tan(#theta_{y}^{trk});#Deltay_{REF} [mm]",50,-0.2,0.2,-0.2,0.2) }
         # geometry: z
         #----------
         self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
@@ -2785,17 +2785,15 @@ class processor(object):
                 new_align.rot = rot
                 ## --> tilt, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
-                if hits_plane_accessor.sin_tilt(pl_id) > 0.84:
+                if hits_plane_accessor.sin_tilt(pl_id) > 0.17:
                     tilt = get_linear_fit(self.dy_y_h[pl_id],-3.,3)/hits_plane_accessor.sin_tilt(pl_id)
                     if abs(titl) > 0.087:
                         new_align.tilt = tilt
-                ## Don't have the information in this coordinate, ther
-                ## --> turn, just if there is an initial inclination (at least 1 degree)
-                #      otherwise, not evaluate nothing
-                #if hits_plane_accessor.sin_turn(pl_id) > 0.84:
-                #    tilt = get_linear_fit(self.dy_ty_h[pl_id],-3.,3)/hits_plane_accessor.sin_tilt(pl_id)
-                #    if abs(titl) > 0.087:
-                #        new_align.tilt = tilt
+                ## Don't have the information for the turn coordinate
+                ##if hits_plane_accessor.sin_turn(pl_id) > 0.17:
+                ##    turn = get_linear_fit(self.dx_tx_h[pl_id],-3.,3)/hits_plane_accessor.sin_turn(pl_id)
+                ##    if abs(turn) > 0.087:
+                ##        new_align.turn = turn
                 ## --> dz
                 dz = get_linear_fit(self.dy_ty_h[pl_id],-0.1,0.1)*1e3
                 ## --> Note that some detectors are not between telescope planes,
