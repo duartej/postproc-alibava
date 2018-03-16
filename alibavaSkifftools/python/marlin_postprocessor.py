@@ -9,6 +9,23 @@ __version__ = "0.1"
 __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
+
+# Used packages 
+from math import sqrt,pi,sin,cos,degrees
+import time
+import datetime
+import array
+import sys
+import os       
+        
+from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
+from .SPS2017TB_metadata import sensor_name_spec_map as specs
+from .SPS2017TB_metadata import filename_parser 
+from .SPS2017TB_metadata import get_orientation
+
+from .analysis_functions import frac_position
+from .analysis_functions import get_time_window
+
 # 5. Be sure the binning is taking into account the strip resolution (at least bin_width = 1/4*pitch or so) ??
 
 DEBUG=False
@@ -81,9 +98,6 @@ class metadata_container(object):
         RuntimeError
             When the tree doesn't contain the Branch hit_X_#
         """
-        from .SPS2017TB_metadata import sensor_name_spec_map
-        import math
-
         # Names (following conventions at .SPS2017TB_metadata
         self.ref_name = "REF_0_b1"
         self.dut_name = dut_name
@@ -98,17 +112,17 @@ class metadata_container(object):
             raise RuntimeError("Unexpected tree structure")
         # Some useful extra info 
         # REF
-        self.ref_pitchX = sensor_name_spec_map[self.ref_name].pitchX
-        self.ref_pitchY = sensor_name_spec_map[self.ref_name].pitchY
-        self.ref_sizeX  = sensor_name_spec_map[self.ref_name].sizeX
-        self.ref_sizeY  = sensor_name_spec_map[self.ref_name].sizeY
+        self.ref_pitchX = specs[self.ref_name].pitchX
+        self.ref_pitchY = specs[self.ref_name].pitchY
+        self.ref_sizeX  = specs[self.ref_name].sizeX
+        self.ref_sizeY  = specs[self.ref_name].sizeY
         ##  DUT
-        self.dut_pitchX = sensor_name_spec_map[self.dut_name].pitchX
-        self.dut_pitchY = sensor_name_spec_map[self.dut_name].pitchY
-        self.dut_sizeX  = sensor_name_spec_map[self.dut_name].sizeX
-        self.dut_sizeY  = sensor_name_spec_map[self.dut_name].sizeY
+        self.dut_pitchX = specs[self.dut_name].pitchX
+        self.dut_pitchY = specs[self.dut_name].pitchY
+        self.dut_sizeX  = specs[self.dut_name].sizeX
+        self.dut_sizeY  = specs[self.dut_name].sizeY
         # Resolutions: REF and DUT (binary so far)
-        _p = 1.0/math.sqrt(12.0)
+        _p = 1.0/sqrt(12.0)
         self.resolution = { self.ref_plane: self.ref_pitchX*_p/MM , 
                 self.dut_plane: self.dut_pitchX*_p/MM }
     
@@ -147,7 +161,6 @@ class alignment_cts(object):
     """Container for the alignment constants
 
     """
-    from math import pi
     # Dictionaries present into a alignment file
     keywords = [ 'iteration', 'x_offset', 'y_offset', 'rot', 'tilt', 'turn', 'dz' ]
     units    = { 'x_offset': (1.0,"mm"), 'y_offset':(1.0,'mm'), \
@@ -184,7 +197,6 @@ class alignment_cts(object):
     def __str__(self):
         """Just the print out of the alignment constants
         """
-        from math import degrees
         m  = "iteration: {0}\n".format(int(self.iteration))
         m += "x_offset : {0} mm\n".format(self.x_offset)
         m += "y_offset : {0} mm\n".format(self.y_offset)
@@ -280,9 +292,6 @@ class alignment_cts(object):
         """Write down the current snapshoot of the data-members
         into a file
         """
-        import time
-        import datetime
-
         # Dump back to the file
         file_content = '#!/usr/bin/env python\n'
         ts = time.time()
@@ -450,12 +459,7 @@ class hits_plane_accessor(object):
             The name of the sensor
         """
         import ROOT
-        import array
-        from math import sqrt,pi
-        from .SPS2017TB_metadata import get_orientation
-        from .SPS2017TB_metadata import sensor_name_spec_map as specs
-        from .analysis_functions import get_time_window
-
+        
         self.id = planeid
         self.sensor_name = sensor_name
         # ----------------------------------
@@ -734,7 +738,6 @@ class hits_plane_accessor(object):
     def tdc_time(self,value):
         """The setter for the tdc_time
         """
-        import array
         self._tdc_time = array.array('f',[float(value)])
     
     @property
@@ -750,7 +753,6 @@ class hits_plane_accessor(object):
     def run_number(self,value):
         """The setter for the run number
         """
-        import array
         self._run_number = array.array('i',[int(value)])
 
     def get_x_channel(self,x):
@@ -858,8 +860,6 @@ class hits_plane_accessor(object):
         -------
         float: the cosinos of the tilt (rotation around x-axis)
         """
-        from math import cos
-
         return cos(hits_plane_accessor.align_constants[pid].tilt)
     
     @staticmethod
@@ -876,8 +876,6 @@ class hits_plane_accessor(object):
         -------
         float: the sin of the tilt (rotation around x-axis)
         """
-        from math import sin
-        
         return sin(hits_plane_accessor.align_constants[pid].tilt)
     
     @staticmethod
@@ -894,8 +892,6 @@ class hits_plane_accessor(object):
         -------
         float: the cosinos of the turn (rotation around y-axis)
         """
-        from math import cos
-        
         return cos(hits_plane_accessor.align_constants[pid].turn)
     
     @staticmethod
@@ -912,8 +908,6 @@ class hits_plane_accessor(object):
         -------
         float: the sin of the turn (rotation around y-axis)
         """
-        from math import sin
-        
         return sin(hits_plane_accessor.align_constants[pid].turn)
     
     @staticmethod
@@ -930,8 +924,6 @@ class hits_plane_accessor(object):
         -------
         float: the cosinos of the turn (rotation around z-axis)
         """
-        from math import cos
-        
         return cos(hits_plane_accessor.align_constants[pid].rot)
     
     @staticmethod
@@ -948,8 +940,6 @@ class hits_plane_accessor(object):
         -------
         float: the sin of the turn (rotation around z-axis)
         """
-        from math import sin
-        
         return sin(hits_plane_accessor.align_constants[pid].rot)
     
     @staticmethod
@@ -1393,9 +1383,6 @@ class hits_plane_accessor(object):
         hitlist: dict(int,list(int))
             The list of indices of the hits matched with a track 
         """
-        from math import sqrt
-        import array
-
         if not res:
             res=RESOLUTION[self.id]
         ISOLATION = 0.6*MM
@@ -1956,8 +1943,6 @@ class tracks_accessor(object):
             The distance between the current track and
             the closest one in the hitplane
         """
-        from math import sqrt
-        
         # It was previously calculated
         if self._cache_isodistance[hitplane.id].has_key(i):
             return self._cache_isodistance[hitplane.id][i]
@@ -2021,8 +2006,6 @@ class tracks_accessor(object):
         h: ROOT.TH1F
             The isolation histogram
         """
-        from math import sqrt
-        
         ((xpred,ypred,zpred),rtel0) = self.get_point_in_sensor_frame(itrk,hitobj)
         #dummy = map(lambda ((o_x,o_y,o_z),_tel): h.Fill(sqrt((o_x-xpred)**2.0+(o_y-ypred)**2.0)),\
         #        map(lambda other_i:  self.get_point_in_sensor_frame(other_i,hitobj),xrange(itrk+1,self.n)))
@@ -2058,8 +2041,6 @@ class tracks_accessor(object):
             not, a -1 is placed instead of the index.
             { track_index: (REF-hit-index,DUT-hit-index) ,... }
         """
-        from math import sqrt
-        
         if not process_it:
             return {}
 
@@ -2253,8 +2234,6 @@ class tracks_accessor(object):
             3: rot 
             4: sensor reference plane
         """
-        from math import sqrt
-
         # |--- Telescope coordinates -----------------------------------------|
         # Normal vector of the plane (defined in opposite direction to the 
         # beam). With perfect alignment would be: (0,0,-1)
@@ -2743,7 +2722,6 @@ class processor(object):
         Explanation
         """
         import ROOT
-        from math import sin,cos,sqrt,asin,pi
         MIN_ENTRIES = 1000
 
         # Just extract all the static info of the class,
@@ -3059,7 +3037,6 @@ class processor(object):
         position for size 2 clusters and beyond
         """
         import ROOT
-        from .analysis_functions import frac_position
         # Create a new histogram
         self.hfrac_pos_2 = ROOT.TH2F("hfrac_pos_2","Fractionary cluster position for"\
                 " cluster-2 size;mod(x)_{pitch};charge [ADC];clusters",100,-0.01,1.01,100,0,1000)
@@ -3165,8 +3142,6 @@ class processor(object):
             Whether if the run is an alignment run, therefore
             no need for filling extra histograms
         """
-        import math
-
         # Get the number of hits in the DUT and REF plane
         self.fill_statistics(duthits.n,refhits.n,trks.n)
 
@@ -3404,7 +3379,6 @@ def get_linear_fit(h,xmin=-2.0,xmax=2.0,robval=0.75):
         The percentage of data points that are good points
     """
     import ROOT
-    import array
 
     ROOT.gROOT.SetBatch()
     cns=ROOT.TCanvas()
@@ -3452,7 +3426,6 @@ def sensor_alignment(fname,verbose):
         Whenever the ROOT file is not present
     """
     import ROOT
-    from math import sin
     
     # Get the data, build clusters, do the actual analysis, 
     # but only the first 50k events
@@ -3519,11 +3492,6 @@ def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
         Whenever the ROOT file is not present
     """
     import ROOT
-    import sys
-    import os
-    from .SPS2017TB_metadata import filename_parser 
-    from .SPS2017TB_metadata import standard_sensor_name_map as name_converter
-    from .SPS2017TB_metadata import sensor_name_spec_map as specs
     # probably provisional XXX
 
     global DEBUG
