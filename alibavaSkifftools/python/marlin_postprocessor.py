@@ -2794,7 +2794,7 @@ class processor(object):
                 #    if abs(titl) > 0.087:
                 #        new_align.tilt = tilt
                 ## --> dz
-                dz = get_linear_fit(self.dy_ty_h[pl_id],-3,-3)*1e3
+                dz = get_linear_fit(self.dy_ty_h[pl_id],-0.1,0.1)*1e3
                 ## --> Note that some detectors are not between telescope planes,
                 #      meaning the dz is not well determined
                 if abs(dz) < 10.0:
