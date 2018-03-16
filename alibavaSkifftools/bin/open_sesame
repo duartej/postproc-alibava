@@ -820,7 +820,7 @@ if __name__ == '__main__':
             iteration = 0
             print "\033[1;34mPerforming DUT and REF alignment\033[1;m..."
             # do the alignment if the user says so 
-            while user_answer[0].lower() == 'y':
+            while len(user_answer) > 0 and user_answer[0].lower() == 'y':
                 alignment_status = sensor_alignment(args.ntuple,args.verbose)
                 print "\033[1;34mINFO ALIGNMENT\033[1;m ITERATION: {0}, STATUS: {1}".format(iteration,ST[alignment_status])
                 if args.align_auto and alignment_status:
