@@ -3411,10 +3411,11 @@ def get_linear_fit(h,xmin=-2.0,xmax=2.0,robval=0.75):
     if h.GetEntries() == 0:
         raise RuntimeError("Empty histogram '{0}'".format(h.GetName()))
     gbg = ROOT.TF1("kkita","pol1")
-    status = h.Fit(gbg,"RQS","",xmax,xmin)
+    status = h.Fit(gbg,"RQS","",xmin,xmax)
     if status.Status() != 0:
         print "\033[1;33mWARNING\033[1;m FAILED THE LINEAR FIT for '{0}': "\
                 "Status {1}".format(h.GetName(),status.Status())
+    # -- XXX Check chi square / ndof
     return gbg.GetParameter(1)
 
 def sensor_alignment(fname,verbose):
