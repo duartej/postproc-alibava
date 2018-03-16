@@ -1376,10 +1376,10 @@ class hits_plane_accessor(object):
               (see last histo) vs. the y-prediction. See `dy_y_h` in the 
               processor class. This histo is used for alignment (tilt)
             - A ROOT.TProfile to store the variation of the residual in x
-              (see last histo) vs. the x-prediction. See `dx_xtx_h` in the 
+              (see last histo) vs. the x-prediction. See `dy_yty_h` in the 
               processor class. This histo is used for alignment (turn)
             - A ROOT.TProfile to store the variation of the residual in y
-              (see last histo) vs. the y-slope. See `dx_tx_h` in the 
+              (see last histo) vs. the y-slope. See `dy_ty_h` in the 
               processor class. This histo is used for alignment (z-shift)
             - XXX MISSING HISTOS DESCRIPTION
         is_ref: bool, optional [XXX: Maybe define a data-member in the init)
@@ -2066,7 +2066,7 @@ class tracks_accessor(object):
         # Get the histograms
         # ---- histos[sensor_id] : 
         #  0: hcorr, 1: hdx,  2:hdx_finer, \
-        #  3: hdx_finer_wide, 4: plane, 5: event correlation
+        #  3: hdy_finer_wide, 4: plane, 5: event correlation
         # Remember to subtract the current event being processed
         # which is already included
         nevents = histos["events"]-1
@@ -2118,7 +2118,7 @@ class tracks_accessor(object):
                 if ihit != -1:
                     # -- dx finer 
                     histos[hits.id][2].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
-                    # -- dx_finer_wide
+                    # -- dy_finer_wide
                     histos[hits.id][3].Fill(hits.sC_local[ihit]-rsens[hits.sC_index])
                     # -- plane
                     histos[hits.id][4].Fill(tel[2]-hits.z[0],tel[0],tel[1])
@@ -2440,13 +2440,11 @@ class processor(object):
         # -- no sensitive direction
         self.Ns_h = { minst.dut_plane: ROOT.TH1F("ns_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
                 minst.ref_plane: ROOT.TH1F("ns_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
-        self.Ns_global_h = { minst.dut_plane: ROOT.TH1F("ns_global_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0),
-                minst.ref_plane: ROOT.TH1F("ns_global_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-10.0,10.0) }
         # -- finer alignment
-        self.dx_finer_h = { minst.dut_plane: ROOT.TH1F("dx_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2),
-                minst.ref_plane: ROOT.TH1F("dx_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2) }
-        self.dx_finer_wide_h = { minst.dut_plane: ROOT.TH1F("dx_finer_wide_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0),
-                minst.ref_plane: ROOT.TH1F("dx_finer_wide_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0) }
+        self.dy_finer_h = { minst.dut_plane: ROOT.TH1F("dy_finer_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2),
+                minst.ref_plane: ROOT.TH1F("dy_finer_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",100,-0.2,0.2) }
+        self.dy_finer_wide_h = { minst.dut_plane: ROOT.TH1F("dy_finer_wide_dut"," ; x_{DUT}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0),
+                minst.ref_plane: ROOT.TH1F("dy_finer_wide_ref"," ; x_{REF}-x_{trk}^{pred} [mm]; Entries",200,-1.0,1.0) }
         # -- the rot (around z-axis)
         self.dy_x_h = { minst.dut_plane: ROOT.TProfile("dy_x_dut"," ;x_{trk}^{pred} [mm];#Deltay_{DUT} [#mum]",\
                         45,-sxdut,sxdut,-0.2,0.2),
@@ -2458,13 +2456,13 @@ class processor(object):
                 minst.ref_plane: ROOT.TProfile("dy_y_ref"," ;y_{trk}^{pred} [mm];#Deltay_{REF} [#mum]",\
                         45,-sxref,sxref,-0.2,0.2) }
         # -- the turn (around y-axis)
-        self.dx_xtx_h = { minst.dut_plane: ROOT.TProfile("dx_xtx_dut"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{DUT} [#mum]",\
+        self.dy_yty_h = { minst.dut_plane: ROOT.TProfile("dy_yty_dut"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{DUT} [#mum]",\
                         50,-0.1,0.1,-1.2,1.2),
-                minst.ref_plane: ROOT.TProfile("dx_xtx_ref"," ;x_{trk}^{pred}*tan(#theta_{x}) [#mum];#Deltax_{REF} [#mum]",\
+                minst.ref_plane: ROOT.TProfile("dy_yty_ref"," ;y_{trk}^{pred}*tan(#theta_{y}) [#mum];#Deltay_{REF} [#mum]",\
                         50,-0.1,0.1,-1.2,1.2) }
         # -- the delta-z
-        self.dx_tx_h = { minst.dut_plane: ROOT.TProfile("dx_tx_dut"," ;tan(#theta_{x}^{trk});#Deltax_{DUT} [#mum]",50,-0.2,0.2,-0.2,0.2),
-                minst.ref_plane: ROOT.TProfile("dx_tx_ref"," ;tan(#theta_{x}^{trk});#Deltax_{REF} [#mum]",50,-0.2,0.2,-0.2,0.2) }
+        self.dy_ty_h = { minst.dut_plane: ROOT.TProfile("dy_ty_dut"," ;tan(#theta_{y}^{trk});#Deltay_{DUT} [#mum]",50,-0.2,0.2,-0.2,0.2),
+                minst.ref_plane: ROOT.TProfile("dy_ty_ref"," ;tan(#theta_{y}^{trk});#Deltay_{REF} [#mum]",50,-0.2,0.2,-0.2,0.2) }
         # geometry: z
         #----------
         self.hplane = { minst.dut_plane: ROOT.TH3F("plane_dut",";dz^{pred} [mm];x^{pred} [mm];y^{pred} [mm]",\
@@ -2472,21 +2470,21 @@ class processor(object):
                 minst.ref_plane: ROOT.TH3F("plane_ref",";dz^{pred} [mm];x^{trk} [mm];y^{pred} Entries",\
                     51,-1.0,1.0,50,-syref*1.5,sxref*1.5,50,-1.5*syref,1.5*syref)}
         # -- Event correlation (allow change dynamically ranges)
-        self.evt_trk_corr = { minst.dut_plane: ROOT.TH2F("evttrk_corr_dut",";Event;r_{DUT}-r_{DUT}^{pred} [mm]",\
+        self.evt_trk_corr = { minst.dut_plane: ROOT.TH2F("evttrk_corr_dut",";Event;y_{DUT}-y_{DUT}^{pred} [mm]",\
                         5000,0,0,100,-6,6),
-                minst.ref_plane: ROOT.TH2F("evttrk_corr_ref"," ;Event;r_{REF}-r_{REF}^{pred} [mm]",\
+                minst.ref_plane: ROOT.TH2F("evttrk_corr_ref"," ;Event;y_{REF}-y_{REF}^{pred} [mm]",\
                         5000,0,0,100,-6,6) }
         map(lambda h: h.SetCanExtend(ROOT.TH1.kXaxis), self.evt_trk_corr.values())
 
-        self._alignment_histos = self.dy_h.values()+self.dx_finer_h.values()+self.dx_finer_wide_h.values()+self.dy_x_h.values()+\
-                self.dx_xtx_h.values()+self.dy_y_h.values()+self.dx_tx_h.values()+\
+        self._alignment_histos = self.dy_h.values()+self.dy_finer_h.values()+self.dy_finer_wide_h.values()+self.dy_x_h.values()+\
+                self.dy_yty_h.values()+self.dy_y_h.values()+self.dy_ty_h.values()+\
                 self.hplane.values()+\
                 self.evt_trk_corr.values()+\
-                self.Ns_h.values()+self.Ns_global_h.values()
+                self.Ns_h.values()
         
         # Associated histos (hits associated to a track)
         # -------------------------------------
-        self.residual_associated = { minst.dut_plane: ROOT.TH2F("res_a_dut","y_{DUT} [mm];y_{DUT}-y_{DUT}^{pred} [mm];Entries",\
+        self.residual_associated = { minst.dut_plane: ROOT.TH2F("res_a_dut",";y_{DUT} [mm];y_{DUT}-y_{DUT}^{pred} [mm];Entries",\
                     100,-1.1*sydut,1.1*sydut,100,-fine_dist_dut,fine_dist_dut), 
                 minst.ref_plane: ROOT.TH2F("res_a_ref",";y_{REF} [mm] ;y_{REF}-y_{REF}^{pred} [mm];Entries",\
                     100,-1.1*syref,1.1*syref,100,-fine_dist_ref,fine_dist_ref) }
@@ -2503,9 +2501,9 @@ class processor(object):
         self.hcharge1D_associated = { minst.dut_plane: ROOT.TH1F("charge1D_a_dut" ,\
                     ";charge cluster [ADC];Entries",300,0,600),
                 minst.ref_plane: ROOT.TH1F("charge1D_a_ref",";charge cluster [ADC];Entries",300,0,600) }
-        self.resclsize_associated = { minst.dut_plane: ROOT.TH2F("resclsize_a_dut"," ;r_{DUT}-r_{DUT}^{pred} [mm];cluster size",\
+        self.resclsize_associated = { minst.dut_plane: ROOT.TH2F("resclsize_a_dut"," ;y_{DUT}-y_{DUT}^{pred} [mm];cluster size",\
                         100,-fine_dist_dut,fine_dist_dut,10,-0.5,9.5), 
-                minst.ref_plane: ROOT.TH2F("resclsize_a_ref"," ;r_{REF}-r_{REF}^{pred} [mm];charge size",\
+                minst.ref_plane: ROOT.TH2F("resclsize_a_ref"," ;y_{REF}-y_{REF}^{pred} [mm];charge size",\
                         100,-fine_dist_ref,fine_dist_ref,10,-0.5,9.5) }
         self.hclustersize_associated = { minst.dut_plane: ROOT.TProfile2D("clustersize_a_dut" ,\
                     ";x_{DUT}^{pred} [mm];y_{DUT}^{pred} [mm];<cluster size>", \
@@ -2768,20 +2766,21 @@ class processor(object):
 
             if self.alignment[pl_id].iteration > 0 \
                     and (abs(coarse_offset-old_offset) < 0.1 \
-                            and self.dx_finer_h[pl_id].Integral() > MIN_ENTRIES) :
+                            and self.dy_finer_h[pl_id].Integral() > MIN_ENTRIES) :
                 # PRe-alignment done, finer alignment now
-                finer_offset = get_offset(self.dx_finer_h[pl_id],xmin=-0.2,xmax=0.2,coarse=False)
+                finer_offset = get_offset(self.dy_finer_h[pl_id],xmin=-0.2,xmax=0.2,coarse=False)
                 if self.alignment[pl_id].sensitive_direction.lower() == "x":
                     new_align.x_offset = finer_offset
                 elif self.alignment[pl_id].sensitive_direction.lower() == "y":
                     new_align.y_offset = finer_offset
                 adding = True
+                # -- Wait until the offset has been at least 
                 # -- Others things here --> 
                 ## -- > rotation 
                 rot = get_linear_fit(self.dy_x_h[pl_id],-3,3)
                 # Asume resolution about 5 deg 
-                #if abs(rot) > 0.087:
-                new_align.rot = rot
+                if abs(rot) > 0.087:
+                    new_align.rot -= rot
                 ## --> tilt, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
                 if hits_plane_accessor.sin_tilt(pl_id) > 0.84:
@@ -2791,11 +2790,11 @@ class processor(object):
                 ## --> turn, just if there is an initial inclination (at least 1 degree)
                 #      otherwise, not evaluate nothing
                 #if hits_plane_accessor.sin_turn(pl_id) > 0.84:
-                #    tilt = get_linear_fit(self.dx_tx_h[pl_id],-3.,3)/hits_plane_accessor.sin_tilt(pl_id)
+                #    tilt = get_linear_fit(self.dy_ty_h[pl_id],-3.,3)/hits_plane_accessor.sin_tilt(pl_id)
                 #    if abs(titl) > 0.087:
                 #        new_align.tilt = tilt
                 ## --> dz
-                dz = get_linear_fit(self.dx_tx_h[pl_id],-3,-3)*1e3
+                dz = get_linear_fit(self.dy_ty_h[pl_id],-3,-3)*1e3
                 ## --> Note that some detectors are not between telescope planes,
                 #      meaning the dz is not well determined
                 if abs(dz) < 10.0:
@@ -2874,8 +2873,6 @@ class processor(object):
                 (rpred,tel) = trks.get_point_in_sensor_frame(itrk,hits)
                 # A tomography in the non-sensitive direction
                 self.Ns_h[hits.id].Fill(rpred[hits.sC_other_index])
-                # -- and global coordinates
-                self.Ns_global_h[hits.id].Fill(tel[hits.sC_other_index])
 
                 dc = hits.sC_local[i]-rpred[hits.sC_index]
                 # -- rotation 
@@ -2883,9 +2880,9 @@ class processor(object):
                 ## -- tilt
                 self.dy_y_h[hits.id].Fill(rpred[hits.sC_index],dc)
                 # -- turn
-                self.dx_xtx_h[hits.id].Fill(rpred[hits.sC_index]*trk_drdz[itrk]*UM,dc)
+                self.dy_yty_h[hits.id].Fill(rpred[hits.sC_index]*trk_drdz[itrk]*UM,dc)
                 ## -- dz 
-                self.dx_tx_h[hits.id].Fill(trk_drdz[itrk]*UM,dc)
+                self.dy_ty_h[hits.id].Fill(trk_drdz[itrk]*UM,dc)
 
     def fill_associated_hit_histos(self,(itrk,trks),(ihit,hits)):
         """Fill those histograms related with associated hit quantities
@@ -3194,11 +3191,11 @@ class processor(object):
         
         # Prepare the ntuple of histograms for DUT and REF
         histos_ref = (self.hcorr_trkX[refhits.id],self.dy_h[refhits.id],\
-                self.dx_finer_h[refhits.id],self.dx_finer_wide_h[refhits.id],\
+                self.dy_finer_h[refhits.id],self.dy_finer_wide_h[refhits.id],\
                 self.hplane[refhits.id],self.evt_trk_corr[refhits.id], \
                 self.Ns_h[refhits.id])
         histos_dut = (self.hcorr_trkX[duthits.id],self.dy_h[duthits.id],\
-                self.dx_finer_h[duthits.id],self.dx_finer_wide_h[duthits.id],\
+                self.dy_finer_h[duthits.id],self.dy_finer_wide_h[duthits.id],\
                 self.hplane[duthits.id],self.evt_trk_corr[duthits.id],\
                 self.Ns_h[duthits.id])
 
@@ -3225,8 +3222,8 @@ class processor(object):
             # Remove the aligment histos (only do it the first time)
             # (except some of them) and from the generic counter list
             keepthem =[]
-            for hname in ["corr_trkX_{0}","dy_{0}","dx_finer_{0}",\
-                    "dx_finer_wide_{0}","plane_{0}", "evttrk_corr_{0}"]:
+            for hname in ["corr_trkX_{0}","dy_{0}","dy_finer_{0}",\
+                    "dy_finer_wide_{0}","plane_{0}", "evttrk_corr_{0}"]:
                 for sname in [ "dut","ref" ]:
                     keepthem.append(hname.format(sname)) 
             dummy = map(lambda h: (h.Delete(),self._allhistograms.remove(h)),\
