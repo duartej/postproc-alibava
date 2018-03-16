@@ -3478,15 +3478,17 @@ def sensor_alignment(fname,verbose):
     # Considered aligned if the aligned constants doesn't change 
     # (within some tolerance). Note that if the previous alignment
     # constants file was not present, the loop is not performed
+    # as well as a minimum the 3-iterations has to be performed
     aligned_sensors = 0
     for pl_id,old_a in old_align_d.iteritems():
+        if proc_inst.alignment[pl_id].iteration < 3:
+            continue
         if old_a == proc_inst.alignment[pl_id]:
             aligned_sensors += 1
     print
     print proc_inst.get_raw_sensors_efficiency()
-    # Check if all sensors are aligned
+    # Check if all sensors are aligned (and at least 3 iteration minimum)
     return (aligned_sensors == len(proc_inst.alignment.keys()))
-
 
 def sensor_map_production(fname,entries_proc=-1,alignment=False,verbose=False):
     """Produce the charge maps and the efficiency maps (hit 
