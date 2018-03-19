@@ -531,7 +531,7 @@ def sensor_analysis(args):
     # Polarity obtained from the metadata (if it is posible)
     if fnp:
         configurables["polarity"] = int(sensor_name_spec_map[standard_sensor_name_map[fnp.sensor_name]].polarity)
-    elif not configurable["polarity"]:
+    elif not configurables["polarity"]:
         raise RuntimeError("Given the non-standard name of '{0}', it is not possible "\
                 "to automatically deduce the polarity of the sensor: use the '--polarity'"\
                 " option to introduce it manually")
