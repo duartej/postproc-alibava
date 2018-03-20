@@ -10,6 +10,8 @@ __maintainer__ = "Jordi Duarte-Campderros"
 __email__ = "jorge.duarte.campderros@cern.ch"
 __status__ = "Development"
 
+import ctypes
+
 def callit_once(f):
     """Decorator  to assure that the function argument is called 
     only once, otherwise raises an exception
@@ -22,6 +24,23 @@ def callit_once(f):
         raise RuntimeError("Unexpected call to the method '{0}'"\
                 " which can be only called ONCE".format(f.__name__))
 
+# Helper classes to avoid the segfault due to the returned
+# datatypes in the AlibavaAnalysisSensor. Not needed in principle
+# for the other two (IOFortythieves and IOASAResults), but added
+# and separated just in case. (See https://stackoverflow.com/\
+#        questions/20806070/ctypes-correctly-sublcass-c-void-\
+#        p-for-passing-and-returning-custom-data-types )
+# XXX: The issue is not fully understood (specially the different
+#      behaviours depending the machine/compiler)
+class c_ioft(ctypes.c_void_p):
+    pass
+
+class c_aa(ctypes.c_void_p):
+    pass
+
+class c_iores(ctypes.c_void_p):
+    pass
+
 class alibava_analysis(object):
     """Wrapper to the C++ class IOFortythieves and AlibavaSensorAnalysis 
     which implement the created ROOT file by the `fortythieves` exec. 
@@ -31,8 +50,6 @@ class alibava_analysis(object):
     def __init__(self,filename,chip):
         """Initialization
         """
-        import ctypes
-
         # some useful attributes
         # -- whether or not the results should be stored in a file
         #    using the IOASAResults class
@@ -43,53 +60,62 @@ class alibava_analysis(object):
         # Library
         self._lib = ctypes.cdll.LoadLibrary("libAlibavaSensorAnalysis.so")
         # All involved types for the IOFortythieves
-        self._lib.ioft_new.restype = ctypes.c_void_p
+        self._lib.ioft_new.restype = c_ioft 
         self._lib.ioft_new.argtypes = [ ctypes.c_char_p, ctypes.c_int ]
-        self._lib.ioft_delete.argtypes = [ ctypes.c_void_p ]
-        self._lib.ioft_initialize.argtypes = [ ctypes.c_void_p ]
-        self._lib.ioft_process.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
-        self._lib.ioft_get_entries.argtypes = [ ctypes.c_void_p ]
+        self._lib.ioft_delete.restype = None
+        self._lib.ioft_delete.argtypes = [ c_ioft ]
+        self._lib.ioft_initialize.restype = None
+        self._lib.ioft_initialize.argtypes = [ c_ioft ]
+        self._lib.ioft_process.restype = None
+        self._lib.ioft_process.argtypes = [ c_ioft, ctypes.c_int ]
         self._lib.ioft_get_entries.restype = ctypes.c_int 
+        self._lib.ioft_get_entries.argtypes = [ c_ioft ]
         # All involved types for the AlibavaSensorAnalysis
         # -- constructor and destructor
-        self._lib.aa_new.restype = ctypes.c_void_p
+        self._lib.aa_new.restype = c_aa
         self._lib.aa_new.argtypes = [ ]
-        self._lib.aa_delete.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_delete.argtypes = [ c_aa ]
         # All involved types for the IOASAResults
-        self._lib.ioresults_new.restye   = ctypes.c_void_p
+        self._lib.ioresults_new.restype   = c_iores
         self._lib.ioresults_new.argtypes = [ ctypes.c_char_p ]
-        self._lib.ioresults_delete.argtypes = [ ctypes.c_void_p ]
-        self._lib.ioresults_book_tree.argtypes = [ ctypes.c_void_p ]
-        self._lib.ioresults_fill_header.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
-        self._lib.ioresults_fill_tree.argtypes = [ ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p ]
+        self._lib.ioresults_delete.restype = None
+        self._lib.ioresults_delete.argtypes = [ c_iores ]
+        self._lib.ioresults_book_tree.restype = None
+        self._lib.ioresults_book_tree.argtypes = [ c_iores ]
+        self._lib.ioresults_fill_header.restype = None
+        self._lib.ioresults_fill_header.argtypes = [ c_iores, c_ioft ]
+        self._lib.ioresults_fill_tree.restype = None
+        self._lib.ioresults_fill_tree.argtypes = [ c_iores, c_ioft, c_aa ]
         # -- some setters
-        self._lib.aa_configure_polarity.argtypes = [ ctypes.c_void_p, ctypes.c_int ]
-        self._lib.aa_configure_time_cut.argtypes = [ ctypes.c_void_p, ctypes.c_float, ctypes.c_float ]
-        self._lib.aa_configure_masked_channels.argtypes = [ ctypes.c_void_p, ctypes.POINTER(ctypes.c_int), ctypes.c_int ]
-        self._lib.aa_configure_mask_criterium.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
-        self._lib.aa_configure_snr_seed.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
-        self._lib.aa_configure_snr_neighbour.argtypes = [ ctypes.c_void_p, ctypes.c_float ]
+        self._lib.aa_configure_polarity.argtypes = [ c_aa, ctypes.c_int ]
+        self._lib.aa_configure_time_cut.argtypes = [ c_aa, ctypes.c_float, ctypes.c_float ]
+        self._lib.aa_configure_masked_channels.argtypes = [ c_aa, ctypes.POINTER(ctypes.c_int), ctypes.c_int ]
+        self._lib.aa_configure_mask_criterium.argtypes = [ c_aa, ctypes.c_float ]
+        self._lib.aa_configure_snr_seed.argtypes = [ c_aa, ctypes.c_float ]
+        self._lib.aa_configure_snr_neighbour.argtypes = [ c_aa, ctypes.c_float ]
         # -- getters of configuration member
-        self._lib.aa_polarity_getter.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_polarity_getter.argtype = [ c_aa ]
         self._lib.aa_polarity_getter.restype = ctypes.c_int 
-        self._lib.aa_time_cut_getter.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_time_cut_getter.argtype = [ c_aa ]
         self._lib.aa_time_cut_getter.restype = ctypes.POINTER(ctypes.c_float) 
-        self._lib.aa_number_masked_channels.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_number_masked_channels.argtype = [ c_aa ]
         self._lib.aa_number_masked_channels.restype = ctypes.c_int
-        self._lib.aa_masked_channels_getter.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_masked_channels_getter.argtype = [ c_aa ]
         self._lib.aa_masked_channels_getter.restype = ctypes.POINTER(ctypes.c_int)
-        self._lib.aa_mask_criterium_getter.argtype = [ ctypes.c_void_p ]
+        self._lib.aa_mask_criterium_getter.argtype = [ c_aa ]
         self._lib.aa_mask_criterium_getter.restype = ctypes.c_float
-        self._lib.aa_snr_seed_getter.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_snr_seed_getter.argtypes = [ c_aa ]
         self._lib.aa_snr_seed_getter.restype = ctypes.c_float
-        self._lib.aa_snr_neighbour_getter.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_snr_neighbour_getter.argtypes = [ c_aa ]
         self._lib.aa_snr_neighbour_getter.restype = ctypes.c_float
         # print configuration
-        self._lib.aa_print_configuration.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
+        self._lib.aa_print_configuration.argtypes = [ c_aa, c_ioft ]
+        self._lib.aa_print_configuration.restype  = None
 
         # -- modifiers
-        self._lib.aa_mask_channels.argtypes = [ ctypes.c_void_p, ctypes.c_void_p ]
-        self._lib.aa_update_crosstalk_factors.argtypes = [ ctypes.c_void_p ]
+        self._lib.aa_mask_channels.argtypes = [ c_aa, c_ioft ]
+        self._lib.aa_mask_channels.restype  = None
+        self._lib.aa_update_crosstalk_factors.argtypes = [ c_aa ]
         self._lib.aa_update_crosstalk_factors.restype = ctypes.c_int 
 
         # The objects
@@ -201,7 +227,6 @@ class alibava_analysis(object):
         masked_chan: list(int)
             The list of masked channels 
         """
-        import ctypes
         # A check before
         if len(masked_chan) == 0:
             raise RuntimeError("Reset to no-masked channels is"\
