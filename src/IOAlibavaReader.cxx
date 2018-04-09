@@ -108,6 +108,16 @@ int IOAlibavaReader::read_data(const input_options & opt,IOManager * iomanager)
     // --- Run type: 1:Calibration; 2:Laser Syn.; 3:Laser; 4: Rad. source; 5: Pedestal
     int type = -1;
     infile.read(reinterpret_cast<char*>(&type), sizeof(int));
+    // [Javier Gonzalez Sanchez's patch] Due to a bad choice in the date 
+    // field (in the Alibava software is defined as time_t), the number 
+    // of bytes could be 4 (if the data-taking SO is 32-bits) or 8 (if 
+    // SO is 64-bits), therefore the (unsigned int) use in the date, which
+    // is 4 bytes independently of the SO, is not enough and we need to 
+    // read another 4 bytes extra (an int)
+    if( type == 0 ) 
+    {
+        infile.read(reinterpret_cast<char*>(&type), sizeof(int));
+    }
     // --- Header lenght
     unsigned int lheader = 0; 
     infile.read(reinterpret_cast<char*>(&lheader), sizeof(unsigned int));
