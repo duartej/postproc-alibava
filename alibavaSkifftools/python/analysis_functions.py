@@ -68,6 +68,64 @@ def landau_gaus(x,par):
     
     return par[2]*1./sqrt(pi)*step*total/par[3]
 
+
+def fit_langaus(h,xmin=0,xmax=60,force_range=False):
+    """Fit a Landau * Gauss to the input histogram, returning
+    the main parameters of the fitted function, as well as if
+    the fit was succesful. The function gets attached to the
+    histogram and can be retrieved with the h.GetFunction method
+
+    Parameters
+    ----------
+    h: ROOT.TH1
+        The histogram to fit
+    xmin: float, optional
+        The range minimum to fit
+    xmax: float, optional
+        The range maximum to fit
+    force_range: bool, optional
+        Whether or not use tunned range for the fit, 
+        If yes, it will apply a range defined around
+        the found peak and using an estimated sigma (peak/7.0):
+          [peak - 2.5 *Sigma , peak + 6.0 *Sigma ]
+
+    Return
+    ------
+    """
+    import ROOT
+
+    # Define the TF1 
+    name = h.GetName()+"_landaugaus_tf1"
+    lg = ROOT.TF1(name,landau_gaus,xmin,xmax,4)
+    # Start values for the parameters. Some guese
+    # -- the Most probable value
+    peak = h.GetBinCenter(h.GetMaximumBin())
+    # -- Sigma
+    sm = peak/7.0
+    if force_range:
+        xmin = peak-2.5*sm
+        xmax = peak+6.0*sm
+        if xmin < 0.5:
+            xmin = 0.5
+    # -- Gaussian noise
+    lg.SetParameter(0,peak)
+    #lg.SetParLimits(0,1,50)
+    # -- Scale of the Landau
+    lg.SetParameter(1,sm)
+    #lg.SetParLimits(1,5.0e-3,10)
+    # -- Normalization constant
+    norm=h.Integral()
+    lg.SetParameter(2,norm)
+    #lg.SetParLimits(2,norm*0.001,norm*3.0)
+    # -- Gauss width (initially as the Landau width)
+    lg.SetParameter(3,sm)
+    #lg.SetParLimits(3,1.e-3,10)
+
+    lg.SetLineColor(46)
+    lg.SetLineWidth(2)
+    results = h.Fit(lg,"RSQ+","",xmin,xmax)
+    return lg.GetParameter(0),lg.GetParameter(3),results.Status()
+
 def get_time_window(tree,cut,\
         win_halfsize=2.0,\
         fog_brname="cluster_charge",time_brname="eventTime",
