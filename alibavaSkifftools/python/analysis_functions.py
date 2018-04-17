@@ -25,7 +25,7 @@ def landau_gaus(x,par):
     x: array
         The variable
     par: array
-        The parameters
+        The parameters [MPV,Sigma landau, Normalization, Sigma Gauss]
     """
     from math import pi,sqrt
     import ROOT 
@@ -91,6 +91,7 @@ def fit_langaus(h,xmin=0,xmax=60,force_range=False):
 
     Return
     ------
+    (MPV,Sigma gaus,TResultsStatus,TF1 fitted)
     """
     import ROOT
 
@@ -124,7 +125,7 @@ def fit_langaus(h,xmin=0,xmax=60,force_range=False):
     lg.SetLineColor(46)
     lg.SetLineWidth(2)
     results = h.Fit(lg,"RSQ+","",xmin,xmax)
-    return lg.GetParameter(0),lg.GetParameter(3),results.Status()
+    return lg.GetParameter(0),lg.GetParameter(3),results.Status(),lg
 
 def get_time_window(tree,cut,\
         win_halfsize=2.0,\
@@ -166,7 +167,8 @@ def get_time_window(tree,cut,\
     if type(_h2) == ROOT.TObject:
         raise AttributeError("Histogram generation failed. Probably"\
                 " due to some unexisting branch name introduced in the"\
-                " cut definition: '{0}'".format(cut))
+                " cut definition: '{0}' or in the Figure of merit branch: '{1}'"\
+                " or in the Time branch: '{2} or not enough Events' ".format(cut,fog_brname,time_brname))
     _h2.SetDirectory(0)
     prof_window = _h2.ProfileX()
     # Fit a polynomial
