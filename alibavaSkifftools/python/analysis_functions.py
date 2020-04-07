@@ -13,6 +13,37 @@ __status__ = "Development"
 ## - a new canvas with the time fit extraction, time window used
 ##   and statistics
 
+def spectrum_searcher_landau_parameters(h,xmin,xmax):
+    """Search the peak for the Landau using the TSpectrum
+
+    Parameters
+    ----------
+    h: ROOT.TH1
+        The histogram
+    xmin: float
+        The minimum value the peak should be
+    xmax: float
+        The maximum value the peak should be
+
+    Return
+    ------
+    peak: float
+    """
+    import ROOT 
+    # Uset TSpectrum to find the available peaks
+    batch=ROOT.gROOT.IsBatch()
+    ROOT.gROOT.SetBatch(1)
+    s=ROOT.TSpectrum()
+    nfound = s.Search(h,1,'nobackground new')
+    # Get the first peak comming from the left
+    for i in range(nfound-1,-1,-1):
+        peak = s.GetPositionX()[i]
+        if abs(xmin) > abs(peak) or abs(peak) > abs(xmax):
+            continue
+        break
+    ROOT.gROOT.SetBatch(batch)
+
+    return peak
 
 def landau_gaus(x,par):
     """Definition of a Landau convulated with gaus 
@@ -69,7 +100,7 @@ def landau_gaus(x,par):
     return par[2]*1./sqrt(pi)*step*total/par[3]
 
 
-def fit_langaus(h,xmin=0,xmax=60,force_range=False):
+def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
     """Fit a Landau * Gauss to the input histogram, returning
     the main parameters of the fitted function, as well as if
     the fit was succesful. The function gets attached to the
@@ -83,6 +114,10 @@ def fit_langaus(h,xmin=0,xmax=60,force_range=False):
         The range minimum to fit
     xmax: float, optional
         The range maximum to fit
+    peak_min: float, optional
+        The minimum allowed value where the peak should be
+    peak_max: float, optional
+        The maximum allowed value where the peak should be
     force_range: bool, optional
         Whether or not use tunned range for the fit, 
         If yes, it will apply a range defined around
@@ -100,7 +135,8 @@ def fit_langaus(h,xmin=0,xmax=60,force_range=False):
     lg = ROOT.TF1(name,landau_gaus,xmin,xmax,4)
     # Start values for the parameters. Some guese
     # -- the Most probable value
-    peak = h.GetBinCenter(h.GetMaximumBin())
+    #peak = h.GetBinCenter(h.GetMaximumBin())
+    peak = spectrum_searcher_landau_parameters(h,peak_min,peak_max)
     # -- Sigma
     sm = peak/7.0
     if force_range:
@@ -113,7 +149,8 @@ def fit_langaus(h,xmin=0,xmax=60,force_range=False):
     #lg.SetParLimits(0,1,50)
     # -- Scale of the Landau
     lg.SetParameter(1,sm)
-    #lg.SetParLimits(1,5.0e-3,10)
+    # Looks like things below 0.1-0.15 
+    lg.SetParLimits(1,0.10,10)
     # -- Normalization constant
     norm=h.Integral()
     lg.SetParameter(2,norm)
