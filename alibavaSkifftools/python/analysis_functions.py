@@ -150,7 +150,9 @@ def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
     # -- Scale of the Landau
     lg.SetParameter(1,sm)
     # Looks like things below 0.1-0.15 
-    lg.SetParLimits(1,0.10,10)
+    # Only make sense if ToT
+    if peak < 50:
+        lg.SetParLimits(1,0.10,10)
     # -- Normalization constant
     norm=h.Integral()
     lg.SetParameter(2,norm)
