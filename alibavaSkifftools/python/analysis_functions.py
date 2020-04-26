@@ -58,11 +58,13 @@ def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
         xmax = peak+6.0*sm
         if xmin < 0.5:
             xmin = 0.5
-    # -- Gaussian noise
+    # --- The landau MPV
     lg.SetParameter(0,peak)
-    #lg.SetParLimits(0,1,50)
-    # -- Scale of the Landau
+    lg.SetParLimits(0,1,peak*4.0)
+    # --- The landau width (scale), the average fluctuations around the MPV 
+    #      (assuming a 5/10% of the MVP)
     lg.SetParameter(1,sm)
+    lg.SetParLimits(1,peak*0.01,peak*0.5)
     # Looks like things below 0.1-0.15 
     # Only make sense if ToT
     # XXX -- FIXME !! THis is only valid for ToT units!!
@@ -71,9 +73,10 @@ def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
     # -- Normalization constant
     norm=h.Integral()
     lg.SetParameter(2,norm)
-    #lg.SetParLimits(2,norm*0.001,norm*3.0)
-    # -- Gauss width (initially as the Landau width)
+    # --- The gaussian noise (fluctuations due to electronics, fixing min 
+    #     value to a 5% of the charge and maximum of twice the estimation )
     lg.SetParameter(3,sm)
+    lg.SetParLimits(3,peak*0.05,sm*2.0)
     #lg.SetParLimits(3,1.e-3,10)
 
     lg.SetLineColor(46)
