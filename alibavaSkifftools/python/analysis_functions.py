@@ -12,152 +12,7 @@ __status__ = "Development"
 ## - remove the OptStat
 ## - a new canvas with the time fit extraction, time window used
 ##   and statistics
-
-def spectrum_searcher_landau_parameters(h,xmin,xmax):
-    """Search the peak for the Landau using the TSpectrum
-
-    Parameters
-    ----------
-    h: ROOT.TH1
-        The histogram
-    xmin: float
-        The minimum value the peak should be
-    xmax: float
-        The maximum value the peak should be
-
-    Return
-    ------
-    peak: float
-    """
-    import ROOT 
-    # Uset TSpectrum to find the available peaks
-    batch=ROOT.gROOT.IsBatch()
-    ROOT.gROOT.SetBatch(1)
-    s=ROOT.TSpectrum()
-    nfound = s.Search(h,1,'nobackground new')
-    # Get the first peak comming from the left
-    for i in range(nfound-1,-1,-1):
-        peak = s.GetPositionX()[i]
-        if abs(xmin) > abs(peak) or abs(peak) > abs(xmax):
-            continue
-        break
-    ROOT.gROOT.SetBatch(batch)
-
-    return peak
-
-def landau_gaus(x,par):
-    """Definition of a Landau convulated with gaus 
-
-    Based on 
-    https://root.cern.ch/root/html/tutorials/fit/langaus.C.html
-
-    Note
-    ----
-    Implemented as c++ binding as speed is incremented 2 orders of
-    magnitude otherwise
-
-    Parameters
-    ----------
-    x: array
-        The variable
-    par: array
-        The parameters [MPV,Sigma landau, Normalization, Sigma Gauss]
-    """
-    from math import pi,sqrt
-    import ROOT 
-
-    if not hasattr(landau_gaus,'_cmpcode'):
-        cppcode="""
-        #include <cmath>
-        #include <algorithm>
-
-        double landau_gaus(double *x, double *par)
-        {
-            // Landau maximum location: in the Landau distribution
-            // (represented by the CERNLIB approximation), the maximum
-            // is located at -0.22278298 with the location parameter = 0
-            // This shift is corrected within this function, so that the actual 
-            // maximum is identical to the MP parameter
-            const double mpshift  = -0.22278298;
-        """
-        cppcode +="""
-            const double pi = {};
-        """.format(pi)
-        
-        cppcode += """
-            // MP shift correction
-            const double mpc = par[0]-mpshift*par[1];
-            // -- Fit parameters:
-            //   par[0] = Most Probable (MP, location) parameter of Landau density
-            //   par[1] = Width (scale) parameter of Landau density
-            //   par[2] = Total area (integral -inf to inf, normalization constant)
-            //   par[3] = Gaussian smearing
-            
-            // -- Control constants
-            //  Number of convolution steps
-            const double np = 100.0;
-            //  Convolution extends to +- sc gaussian sigmas
-            const double sc = 5.0;
-            // -- Range of convolution integral
-            const double xlow = std::max(0.0,x[0]-sc*par[3]);
-            const double xupp = x[0]+sc*par[3];
-            const double step =(xupp-xlow)/np;
-            
-            //-- Convolution integral of Landau and Gaussian by sum
-            double total = 0.0;
-            for(int i=1; i <int(np/2.0)+1; ++i)
-            {
-                const double xi = xlow+(i-0.5)*step;
-                const double xxi= xupp-(i-0.5)*step;
-
-                total += TMath::Landau(xi,mpc,par[1])/par[1]*TMath::Gaus(x[0],xi,par[3])+ 
-                           TMath::Landau(xxi,mpc,par[1])/par[1]*TMath::Gaus(x[0],xxi,par[3]);
-            }
-                        
-            return par[2]*1./std::sqrt(pi)*step*total/par[3];
-        }
-        """
-        _= ROOT.gInterpreter.ProcessLine(cppcode)
-        landau_gaus._cmpcode = ROOT.landau_gaus
-    return landau_gaus._cmpcode(x,par)
-    ## Landau maximum location: in the Landau distribution
-    ## (represented by the CERNLIB approximation), the maximum
-    ## is located at -0.22278298 with the location parameter = 0
-    ## This shift is corrected within this function, so that the actual 
-    ## maximum is identical to the MP parameter
-    #mpshift  = -0.22278298
-    #
-    ## MP shift correction
-    #mpc = par[0]-mpshift*par[1]
-    ## -- Fit parameters:
-    ##   par[0] = Most Probable (MP, location) parameter of Landau density
-    ##   par[1] = Width (scale) parameter of Landau density
-    ##   par[2] = Total area (integral -inf to inf, normalization constant)
-    ##   par[3] = Gaussian smearing
-    #
-    ## -- Control constants
-    ##  Number of convolution steps
-    #np = 100.0
-    ##  Convolution extends to +- sc gaussian sigmas
-    #sc = 5.0
-    ## -- Range of convolution integral
-    #xlow = max(0.0,x[0]-sc*par[3])
-    #xupp = x[0]+sc*par[3]
-    #step =(xupp-xlow)/np
-    #
-    ## -- Convolution integral of Landau and Gaussian by sum
-    #xlow_i = lambda i: xlow+(i-0.5)*step
-    #xup_i  = lambda i: xupp-(i-0.5)*step
-    #
-    #total = 0.0
-    #for i in xrange(1,int(np/2.0)+1):
-    #    xi = xlow_i(i)
-    #    xxi = xup_i(i)
-    #    total += sum(map(lambda ix: ROOT.TMath.Landau(ix,mpc,par[1])/par[1]*\
-    #            ROOT.TMath.Gaus(x[0],ix,par[3]),[xlow_i(i),xup_i(i)]))
-    #
-    #return par[2]*1./sqrt(pi)*step*total/par[3]
-
+from sifca_utils.functions import landgaus,peaks_searcher
 
 def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
     """Fit a Landau * Gauss to the input histogram, returning
@@ -191,11 +46,11 @@ def fit_langaus(h,xmin=0,xmax=60,peak_min=0,peak_max=60,force_range=False):
 
     # Define the TF1 
     name = h.GetName()+"_landaugaus_tf1"
-    lg = ROOT.TF1(name,landau_gaus,xmin,xmax,4)
+    lg = ROOT.TF1(name,landgaus,xmin,xmax,4)
     # Start values for the parameters. Some guese
     # -- the Most probable value
     #peak = h.GetBinCenter(h.GetMaximumBin())
-    peak = spectrum_searcher_landau_parameters(h,peak_min,peak_max)
+    peak = peaks_searcher(h,peak_min,peak_max)[0]
     # -- Sigma
     sm = peak/7.0
     if force_range:
